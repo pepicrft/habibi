@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="<%= @locale %>" dir="<%= @direction %>">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="<%= @csrf %>">
+    <title><%= dgettext("auth", "Connect an app · Habibi") %></title>
+    <link rel="icon" href="/assets/favicon.svg">
+    <link rel="stylesheet" href="/assets/theme.css">
+    <link rel="stylesheet" href="/assets/mascot/heartling.css">
+    <link rel="stylesheet" href="/auth-assets/auth.css">
+    <script src="/auth-assets/passkeys.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <a class="brand" href="/">habibi<span class="heartling" aria-hidden="true"></span></a>
+      <p class="eyebrow"><%= dgettext("auth", "A connection, on your terms") %></p>
+      <h1><%= dgettext("auth", "Let’s make a connection.") %></h1>
+      <p><%= dgettext("auth", "%{app} is asking to connect to Habibi. App names are supplied by their developer and are not verified.", app: @client.name) %></p>
+      <div class="permission">
+        <h2><%= dgettext("auth", "Sync encrypted vaults") %></h2>
+        <p><%= dgettext("auth", "This app can use Habibi’s storage for vaults whose credentials you give it. Signing in does not give the app your vault keys or decrypt your memories.") %></p>
+        <p class="destination"><%= dgettext("auth", "Return address") %><br><code><%= @redirect_uri %></code></p>
+      </div>
+      <%= if @signed_in do %>
+        <p class="notice"><%= dgettext("auth", "You’re signed in with your passkey.") %></p>
+        <form action="/oauth/authorize" method="post">
+          <input type="hidden" name="_csrf_token" value="<%= @csrf %>">
+          <button class="button-primary" name="decision" value="allow"><%= dgettext("auth", "Allow connection") %> <span aria-hidden="true">↗</span></button>
+          <button class="secondary" name="decision" value="deny"><%= dgettext("auth", "Cancel") %></button>
+        </form>
+        <form action="/auth/logout" method="post">
+          <input type="hidden" name="_csrf_token" value="<%= @csrf %>">
+          <button class="text-button"><%= dgettext("auth", "Use a different account") %></button>
+        </form>
+      <% else %>
+        <button class="button-primary" data-passkey="login"><%= dgettext("auth", "Sign in with a passkey") %> <span aria-hidden="true">↗</span></button>
+        <%= if @registration do %>
+          <button class="secondary" data-passkey="register"><%= dgettext("auth", "Create a passkey account") %></button>
+        <% else %>
+          <p class="notice"><%= dgettext("auth", "New accounts are not open yet.") %></p>
+        <% end %>
+        <p class="small"><%= dgettext("auth", "No email or password needed. Your passkey signs you in; your separate recovery kit protects access to your vault. If you lose your passkey, this prototype cannot restore that account.") %></p>
+      <% end %>
+      <p id="status" role="status" aria-live="polite"
+        data-prompt="<%= dgettext("auth", "Follow your device’s passkey prompt…") %>"
+        data-unsupported="<%= dgettext("auth", "This browser does not support passkeys. Open this page in your system browser.") %>"
+        data-cancelled="<%= dgettext("auth", "Passkey request cancelled. You can try again.") %>"
+        data-failure="<%= dgettext("auth", "Sign-in could not be completed. Please try again.") %>"></p>
+      <p class="small"><%= dgettext("auth", "Only connect apps you trust. An app can read anything you choose to decrypt and share with it. This is an experimental, unaudited service.") %></p>
+    </main>
+  </body>
+</html>

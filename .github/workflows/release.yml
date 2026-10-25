@@ -49,6 +49,7 @@ jobs:
       packages: write
     env:
       IMAGE: ghcr.io/pepicrft/habibi
+      CHART_REGISTRY: ghcr.io/pepicrft/charts
       VERSION: ${{ needs.version.outputs.number }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
@@ -58,7 +59,7 @@ jobs:
       - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           version: "2026.9.1"
-          install_args: "git-cliff jq"
+          install_args: "git-cliff jq helm"
         env:
           MISE_GITHUB_TOKEN: ${{ github.token }}
       - name: Reject a conflicting published tag
@@ -71,6 +72,10 @@ jobs:
       - name: Prepare release notes
         if: steps.tag.outputs.exists != 'true'
         run: bash mise/tasks/release/check.sh notes > "$RUNNER_TEMP/release-notes.md"
+      - name: Package the versioned Helm chart
+        run: |
+          helm lint deploy/helm/habibi --values deploy/values-production.yaml
+          helm package deploy/helm/habibi --version "$VERSION" --app-version "$VERSION" --destination "$RUNNER_TEMP"
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -107,6 +112,41 @@ jobs:
         run: |
           docker buildx imagetools inspect "$IMAGE@$DIGEST"
           printf '\nImage: %s@%s\n' "$IMAGE" "$DIGEST" >> "$RUNNER_TEMP/release-notes.md"
+      - name: Log in to the Helm registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Publish or reuse the versioned Helm chart
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/helm-existing" "$RUNNER_TEMP/helm-expected"
+          # Compare contents, not archive bytes: Helm's tar timestamps vary on retries.
+          if helm pull "oci://$CHART_REGISTRY/habibi" --version "$VERSION" --destination "$RUNNER_TEMP/helm-existing" 2> "$RUNNER_TEMP/helm-pull.err"; then
+            tar -xzf "$RUNNER_TEMP/helm-existing/habibi-$VERSION.tgz" -C "$RUNNER_TEMP/helm-existing"
+            tar -xzf "$RUNNER_TEMP/habibi-$VERSION.tgz" -C "$RUNNER_TEMP/helm-expected"
+            diff -ru "$RUNNER_TEMP/helm-expected/habibi" "$RUNNER_TEMP/helm-existing/habibi"
+            echo "Reusing the identical published Helm chart $VERSION"
+          elif grep -Fxq "Error: failed to perform \"FetchReference\" on source: $CHART_REGISTRY/habibi:$VERSION: not found" "$RUNNER_TEMP/helm-pull.err"; then
+            helm push "$RUNNER_TEMP/habibi-$VERSION.tgz" "oci://$CHART_REGISTRY"
+          # GHCR can deny pulls for a package that has never been published.
+          # Only bootstrap if the authenticated Packages API also reports it absent.
+          elif grep -Eiq 'denied|403' "$RUNNER_TEMP/helm-pull.err" &&
+            package_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --header "Authorization: Bearer $GHCR_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              'https://api.github.com/users/pepicrft/packages/container/charts%2Fhabibi') &&
+            [[ "$package_status" == 404 ]]; then
+            helm push "$RUNNER_TEMP/habibi-$VERSION.tgz" "oci://$CHART_REGISTRY"
+          else
+            # Authentication, network and registry errors must not become overwrites.
+            cat "$RUNNER_TEMP/helm-pull.err" >&2
+            exit 1
+          fi
+      - name: Record the Helm chart
+        if: steps.tag.outputs.exists != 'true'
+        run: |
+          printf '\nHelm chart: oci://%s/habibi --version %s\n' "$CHART_REGISTRY" "$VERSION" >> "$RUNNER_TEMP/release-notes.md"
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         if: steps.tag.outputs.exists != 'true'
         with:

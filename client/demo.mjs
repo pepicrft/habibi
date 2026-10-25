@@ -7,15 +7,18 @@ if (!["127.0.0.1", "localhost", "[::1]"].includes(origin.hostname)) {
   throw new Error("This disposable demo only connects to a loopback server");
 }
 
+const accessToken = process.env.HABIBI_ACCESS_TOKEN;
+if (!accessToken) throw new Error("Set HABIBI_ACCESS_TOKEN after completing the browser OAuth flow");
+
 const vault = createVault();
 const id = crypto.randomUUID();
 const plaintext = new TextEncoder().encode("A private test note: water the balcony plants on Tuesday.");
 const envelope = await encryptRecord(vault.key, vault.id, id, plaintext);
-const headers = { authorization: `Bearer ${vault.token}` };
+const headers = { authorization: `Bearer ${accessToken}`, "x-habibi-vault-token": vault.token };
 const path = `/v1/vaults/${vault.id}/records`;
 
 const created = await fetch(new URL("/v1/vaults", origin), {
-  method: "POST", headers: { "content-type": "application/json" },
+  method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
   body: JSON.stringify({ id: vault.id, token: vault.token }),
 });
 assert.equal(created.status, 201);
@@ -40,7 +43,7 @@ const { bundle, recoveryKey } = await createRecovery(vault);
 assert.deepEqual(await recoverVault(bundle, recoveryKey), vault);
 
 const denied = await fetch(new URL(path, origin), {
-  headers: { authorization: `Bearer ${createVault().token}` },
+  headers: { ...headers, "x-habibi-vault-token": createVault().token },
 });
 assert.equal(denied.status, 401);
 console.log("Passed: create → encrypt → S3 sync → idempotent retry → list → download → decrypt → recover; wrong-token access denied.");

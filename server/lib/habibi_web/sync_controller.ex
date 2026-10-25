@@ -5,6 +5,7 @@ defmodule HabibiWeb.SyncController do
 
   alias Habibi.Sync
 
+  plug :authenticate_account when action in [:create, :put, :list, :get]
   plug :authorize when action in [:put, :list, :get]
 
   def health(conn, _params), do: json(conn, %{status: "ok"})
@@ -12,7 +13,7 @@ defmodule HabibiWeb.SyncController do
   def ready(conn, _params) do
     case Ecto.Adapters.SQL.query(
            Habibi.Repo,
-           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL",
+           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL",
            [],
            timeout: 2_000
          ) do
@@ -88,11 +89,25 @@ defmodule HabibiWeb.SyncController do
   end
 
   defp authorize(conn, _opts) do
-    with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
+    with [token] <- get_req_header(conn, "x-habibi-vault-token"),
          {:ok, vault} <- Sync.authorize(conn.path_params["vault_id"], token) do
       assign(conn, :vault, vault)
     else
       _ -> conn |> put_status(401) |> json(%{error: "unauthorized"}) |> halt()
+    end
+  end
+
+  defp authenticate_account(conn, _opts) do
+    case Habibi.OAuth.authenticate(conn) do
+      {:ok, owner} ->
+        assign(conn, :account, owner)
+
+      _ ->
+        conn
+        |> put_resp_header("www-authenticate", ~s(Bearer realm="habibi"))
+        |> put_status(401)
+        |> json(%{error: "invalid_token"})
+        |> halt()
     end
   end
 

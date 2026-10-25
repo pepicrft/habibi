@@ -31,12 +31,17 @@ spec:
           type: RuntimeDefault
       {{- if .Values.imagePullSecret.enabled }}
       imagePullSecrets:
-        - name: {{ .Release.Name }}-registry
+        - name: {{ default (printf "%s-registry" .Release.Name) .Values.imagePullSecret.existingSecret }}
       {{- end }}
       containers:
         - name: web
           image: {{ include "habibi.image" . | quote }}
           imagePullPolicy: IfNotPresent
+          {{- if not .Values.platform.enabled }}
+          envFrom:
+            - secretRef:
+                name: {{ required "external.existingSecret is required when platform.enabled=false" .Values.external.existingSecret }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 4000
@@ -54,6 +59,7 @@ spec:
               value: {{ .Values.allowRegistration | quote }}
             - name: DNS_CLUSTER_QUERY
               value: {{ printf "%s-peers.%s.svc.cluster.local" .Release.Name .Release.Namespace | quote }}
+            {{- if .Values.platform.enabled }}
             - name: S3_BUCKET
               valueFrom:
                 secretKeyRef:
@@ -79,6 +85,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-ciphertext
                   key: AWS_REGION
+            {{- end }}
             {{- if .Values.analytics.enabled }}
             - name: SMOLANALYTICS_HOST
               valueFrom:
@@ -113,16 +120,20 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if or .Values.platform.enabled .Values.external.databaseCASecret }}
             - name: database-ca
               mountPath: /database
               readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
+        {{- if or .Values.platform.enabled .Values.external.databaseCASecret }}
         - name: database-ca
           secret:
-            secretName: {{ .Release.Name }}-postgres-ca
+            secretName: {{ if .Values.platform.enabled }}{{ .Release.Name }}-postgres-ca{{ else }}{{ .Values.external.databaseCASecret }}{{ end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -1,0 +1,18 @@
+{
+  "image": "heartling.png",
+  "poster": "heartling-idle.png",
+  "width": 1536,
+  "height": 768,
+  "frameWidth": 384,
+  "frameHeight": 384,
+  "columns": 4,
+  "tintToken": "primary",
+  "blendMode": "hard-light",
+  "states": {
+    "idle": { "frames": [0] },
+    "curious": { "frames": [1] },
+    "sleepy": { "frames": [2] },
+    "attentive": { "frames": [3] },
+    "walk": { "frames": [4, 5, 6, 7], "frameDurationMs": 200 }
+  }
+}

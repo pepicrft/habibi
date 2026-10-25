@@ -1,0 +1,55 @@
+{
+  "colors": {
+    "text": "#242e28",
+    "background": "#f8f6ef",
+    "primary": "#35483d",
+    "secondary": "#202e25",
+    "accent": "#dde5d6",
+    "muted": "#eeeee3",
+    "textMuted": "#62695e",
+    "border": "#dcded2",
+    "focus": "#35483d",
+    "memoryBorder": "#9aa98f",
+    "bubble": "#e8ebdf"
+  },
+  "fonts": {
+    "body": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "heading": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "monospace": "ui-monospace, SFMono-Regular, Consolas, monospace"
+  },
+  "fontSizes": [12, 14, 16, 20, 24, 32, 48, 64],
+  "fontWeights": { "body": 400, "heading": 550, "button": 550, "bold": 700 },
+  "lineHeights": { "body": 1.65, "heading": 1.1, "control": 1.5 },
+  "space": [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 56, 64],
+  "radii": { "control": 4, "bubble": 16, "pill": 100 },
+  "borderWidths": { "hairline": 1, "focus": 3 },
+  "styles": {
+    "root": {
+      "fontFamily": "body",
+      "fontSize": 2,
+      "fontWeight": "body",
+      "lineHeight": "body",
+      "color": "text",
+      "bg": "background",
+      "colorScheme": "light",
+      "fontSynthesis": "none"
+    }
+  },
+  "fontFaces": [
+    {
+      "fontFamily": "DM Sans",
+      "src": "url('/assets/fonts/dm-sans-latin-wght-normal.woff2') format('woff2')",
+      "fontStyle": "normal",
+      "fontWeight": "100 900",
+      "fontDisplay": "swap"
+    }
+  ],
+  "buttons": {
+    "primary": {
+      "color": "background",
+      "bg": "primary",
+      "fontWeight": "button",
+      "&:hover": { "color": "background", "bg": "secondary" }
+    }
+  }
+}

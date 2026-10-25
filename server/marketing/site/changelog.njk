@@ -1,0 +1,67 @@
+---
+layout: layout.njk
+title: "Changelog — Habibi"
+description: "Small steps, in the open. Published server and website releases for Habibi, an open-source personal AI companion in development."
+pagination:
+  data: locales
+  size: 1
+  alias: locale
+permalink: "{{ locale | homePath }}changelog/"
+alternatePath: "changelog/"
+changelogPage: true
+---
+{#
+  Offline snapshot verified against GitHub's published, non-draft releases on
+  2026-10-25. The bullet text is reused from the git-cliff-generated release
+  bodies, not inferred from local tags or the worktree.
+
+  To update: inspect `gh release list` and `gh release view <tag> --json
+  tagName,publishedAt,url,body`, then add published entries newest first below.
+  Keep release URLs and publication dates from GitHub; wrap all new copy in
+  literal marketing dgettext calls and regenerate marketing.pot. Do not run
+  release tasks or publish a tag to update this page. No network or Git
+  checkout is needed to render this snapshot.
+#}
+<main class="changelog wrap" id="main">
+  <header class="changelog-intro">
+    <p class="eyebrow">{{ dgettext("marketing", "Small steps, in the open") }}</p>
+    <h1>{{ dgettext("marketing", "Changelog") }}</h1>
+    <p>{{ dgettext("marketing", "Published server and website releases, newest first. A little record of what’s changed, and when.") }}</p>
+    <p class="changelog-context">{{ dgettext("marketing", "Habibi is still in early development. These are not mobile app releases; there’s no app to download yet.") }}</p>
+    <a class="text-link" href="https://github.com/pepicrft/habibi/releases" rel="noopener noreferrer">{{ dgettext("marketing", "All releases on GitHub") }} <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <ol class="changelog-timeline" role="list">
+    <li class="changelog-entry">
+      <div class="changelog-date">
+        <time datetime="2026-10-25T11:47:15Z">{{ dgettext("marketing", "October 25, 2026") }}</time>
+        <span class="eyebrow">{{ dgettext("marketing", "Published") }}</span>
+      </div>
+      <article class="changelog-release" aria-labelledby="release-0-1-1">
+        <h2 id="release-0-1-1"><a href="#release-0-1-1">{{ dgettext("marketing", "Habibi 0.1.1") }}</a></h2>
+        <p class="changelog-summary">{{ dgettext("marketing", "Steadier releases.") }}</p>
+        <h3>{{ dgettext("marketing", "Bug fixes") }}</h3>
+        <ul>
+          <li>{{ dgettext("marketing", "pin git-cliff to the selected stable baseline") }}</li>
+          <li>{{ dgettext("marketing", "name stable releases after Habibi") }}</li>
+        </ul>
+        <a class="text-link" href="https://github.com/pepicrft/habibi/releases/tag/habibi%400.1.1" rel="noopener noreferrer">{{ dgettext("marketing", "View release on GitHub") }} <span aria-hidden="true">↗</span></a>
+      </article>
+    </li>
+    <li class="changelog-entry">
+      <div class="changelog-date">
+        <time datetime="2026-10-25T11:35:18Z">{{ dgettext("marketing", "October 25, 2026") }}</time>
+        <span class="eyebrow">{{ dgettext("marketing", "Published") }}</span>
+      </div>
+      <article class="changelog-release" aria-labelledby="release-0-1-0">
+        <h2 id="release-0-1-0"><a href="#release-0-1-0">{{ dgettext("marketing", "Habibi 0.1.0") }}</a></h2>
+        <p class="changelog-summary">{{ dgettext("marketing", "A small beginning.") }}</p>
+        <h3>{{ dgettext("marketing", "Features") }}</h3>
+        <ul>
+          <li>{{ dgettext("marketing", "introduce private-by-design Habibi companion platform") }}</li>
+        </ul>
+        <a class="text-link" href="https://github.com/pepicrft/habibi/releases/tag/server%400.1.0" rel="noopener noreferrer">{{ dgettext("marketing", "View release on GitHub") }} <span aria-hidden="true">↗</span></a>
+      </article>
+    </li>
+  </ol>
+</main>

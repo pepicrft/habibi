@@ -15,7 +15,33 @@ Marketing source lives in `server/marketing/`. Eleventy listens on port 8080 and
 
 The Docker build renders the site before assembling the Elixir release. Phoenix serves the generated pages, assets, robots and sitemap alongside the API; Node and Eleventy are not present in the runtime image. HTML is publicly cacheable, while sync API responses retain `Cache-Control: no-store`. Unknown API paths return JSON, not the marketing 404 page.
 
+`/changelog/` lists verified published server/website releases using a checked-in, translatable snapshot in `server/marketing/site/changelog.njk`. Its source comment documents updating the snapshot from GitHub's published release dates and git-cliff notes, then regenerating the marketing catalogue. Local changes and planned mobile features are not listed as released. The page does not fetch GitHub during builds or browsing and is not automatically updated by publication.
+
 An independent static deployment is still possible: publish only `server/priv/static/marketing/`, never the repository root. Set the custom domain to `habibi.fyi` and enable HTTPS. No hosting account or DNS changes are made here.
+
+### Shared UI theme
+
+**`server/priv/theme.json` owns the design tokens**, independently of OAuth credentials and vault keys. It follows the [Theme UI theme specification](https://theme-ui.com/theme-spec): semantic colors, fonts, type/spacing scales, radii, and shared styles/variants. The marketing and sign-in pages use Theme UI's actual framework-agnostic `@theme-ui/css` resolver at build time. Both load the generated `/assets/theme.css`, including local font faces and the primary-button variant; their own CSS keeps page layout and illustration geometry. No React or styling JavaScript ships in marketing pages.
+
+Change the server theme, then run `npm run build` (or use the theme-aware development watcher). The build also exposes the same object at `/assets/theme.json`. `client/theme.mjs` re-exports the server source for bundling and offline startup; a future React UI can pass it directly to `ThemeUIProvider`. There is no mobile UI yet, and native views will need a platform adapter for CSS font/length values and native materials. Clients do not automatically download or execute remote presentation code. Build tests change tokens and verify that CSS, metadata, public JSON and the client export agree.
+
+The favicon and SVG share card are also rendered from server tokens, in `site/favicon.njk` and `site/social.njk`. `site/assets/social.png` is a checked-in 1200×630 raster export of the generated `/assets/social.svg`; refresh that export when changing its copy or theme.
+
+The build also emits `/assets/nsh-theme.json`, mapping the same semantic colors, fonts, spacing and radius into [NSH's theme format](https://nsh.dev/). NSH is not React and does not consume `ThemeUIProvider` or `sx`. This is a generated theme adapter, not an installed or verified native runtime; native font availability and platform materials still need testing in the eventual app. Only the light palette ships today.
+
+Habibi's mascot is **Heartling**, an asymmetric clay heart with tiny feet. Its generated artwork was converted to neutral grayscale, cleaned of stray alpha, and aligned on a shared baseline. The transparent poster, eight-frame atlas and platform-neutral frame map live in `server/marketing/site/assets/mascot/` and ship under `/assets/mascot/`. Four expressions (idle, curious, sleepy, attentive) accompany a four-frame, 800ms ambient walk. The smaller poster loads by default; expression or walking states load the atlas.
+
+The mascot's body follows the active theme's **`colors.primary`**, not a fixed terracotta image or a separate palette. The web renderer hard-light blends the neutral texture over that color, then masks the result with the texture's alpha, preserving the clay shading and dark eyes. Updating `--theme-ui-colors-primary` recolors it immediately. Use `<span class="heartling" aria-hidden="true"></span>` after loading `heartling.css`; add `data-state="curious"`, `sleepy`, `attentive`, or `walk` as needed. Motion is opt-in and stops with `prefers-reduced-motion`. Describe actual work or errors in separate localized text, never with the mascot alone.
+
+For the future native host, bundle the same PNGs and `heartling.json`: frames are row-major, 384×384 pixels; resolve its `tintToken` against the **selected** Theme UI palette (or NSH `primary`), hard-light blend the cropped texture over the resolved color, and apply the cropped alpha as a mask. Re-resolve on theme changes rather than baking a tint into cached frames. Native materials, compositing, animation and theme selection are not implemented or verified yet; this is a reusable asset contract and a working web renderer, not a mobile feature claim.
+
+The [Shadowfax website, iOS screenshots and changelog](https://www.krispuckett.com/shadowfax) inform the design: warm paper, readable ink, restrained sans-serif type, quiet separators, and contextual cards. The homepage's original conversation study uses native HTML disclosure to reveal a fictional source note, not a running agent or released mobile app. No reference artwork or media is distributed. Native glass, sheets, widgets and accessibility should use platform components rather than copying web effects; those mobile features remain unimplemented.
+
+The intended native conversation model is an answer plus small, interactive objects: choices, editable lists, reminders, source-backed previews and contextual follow-up suggestions. Keep suggested, approved, saved and completed states distinct, with explicit progress, stop and undo actions. A compact card may expand into a focused surface without losing its place in the thread; any doorway transition should use original Habibi artwork, support reduced motion and have an ordinary accessible open action. Optional ambient animation must not masquerade as real agent progress.
+
+Ongoing tasks (the reference's “quests”) should retain an inspectable goal, permission scope, activity and stop/approval controls. Sustained background work belongs on the user's paired runner rather than assuming an iOS app can run indefinitely or moving readable conversations onto Habibi's sync server. Lock Screen and Live Activity presentation should hide sensitive content by default; push payloads must not become a plaintext side channel. Voice capture needs explicit recording feedback and a deliberate on-device or user-approved transcription destination.
+
+For a future NSH host, Rust components ship compiled with the app; downloadable components use sandboxed JavaScript/TSX. Generated components must receive only the content and named actions needed for that answer, never vault keys, OAuth credentials or arbitrary tool/network access. Explicitly deny unneeded capabilities: NSH's omitted capability declaration is not a deny-all default, and registered native components need host-side checks. Generation belongs on the device or a user-controlled paired runner, not the blind sync service. Lock Screen capture, Live Activities/Dynamic Island, widgets and background execution require native targets and platform permission handling. Dynamic downloaded code also needs review against Apple's current App Store rules (including 2.5.2 and 4.7); sandboxing alone does not establish eligibility. None of these native features is implemented here yet.
 
 ### Locales
 
@@ -26,7 +52,9 @@ npm run gettext:extract  # from the repository root
 npm run gettext:check    # fails on stale source extraction; also runs during build
 ```
 
-From `server/`, `mix gettext.extract` invokes the same extractor and `mix assets.deploy` builds the site after `npm ci` has been run at the root. Extraction never merges or rewrites `.po` files. Translation automation or contributors can use standard Gettext/Weblate tooling; no external translation service or credentials are configured. Keep translated values as plain text, not HTML.
+Authentication uses standard Elixir Gettext independently: `HabibiWeb.AuthGettext`, domain `auth`, with `server/priv/auth_gettext/auth.pot` and translations in `server/priv/auth_gettext/<locale>/LC_MESSAGES/auth.po`. From `server/`, run `mix gettext.extract` to update it and `mix gettext.extract --check-up-to-date` to check it. CI runs both marketing and authentication extraction checks; a content change without updated catalogues fails. Browser passkey messages use server-translated text rather than hardcoded JavaScript copy. Auth selects an installed catalogue using `Accept-Language` and sets `Content-Language`, `lang` and `dir`; marketing language selection remains URL-based.
+
+`mix assets.deploy` builds the site after `npm ci` has been run at the root. Marketing extraction never merges or rewrites `.po` files. Translation automation or contributors can use standard Gettext/Weblate tooling; no external translation service or credentials are configured. Keep translated values as plain text, not HTML. Docker copies auth catalogues before Elixir compilation because Gettext compiles them into the release.
 
 English is served at `/`; an additional catalogue such as `es` generates `/es/` and `/es/404.html`, localized navigation/metadata, `lang`/`dir`, alternate-language links and sitemap entries. Missing or fuzzy translations fall back to English, and translated HTML is escaped. Only English ships initially: empty catalogues for languages without translations are not created. Builds clean obsolete output, so removing a catalogue removes its pages. Browser-language redirects and locale cookies are intentionally absent: URLs alone choose the language and public pages remain cacheable.
 
@@ -102,6 +130,7 @@ Create the bucket using your storage service's tooling first. Omit `S3_ENDPOINT`
 
 ```sh
 node --test client/vault.test.mjs
+# Complete the local browser OAuth flow below, then set its access token securely.
 node client/demo.mjs
 ```
 
@@ -118,7 +147,30 @@ The API is small:
 | GET | `/health` | Process liveness, not a storage-readiness check |
 | GET | `/ready` | Database connectivity and initial sync schema; 503 until migrations complete |
 
-Record operations require `Authorization: Bearer <sync token>`. No tokens in URLs. Responses have `Cache-Control: no-store`; parameter and SQL-query logging are disabled. The metadata digest is an upload identity check, not a substitute for client GCM authentication. Clients must decrypt/authenticate records before accepting them as history.
+Every vault API operation requires `Authorization: Bearer <OAuth access token>`. Record operations additionally require `X-Habibi-Vault-Token: <sync token>`. This replaces the prototype's capability-only Authorization header. Neither credential decrypts content. There is deliberately no account-to-vault ownership mapping: another authenticated account still needs the separate vault capability. No bearer tokens in URLs. Responses have `Cache-Control: no-store`; parameter and SQL-query logging are disabled. The metadata digest is an upload identity check, not a substitute for client GCM authentication. Clients must decrypt/authenticate records before accepting them as history. The local demo reads its OAuth token from `HABIBI_ACCESS_TOKEN`; never commit it or put it on a command line.
+
+## Native app authentication
+
+The server implements a deliberately narrow OAuth profile using Boruta 2.3.8: **public native clients, authorization code with mandatory S256 PKCE, rotating refresh tokens, and revocation**. Browser identity uses discoverable passkeys verified by Wax, with required user verification and explicit CSRF-protected consent. Accounts are random pseudonymous IDs, not email addresses. Authentication does not recover or release vault encryption keys. This is OAuth, not OpenID Connect; no ID tokens, password grants, implicit flow, userinfo or third-party provider login are exposed.
+
+1. Discover `/.well-known/oauth-authorization-server` at the configured canonical origin. In production, set `PHX_HOST=habibi.fyi`; HTTPS and Secure cookies are mandatory. Passkeys are bound to this relying-party domain.
+2. POST JSON to `/oauth/register`, for example:
+
+   ```json
+   {"client_name":"Habibi for iPhone","application_type":"native","redirect_uris":["fyi.habibi.ios:/oauth/callback"],"token_endpoint_auth_method":"none","grant_types":["authorization_code","refresh_token"],"response_types":["code"],"scope":"vaults:sync"}
+   ```
+
+   No client secret is returned. This profile accepts exact app-claimed HTTPS callbacks and reverse-domain, single-slash private schemes. Wildcards, credentials, fragments and query strings are rejected. Desktop HTTP loopback redirects and client metadata/key-fetch extensions are not supported. Registration does not prove that a client is an official Habibi app; the consent page displays its unverified name and callback. App/universal-link association files must be configured by the eventual native app.
+3. Generate a fresh high-entropy verifier and state on the device. Open `/oauth/authorize` in **ASWebAuthenticationSession on iOS or a system-browser/custom-tab flow on Android**, never an embedded WebView. Send `response_type=code`, `client_id`, the exact `redirect_uri`, `scope=vaults:sync`, state (16–256 bytes), `code_challenge=BASE64URL(SHA256(verifier))`, and `code_challenge_method=S256`. The verifier is 43–128 RFC7636 unreserved characters. The browser signs in or creates a passkey account, then asks for consent.
+4. Validate the callback's `state` and `iss` on the device. Exchange its single-use, 60-second code at `/oauth/token` using an `application/x-www-form-urlencoded` POST with `grant_type=authorization_code`, `client_id`, `code`, the original `redirect_uri`, and `code_verifier`. Access tokens last 15 minutes. `GET /v1/me` returns only the pseudonymous `sub`.
+5. Refresh with a form POST containing `grant_type=refresh_token`, `client_id`, and `refresh_token`. Persist the returned replacement atomically in Keychain/Keystore-backed storage and **serialize refreshes**. Reuse of a spent refresh token or correctly bound authorization code invalidates its entire grant, including descendants. Concurrent duplicate exchanges are not idempotent: one may succeed, but the replay invalidates that success. Grants have an absolute 30-day lifetime; sign in again afterward.
+6. Disconnect with a form POST to `/oauth/revoke` containing `client_id`, `token`, and optionally `token_type_hint`. Either an access or refresh token revokes its whole grant. Unknown or wrong-client tokens return the same success response. Browser logout only drops the browser session; it does not disconnect native grants or rotate vault credentials.
+
+Authorization codes and access/refresh credentials are stored as SHA-256 digests. PostgreSQL grant-row locks serialize exchange, replay handling and revocation across replicas; authorization reads bypass application caches. Keep grant/token ancestry until its replay-retention policy is designed; do not run Boruta's stock inactive-token cleanup. Passkey public keys, pseudonymous account IDs, client registrations and authentication metadata are necessarily visible to the server; private passkey keys and vault content keys remain on devices. This does not hide network/access metadata.
+
+`ALLOW_REGISTRATION=true` enables both account creation and dynamic client registration locally; production remains closed by default. Authentication endpoints have a shared PostgreSQL 60-request/minute limit per socket peer and route. Untrusted forwarded headers cannot bypass it; behind an ingress, users may conservatively share that limit. This is not a complete abuse-prevention system.
+
+No native client, extra-passkey enrollment, account recovery, account deletion, or token-cleanup job is shipped yet. Losing the only passkey loses that account; **vault recovery still requires the separately held recovery key and exported encrypted bundle**. This implementation remains experimental and needs a security review before sensitive use.
 
 For API tests, use a **separate disposable database**:
 
@@ -151,15 +203,39 @@ mise run release:notes
 mise run release:test
 ```
 
-The image runs as an unprivileged user and contains the OTP release plus generated marketing assets, not Node, npm, Mix, templates, or source credentials. The local release commands only inspect committed history; they reject unborn or dirty worktrees and never create tags, commits, images, or GitHub releases.
+The image runs as an unprivileged user and contains the OTP release plus generated marketing and authentication assets, not Node, npm, Mix, or source credentials. The local release commands only inspect committed history; they reject unborn or dirty worktrees and never create tags, commits, images, or GitHub releases.
 
-`.github/workflows/release.yml` adapts [Tuist's tag-derived release flow](https://github.com/tuist/tuist/blob/650d726f3831d80785b47eaaed311a648aa4408f/.github/workflows/server-production-deployment.yml): pushes to `main`, including merges, or a manual dispatch on `main` ask git-cliff whether a combined server/marketing release is needed. A no-op skips publication; a release runs CI, builds and pushes `ghcr.io/pepicrft/habibi:<version>`, creates the GitHub Release/tag at the exact built SHA, then promotes that digest to `latest`. Publication is serialized across runs. New Git tags use `habibi@x.y.z`; the already-published `server@0.1.0` remains a version baseline. Image references use `:version`, because OCI reserves `@` for content digests. There are no release/version commits back to `main`.
+`.github/workflows/release.yml` adapts [Tuist's tag-derived release flow](https://github.com/tuist/tuist/blob/650d726f3831d80785b47eaaed311a648aa4408f/.github/workflows/server-production-deployment.yml): pushes to `main`, including merges, or a manual dispatch on `main` ask git-cliff whether a combined server/marketing release is needed. A no-op skips publication; a release runs CI, builds and pushes `ghcr.io/pepicrft/habibi:<version>`, publishes the matching OCI Helm chart, creates the GitHub Release/tag at the exact built SHA, then promotes that digest to `latest`. Publication is serialized across runs. New Git tags use `habibi@x.y.z`; the already-published `server@0.1.0` remains a version baseline. Image references use `:version`, because OCI reserves `@` for content digests. There are no release/version commits back to `main`.
 
 Git-cliff is pinned to Tuist's 2.6.0. Relevant conventional `fix`, `docs`, `perf`, `refactor`, `style` and `test` commits bump patches, `feat` bumps minors, and breaking changes bump majors, including during 0.x. Server, marketing, deployment charts, root build files and release automation define the release boundary; scopes are not restricted to `(server)`. Client-only changes and ordinary `chore`/`ci` commits do not trigger releases. Only reachable stable `habibi@x.y.z` and legacy `server@x.y.z` tags participate, ordered by numeric version; prerelease and unrelated-branch tags do not affect the version. Squash merges need a conventional commit title; ordinary merges retain the conventional commits from their branch. Configuration/tool failures fail visibly rather than becoming a successful no-op.
 
 The initial release requires a committed repository. No image, tag, package-visibility setting or release has been published by adding this workflow. GHCR publication uses the repository's `GITHUB_TOKEN` with `packages: write`, not a personal token. GHCR packages are initially private; making one public is a separate operator action. CI currently publishes `linux/amd64`; the Dockerfile can also build natively on arm64, but there is no multi-architecture manifest yet.
 
 Registry and GitHub publication are not atomic. If a publication step fails, rerun the failed job at the original SHA before starting a newer release. A retry after the GitHub tag was created reuses the existing image digest and leaves release notes untouched. Never force-move a published tag. The workflow does not access Kubernetes: production Flux watches the promoted `latest` digest and performs deployment separately.
+
+### Install with Helm
+
+The release workflow publishes `oci://ghcr.io/pepicrft/charts/habibi` with chart `version` and `appVersion` set to the git-cliff release number. Installing chart X selects application image X for both web and migration workloads. Explicit `image.repository`, `image.tag` and `image.digest` overrides remain supported. Retries compare extracted chart contents, reuse identical publications and reject conflicts. No chart has been published by these local changes yet.
+
+For self-hosting without the production cluster's custom operators, copy `deploy/values-external.yaml` to your own values file. This mode renders only ordinary Kubernetes resources. Provision PostgreSQL and a private S3-compatible bucket separately, then create the referenced Secrets in the target namespace. The chart does not create, migrate or delete your external infrastructure; its migration Job does apply Habibi's database migrations when installed or upgraded.
+
+- `external.existingSecret` contains `DATABASE_URL`, a persistent random `SECRET_KEY_BASE` (at least 64 bytes), a separate random `RELEASE_COOKIE`, `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Include `S3_ENDPOINT` for non-AWS storage; omit it for regional AWS S3. Use bucket-scoped credentials and your secret-management tooling, not Git or command-line literals.
+- `external.databaseCASecret` contains `ca.crt`, mounted read-only in both workloads for verified PostgreSQL TLS. The example enables it. Emptying this setting disables certificate-based TLS configuration and is only appropriate for disposable local setups.
+- Set `host` to your HTTPS origin. The example exposes a ClusterIP service only; configure `ingress.enabled`, the nginx ingress controller/certificate issuer, and `networkPolicy.ingressNamespace` for your cluster before browser authentication. The ingress policy expects nginx controller labels. Keep Erlang distribution private.
+- Anonymous installation requires **both** the chart and application image packages to be public. Their GHCR visibility settings are separate operator actions. For a private chart, use `helm registry login ghcr.io`; for a private image, enable `imagePullSecret` and set `imagePullSecret.existingSecret` to a pre-created registry Secret. The external example assumes public images.
+
+After a release has published both artifacts:
+
+```sh
+VERSION=<published-version>
+helm upgrade --install habibi oci://ghcr.io/pepicrft/charts/habibi \
+  --version "$VERSION" \
+  --namespace habibi --create-namespace \
+  --values habibi-values.yaml \
+  --wait --wait-for-jobs
+```
+
+Back up the external database, bucket and runtime Secrets; the operator cannot restore vault content keys. Registration remains disabled by default. Existing Flux deployments retain the operator-managed mode (`platform.enabled=true`) described below, including their explicit image digest pins.
 
 ### Pepicrft cluster deployment
 

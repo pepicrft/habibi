@@ -1,0 +1,15 @@
+# Portable mode: no External Secrets, CNPG or custom bucket controller needed.
+# Create this ordinary Secret before installation; never put credentials here.
+platform:
+  enabled: false
+external:
+  existingSecret: habibi-runtime
+  # Secret must contain ca.crt for verified PostgreSQL TLS.
+  databaseCASecret: habibi-database-ca
+host: habibi.example.com
+imagePullSecret:
+  # For private images, enable and supply a pre-created registry Secret instead.
+  enabled: false
+  existingSecret: habibi-registry
+networkPolicy:
+  ingressNamespace: ingress-nginx

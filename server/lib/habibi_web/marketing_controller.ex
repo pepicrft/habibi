@@ -4,13 +4,21 @@ defmodule HabibiWeb.MarketingController do
   import Plug.Conn
 
   def home(conn, params) do
+    page(conn, params, "", "index.html")
+  end
+
+  def changelog(conn, params) do
+    page(conn, params, "changelog/", "changelog/index.html")
+  end
+
+  defp page(conn, params, path, file) do
     locale = params["locale"] || "en"
 
     if locale in locales() do
-      canonical = if locale == "en", do: "/", else: "/#{locale}/"
+      canonical = if locale == "en", do: "/#{path}", else: "/#{locale}/#{path}"
 
       if conn.request_path == canonical do
-        serve(conn, locale, "index.html", 200)
+        serve(conn, locale, file, 200)
       else
         conn |> put_status(301) |> redirect(to: canonical)
       end

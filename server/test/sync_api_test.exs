@@ -7,6 +7,7 @@ defmodule Habibi.SyncAPITest do
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Habibi.Repo, shared: false)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+    Process.put(:oauth_token, Habibi.AuthTestHelpers.access_token())
     :ok
   end
 
@@ -124,7 +125,8 @@ defmodule Habibi.SyncAPITest do
         else: {payload, "application/octet-stream"}
 
     conn = conn(method, url, payload) |> put_req_header("content-type", type)
-    conn = if token, do: put_req_header(conn, "authorization", "Bearer " <> token), else: conn
+    conn = put_req_header(conn, "authorization", "Bearer " <> Process.get(:oauth_token))
+    conn = if token, do: put_req_header(conn, "x-habibi-vault-token", token), else: conn
     HabibiWeb.Endpoint.call(conn, HabibiWeb.Endpoint.init([]))
   end
 

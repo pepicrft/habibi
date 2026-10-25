@@ -1,16 +1,27 @@
 replicaCount: 2
 image:
   repository: ghcr.io/pepicrft/habibi
-  tag: latest
+  # Empty uses the chart appVersion; explicit tags and digest pins still win.
+  tag: ""
   digest: ""
 host: habibi.example.com
 allowRegistration: false
 poolSize: 5
+platform:
+  # Existing Flux deployment provisions storage and secrets with operators.
+  enabled: true
+external:
+  # With platform.enabled=false, supply PostgreSQL/S3/runtime settings here.
+  existingSecret: ""
+  databaseCASecret: ""
+networkPolicy:
+  ingressNamespace: platform
 analytics:
   enabled: false
   secretName: analytics-client
 imagePullSecret:
   enabled: true
+  existingSecret: ""
   secretStoreName: infisical-salibu
 ingress:
   enabled: false

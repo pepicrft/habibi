@@ -6,7 +6,7 @@ node_modules
 _site
 server/_build
 server/deps
-server/priv/static
+server/priv/static/marketing
 server/test
 server/marketing/test
 **/.env

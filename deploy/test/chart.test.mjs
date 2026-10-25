@@ -1,10 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import yaml from "js-yaml";
 
 test("production routes only Habibi, pins web and migrations together, and keeps durable state and credentials private", () => {
   const digest = `sha256:${"8b".repeat(32)}`;
+  const { appVersion } = yaml.load(
+    readFileSync("deploy/helm/habibi/Chart.yaml", "utf8"),
+  );
   const render = (...options) =>
     yaml
       .loadAll(
@@ -37,7 +41,7 @@ test("production routes only Habibi, pins web and migrations together, and keeps
   const web = deployment.spec.template.spec.containers[0];
   const migration = find("Job");
   const migrate = migration.spec.template.spec.containers[0];
-  assert.equal(web.image, `ghcr.io/pepicrft/habibi:latest@${digest}`);
+  assert.equal(web.image, `ghcr.io/pepicrft/habibi:${appVersion}@${digest}`);
   assert.equal(migrate.image, web.image);
   assert.deepEqual(migrate.command, [
     "/app/bin/habibi",
@@ -155,4 +159,88 @@ test("production routes only Habibi, pins web and migrations together, and keeps
   );
   assert.equal(isolatedPod.containers[0].envFrom, undefined);
   assert.equal(isolatedPod.imagePullSecrets, undefined);
+});
+
+test("external services render only standard Kubernetes resources and share runtime secrets and verified database TLS", () => {
+  const render = (...overrides) =>
+    yaml
+      .loadAll(
+        execFileSync(
+          "helm",
+          [
+            "template",
+            "self-hosted",
+            "deploy/helm/habibi",
+            "-f",
+            "deploy/values-external.yaml",
+            ...overrides,
+          ],
+          { encoding: "utf8" },
+        ),
+      )
+      .filter(Boolean);
+  const resources = render();
+  assert.ok(
+    resources.every((resource) =>
+      ["v1", "apps/v1", "batch/v1", "networking.k8s.io/v1"].includes(
+        resource.apiVersion,
+      ),
+    ),
+  );
+  const workloads = resources.filter((resource) =>
+    ["Deployment", "Job"].includes(resource.kind),
+  );
+  assert.equal(workloads.length, 2);
+  for (const resource of workloads) {
+    const pod = resource.spec.template.spec;
+    const container = pod.containers[0];
+    assert.deepEqual(container.envFrom, [
+      { secretRef: { name: "habibi-runtime" } },
+    ]);
+    assert.ok(!container.env.some((env) => env.valueFrom?.secretKeyRef));
+    assert.equal(
+      container.env.find((env) => env.name === "DATABASE_CA_CERT").value,
+      "/database/ca.crt",
+    );
+    assert.equal(
+      pod.volumes.find((volume) => volume.name === "database-ca").secret
+        .secretName,
+      "habibi-database-ca",
+    );
+    assert.equal(pod.imagePullSecrets, undefined);
+  }
+  assert.equal(
+    resources.find((resource) => resource.kind === "NetworkPolicy").spec
+      .ingress[0].from[0].namespaceSelector.matchLabels[
+      "kubernetes.io/metadata.name"
+    ],
+    "ingress-nginx",
+  );
+  const local = render(
+    "--set",
+    "external.databaseCASecret=,imagePullSecret.enabled=true,imagePullSecret.existingSecret=private-registry",
+  );
+  for (const resource of local.filter((resource) =>
+    ["Deployment", "Job"].includes(resource.kind),
+  )) {
+    const pod = resource.spec.template.spec;
+    assert.deepEqual(pod.imagePullSecrets, [{ name: "private-registry" }]);
+    assert.ok(!pod.volumes.some((volume) => volume.name === "database-ca"));
+    assert.ok(
+      !pod.containers[0].env.some((env) => env.name === "DATABASE_CA_CERT"),
+    );
+  }
+  const missing = spawnSync(
+    "helm",
+    [
+      "template",
+      "self-hosted",
+      "deploy/helm/habibi",
+      "--set",
+      "platform.enabled=false",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /external\.existingSecret is required/);
 });

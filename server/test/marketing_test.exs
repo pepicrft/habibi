@@ -7,11 +7,17 @@ defmodule HabibiWeb.MarketingTest do
   test "the release serves public marketing and assets without changing API privacy" do
     home = request("/")
     assert home.status == 200
-    assert home.resp_body =~ "A little closer."
+    assert home.resp_body =~ "An agent of your own."
     assert get_resp_header(home, "content-type") == ["text/html; charset=utf-8"]
     assert get_resp_header(home, "cache-control") == ["public, max-age=300"]
 
     assert request("/assets/styles.css").status == 200
+    assert request("/assets/theme.css").status == 200
+    theme = request("/assets/theme.json")
+    assert theme.status == 200
+    assert get_resp_header(theme, "content-type") == ["application/json"]
+    assert Jason.decode!(theme.resp_body) == Jason.decode!(File.read!("priv/theme.json"))
+    assert get_resp_header(theme, "set-cookie") == []
     assert request("/robots.txt").resp_body =~ "https://habibi.fyi/sitemap.xml"
     assert request("/sitemap.xml").resp_body =~ "https://habibi.fyi/"
 

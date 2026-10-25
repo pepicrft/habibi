@@ -38,7 +38,9 @@ jobs:
           MISE_GITHUB_TOKEN: ${{ github.token }}
       - run: npm ci
       - run: npm run build
+      - run: npm run gettext:check
       - run: npm test
+      - run: node --test server/test/passkeys_browser_test.mjs
       - run: helm lint deploy/helm/habibi --values deploy/values-production.yaml
       - run: npm run test:deploy
       - run: bash mise/tasks/release/test.sh
@@ -47,6 +49,8 @@ jobs:
       - run: mix format --check-formatted
         working-directory: server
       - run: mix compile --warnings-as-errors
+        working-directory: server
+      - run: mix gettext.extract --check-up-to-date
         working-directory: server
       - run: mix ecto.setup
         working-directory: server

@@ -17,6 +17,17 @@ config :phoenix, :filter_parameters, {:keep, []}
 config :habibi, Habibi.Repo, log: false
 config :logger, level: :info
 
+config :habibi, :secure_cookies, config_env() == :prod
+
+config :boruta, Boruta.Oauth,
+  repo: Habibi.Repo,
+  cache_backend: Habibi.OAuth.DatabaseOnlyCache,
+  contexts: [
+    resource_owners: Habibi.OAuth.ResourceOwners,
+    access_tokens: Habibi.OAuth.Tokens,
+    codes: Habibi.OAuth.Codes
+  ]
+
 if config_env() == :test do
   config :habibi, :allow_registration, true
   config :habibi, :storage, Habibi.TestStorage

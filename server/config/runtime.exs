@@ -33,7 +33,8 @@ config :habibi, HabibiWeb.Endpoint,
   url: [
     host: System.get_env("PHX_HOST", "localhost"),
     scheme: if(config_env() == :prod, do: "https", else: "http"),
-    port: if(config_env() == :prod, do: 443, else: 4000)
+    port:
+      if(config_env() == :prod, do: 443, else: String.to_integer(System.get_env("PORT", "4000")))
   ],
   http: [ip: bind_ip, port: String.to_integer(System.get_env("PORT", "4000"))],
   secret_key_base:

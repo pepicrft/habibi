@@ -10,8 +10,7 @@ defmodule Habibi.MixProject do
       deps: deps(),
       aliases: [
         "ecto.setup": ["ecto.create", "ecto.migrate"],
-        "assets.deploy": ["cmd --cd .. npm run build"],
-        "gettext.extract": ["cmd --cd .. npm run gettext:extract"]
+        "assets.deploy": ["cmd --cd .. npm run build"]
       ]
     ]
   end
@@ -23,6 +22,10 @@ defmodule Habibi.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.8.0"},
+      {:phoenix_html, "~> 4.3"},
+      {:gettext, "~> 1.0"},
+      {:boruta, "~> 2.3.8"},
+      {:wax_, "~> 0.7.0"},
       {:bandit, "~> 1.8"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, "~> 0.21"},

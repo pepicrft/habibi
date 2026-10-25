@@ -1,0 +1,112 @@
+## This file is a PO Template file.
+##
+## "msgid"s here are often extracted from source code.
+## Add new messages manually only if they're dynamic
+## messages that can't be statically extracted.
+##
+## Run "mix gettext.extract" to bring this file up to
+## date. Leave "msgstr"s empty as changing them here has no
+## effect: edit them in PO (.po) files instead.
+#
+msgid ""
+msgstr ""
+
+#: priv/templates/authorize.html.eex:19
+#, elixir-autogen, elixir-format
+msgid "%{app} is asking to connect to Habibi. App names are supplied by their developer and are not verified."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:17
+#, elixir-autogen, elixir-format
+msgid "A connection, on your terms"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:29
+#, elixir-autogen, elixir-format
+msgid "Allow connection"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:30
+#, elixir-autogen, elixir-format
+msgid "Cancel"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:7
+#, elixir-autogen, elixir-format
+msgid "Connect an app · Habibi"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:39
+#, elixir-autogen, elixir-format
+msgid "Create a passkey account"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:46
+#, elixir-autogen, elixir-format
+msgid "Follow your device’s passkey prompt…"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:18
+#, elixir-autogen, elixir-format
+msgid "Let’s make a connection."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:41
+#, elixir-autogen, elixir-format
+msgid "New accounts are not open yet."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:43
+#, elixir-autogen, elixir-format
+msgid "No email or password needed. Your passkey signs you in; your separate recovery kit protects access to your vault. If you lose your passkey, this prototype cannot restore that account."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:50
+#, elixir-autogen, elixir-format
+msgid "Only connect apps you trust. An app can read anything you choose to decrypt and share with it. This is an experimental, unaudited service."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:48
+#, elixir-autogen, elixir-format
+msgid "Passkey request cancelled. You can try again."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:23
+#, elixir-autogen, elixir-format
+msgid "Return address"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:37
+#, elixir-autogen, elixir-format
+msgid "Sign in with a passkey"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:49
+#, elixir-autogen, elixir-format
+msgid "Sign-in could not be completed. Please try again."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:21
+#, elixir-autogen, elixir-format
+msgid "Sync encrypted vaults"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:22
+#, elixir-autogen, elixir-format
+msgid "This app can use Habibi’s storage for vaults whose credentials you give it. Signing in does not give the app your vault keys or decrypt your memories."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:47
+#, elixir-autogen, elixir-format
+msgid "This browser does not support passkeys. Open this page in your system browser."
+msgstr ""
+
+#: priv/templates/authorize.html.eex:34
+#, elixir-autogen, elixir-format
+msgid "Use a different account"
+msgstr ""
+
+#: priv/templates/authorize.html.eex:26
+#, elixir-autogen, elixir-format
+msgid "You’re signed in with your passkey."
+msgstr ""

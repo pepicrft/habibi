@@ -1,0 +1,133 @@
+.changelog {
+  padding-block: 80px;
+}
+
+.changelog-intro {
+  max-width: 620px;
+  margin-bottom: 64px;
+}
+
+.changelog h1 {
+  margin-block: 16px 24px;
+  font-size: var(--theme-ui-fontSizes-6);
+  line-height: var(--theme-ui-lineHeights-heading);
+}
+
+.changelog-intro > p:not(.eyebrow) {
+  margin-top: 16px;
+}
+
+.changelog-context,
+.changelog-date {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.changelog-intro .text-link {
+  margin-top: 24px;
+}
+
+.changelog-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changelog-entry {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 40px;
+}
+
+.changelog-date {
+  padding-top: 9px;
+}
+
+.changelog-date .eyebrow {
+  display: block;
+  margin-top: 8px;
+}
+
+.changelog-release {
+  position: relative;
+  padding-inline-start: 40px;
+  padding-bottom: 64px;
+  border-inline-start: 1px solid var(--line);
+}
+
+.changelog-release::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -5px;
+  top: 15px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--theme-ui-colors-primary);
+  box-shadow: 0 0 0 5px var(--paper);
+}
+
+.changelog-entry:last-child .changelog-release {
+  padding-bottom: 8px;
+}
+
+.changelog-release h2 {
+  font-size: var(--theme-ui-fontSizes-4);
+}
+
+.changelog-release h2 a {
+  text-decoration: none;
+}
+
+.changelog-release h2 a:hover {
+  text-decoration: underline;
+}
+
+.changelog-summary {
+  margin-top: 12px;
+}
+
+.changelog-release h3 {
+  margin-top: 28px;
+  font-size: 0.85rem;
+  font-weight: var(--theme-ui-fontWeights-bold);
+  letter-spacing: 0;
+}
+
+.changelog-release ul {
+  margin-block: 12px 24px;
+  padding-inline-start: 20px;
+}
+
+.changelog-release li + li {
+  margin-top: 8px;
+}
+
+@media (max-width: 580px) {
+  .changelog {
+    padding-block: 48px 64px;
+  }
+
+  .changelog-intro {
+    margin-bottom: 40px;
+  }
+
+  .changelog-entry {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .changelog-date {
+    padding-inline-start: 24px;
+  }
+
+  .changelog-date .eyebrow {
+    display: inline;
+    margin-inline-start: 12px;
+  }
+
+  .changelog-release {
+    padding-inline-start: 24px;
+    padding-bottom: 40px;
+  }
+}

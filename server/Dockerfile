@@ -9,6 +9,7 @@ COPY server/marketing/package.json server/marketing/package.json
 RUN npm ci
 COPY server/marketing server/marketing
 COPY server/priv/gettext server/priv/gettext
+COPY server/priv/theme.json server/priv/theme.json
 RUN npm run build
 
 FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-bookworm-20260623-slim AS builder
@@ -23,6 +24,9 @@ COPY server/config/config.exs config/config.exs
 RUN mix deps.get --only prod && mix deps.compile
 COPY server/lib lib
 COPY server/priv/repo priv/repo
+COPY server/priv/templates priv/templates
+COPY server/priv/auth_gettext priv/auth_gettext
+COPY server/priv/static/auth priv/static/auth
 COPY server/rel rel
 COPY --from=marketing /app/server/priv/static/marketing priv/static/marketing
 ARG HABIBI_VERSION=0.1.0-dev

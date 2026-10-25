@@ -1,8 +1,9 @@
 {{- define "habibi.image" -}}
+{{- $tag := default .Chart.AppVersion .Values.image.tag -}}
 {{- if .Values.image.digest -}}
-{{ printf "%s:%s@%s" .Values.image.repository .Values.image.tag .Values.image.digest }}
+{{ printf "%s:%s@%s" .Values.image.repository $tag .Values.image.digest }}
 {{- else -}}
-{{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+{{ printf "%s:%s" .Values.image.repository $tag }}
 {{- end -}}
 {{- end -}}
 
@@ -22,13 +23,12 @@ capabilities:
 {{- end -}}
 
 {{- define "habibi.env" -}}
+{{- if .Values.platform.enabled }}
 - name: DATABASE_URL
   valueFrom:
     secretKeyRef:
       name: {{ .Release.Name }}-postgres-app
       key: uri
-- name: DATABASE_CA_CERT
-  value: /database/ca.crt
 - name: SECRET_KEY_BASE
   valueFrom:
     secretKeyRef:
@@ -39,6 +39,11 @@ capabilities:
     secretKeyRef:
       name: {{ .Release.Name }}-release-cookie
       key: RELEASE_COOKIE
+{{- end }}
+{{- if or .Values.platform.enabled .Values.external.databaseCASecret }}
+- name: DATABASE_CA_CERT
+  value: /database/ca.crt
+{{- end }}
 - name: POD_IP
   valueFrom:
     fieldRef:

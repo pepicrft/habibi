@@ -12,5 +12,12 @@ eleventyExcludeFromCollections: true
 {% endfor %}
     <xhtml:link rel="alternate" hreflang="x-default" href="https://habibi.fyi/"/>
   </url>
+  <url>
+    <loc>https://habibi.fyi{{ locale | homePath }}changelog/</loc>
+{% for alternate in locales %}
+    <xhtml:link rel="alternate" hreflang="{{ alternate | languageTag }}" href="https://habibi.fyi{{ alternate | homePath }}changelog/"/>
+{% endfor %}
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://habibi.fyi/changelog/"/>
+  </url>
 {% endfor %}
 </urlset>

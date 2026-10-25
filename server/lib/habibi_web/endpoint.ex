@@ -4,6 +4,8 @@ defmodule HabibiWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Head
 
+  plug Plug.Static, at: "/auth-assets", from: {:habibi, "priv/static/auth"}
+
   plug Plug.Static,
     at: "/",
     from: {:habibi, "priv/static/marketing"},
@@ -11,8 +13,18 @@ defmodule HabibiWeb.Endpoint do
 
   plug :private_response
 
+  plug Plug.Session,
+    store: :cookie,
+    key: "_habibi_auth",
+    signing_salt: "habibi-browser-v1",
+    encryption_salt: "habibi-browser-encrypted-v1",
+    secure: Application.compile_env!(:habibi, :secure_cookies),
+    http_only: true,
+    same_site: "Lax",
+    max_age: 900
+
   plug Plug.Parsers,
-    parsers: [:json],
+    parsers: [:urlencoded, :json],
     pass: ["application/octet-stream"],
     json_decoder: Jason,
     length: 8192

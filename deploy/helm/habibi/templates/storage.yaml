@@ -1,3 +1,4 @@
+{{- if .Values.platform.enabled }}
 apiVersion: objectstorage.pepicrft.me/v1alpha1
 kind: ObjectBucketClaim
 metadata:
@@ -91,3 +92,4 @@ spec:
     name: barman-cloud.cloudnative-pg.io
   cluster:
     name: {{ .Release.Name }}-postgres
+{{- end }}

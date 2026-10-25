@@ -1,0 +1,80 @@
+/* Neutral clay texture over the active theme color. No precolored variants. */
+.heartling {
+  --heartling-image: url("./heartling-idle.png");
+  --heartling-size: 100% 100%;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  color: var(--theme-ui-colors-primary);
+  background-image:
+    var(--heartling-image), linear-gradient(currentColor, currentColor);
+  background-size:
+    var(--heartling-size),
+    100% 100%;
+  background-position:
+    0% 0%,
+    0% 0%;
+  background-repeat: no-repeat;
+  background-blend-mode: hard-light, normal;
+  mask-image: var(--heartling-image);
+  mask-size: var(--heartling-size);
+  mask-position: 0% 0%;
+  mask-repeat: no-repeat;
+}
+
+.heartling[data-state] {
+  --heartling-image: url("./heartling.png");
+  --heartling-size: 400% 200%;
+}
+
+.heartling[data-state="curious"] {
+  background-position:
+    33.333333% 0%,
+    0% 0%;
+  mask-position: 33.333333% 0%;
+}
+
+.heartling[data-state="sleepy"] {
+  background-position:
+    66.666667% 0%,
+    0% 0%;
+  mask-position: 66.666667% 0%;
+}
+
+.heartling[data-state="attentive"] {
+  background-position:
+    100% 0%,
+    0% 0%;
+  mask-position: 100% 0%;
+}
+
+/* An opt-in ambient walk, not an indication of real agent progress. */
+.heartling[data-state="walk"] {
+  background-position:
+    0% 100%,
+    0% 0%;
+  mask-position: 0% 100%;
+  animation: heartling-walk 800ms steps(4, end) infinite;
+}
+
+@keyframes heartling-walk {
+  from {
+    background-position:
+      0% 100%,
+      0% 0%;
+    mask-position: 0% 100%;
+  }
+  to {
+    background-position:
+      133.333333% 100%,
+      0% 0%;
+    mask-position: 133.333333% 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heartling[data-state="walk"] {
+    animation: none;
+  }
+}

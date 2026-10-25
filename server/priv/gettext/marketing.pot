@@ -4,36 +4,8 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: site/index.njk:36
-msgid "A SATURDAY, SOMEDAY"
-msgstr ""
-
-#: site/index.njk:81
-msgid "A design direction, not an audited security guarantee."
-msgstr ""
-
-#: site/index.njk:85
-msgid "A few good questions"
-msgstr ""
-
-#: site/index.njk:47
-msgid "A glimpse of what we’re building"
-msgstr ""
-
-#: site/index.njk:95
-msgid "A kinder corner"
-msgstr ""
-
-#: site/index.njk:16
-msgid "A little closer."
-msgstr ""
-
-#: site/_includes/layout.njk:54
-msgid "A little company. On your terms."
-msgstr ""
-
-#: site/index.njk:53
-msgid "A little more human"
+#: site/index.njk:27
+msgid "A conversation, with context."
 msgstr ""
 
 #: site/404.njk:14
@@ -44,322 +16,232 @@ msgstr ""
 msgid "A little off the path — Habibi"
 msgstr ""
 
-#: site/index.njk:17
-msgid "A lot more"
+#: site/index.njk:45
+msgid "A note, not a guess."
 msgstr ""
 
-#: site/index.njk:81
-msgid "A note from the workbench"
+#: site/changelog.njk:58
+msgid "A small beginning."
 msgstr ""
 
-#: site/index.njk:37
-msgid "A note you kept"
-msgstr ""
-
-#: site/index.njk:20
-msgid ""
-"A personal AI companion for the little things that make up a life. Built to "
-"remember what matters, without making your life someone else’s business."
-msgstr ""
-
-#: site/index.njk:21
-msgid "A quieter kind of technology."
-msgstr ""
-
-#: site/index.njk:95
-msgid "A small beginning"
-msgstr ""
-
-#: site/_includes/layout.njk:44
+#: site/_includes/layout.njk:58
+#: site/index.njk:52
 msgid "About"
 msgstr ""
 
-#: site/index.njk:14
-msgid "An open-source companion, in the making"
+#: site/index.njk:41
+msgid "After our walk"
+msgstr ""
+
+#: site/changelog.njk:31
+msgid "All releases on GitHub"
+msgstr ""
+
+#: site/index.njk:15
+#: site/social.njk:15
+msgid "An agent of your own."
+msgstr ""
+
+#: site/social.njk:16
+msgid "An open-source personal agent in development."
+msgstr ""
+
+#: site/index.njk:1
+msgid ""
+"An open-source personal agent in the making. Explore the interface "
+"direction, local-first memory, and the boundaries of encrypted sync."
 msgstr ""
 
 #: site/404.njk:17
 msgid "Back to Habibi"
 msgstr ""
 
-#: site/_includes/layout.njk:46
-msgid "Building"
+#: site/changelog.njk:43
+msgid "Bug fixes"
 msgstr ""
 
-#: site/index.njk:81
-msgid "Built in the open"
+#: site/_includes/layout.njk:49
+#: site/_includes/layout.njk:59
+#: site/changelog.njk:28
+#: site/index.njk:74
+msgid "Changelog"
 msgstr ""
 
-#: site/index.njk:90
-msgid "Can I download Habibi yet?"
+#: site/changelog.njk:1
+msgid "Changelog — Habibi"
 msgstr ""
 
-#: site/index.njk:87
-msgid "Can my AI provider read my conversations?"
-msgstr ""
-
-#: site/index.njk:60
+#: site/index.njk:66
 msgid ""
-"Choose your inference provider and connect to it directly from the app. "
-"Habibi’s sync service won’t hold your provider credentials. The provider "
-"will see the context you send."
+"Experimental and unaudited. These boundaries are not a security guarantee."
 msgstr ""
 
-#: site/index.njk:72
-msgid ""
-"Ciphertext in object storage. No content keys or provider credentials. The "
-"service still sees account and sync metadata."
+#: site/changelog.njk:59
+msgid "Features"
 msgstr ""
 
-#: site/index.njk:81
-msgid "Clear intentions."
+#: site/index.njk:19
+msgid "Follow the build"
 msgstr ""
 
-#: site/index.njk:95
-msgid "Come see what’s taking shape"
+#: site/_includes/layout.njk:57
+msgid "Footer navigation"
 msgstr ""
 
-#: site/index.njk:81
-msgid "Device-owned encryption keys"
+#: site/index.njk:38
+msgid "For lunch with Maya"
 msgstr ""
 
-#: site/index.njk:81
-msgid "Direct-to-provider AI"
-msgstr ""
-
-#: site/index.njk:91
-msgid "Does local-first mean the AI runs offline?"
-msgstr ""
-
-#: site/index.njk:80
-msgid "Early days, open doors"
-msgstr ""
-
-#: site/index.njk:72
-msgid "Encrypted content · optional device sync"
-msgstr ""
-
-#: site/index.njk:23
-msgid "Explore on GitHub"
-msgstr ""
-
-#: site/index.njk:80
-msgid "Follow the work on GitHub"
-msgstr ""
-
-#: site/index.njk:54
-msgid "For a life."
-msgstr ""
-
-#: site/index.njk:39
+#: site/index.njk:40
 msgid "From your own notes"
 msgstr ""
 
-#: site/index.njk:55
-msgid ""
-"Good company pays attention. It remembers the little things, helps you "
-"connect the dots, and leaves you room to be yourself. That’s the idea behind "
-"Habibi."
+#: site/changelog.njk:57
+msgid "Habibi 0.1.0"
 msgstr ""
 
-#: site/index.njk:85
-msgid "Good to know."
+#: site/changelog.njk:41
+msgid "Habibi 0.1.1"
 msgstr ""
 
-#: site/index.njk:80
+#: site/index.njk:18
 msgid ""
-"Habibi is a personal, open-source project in early development. The first "
-"piece is a ciphertext-only sync prototype. The mobile companion is still "
-"ahead."
+"Habibi is a personal agent in the making. A place for notes, plans, and "
+"conversations, designed around your life rather than a blank chat box."
 msgstr ""
 
-#: site/index.njk:59
+#: site/changelog.njk:30
 msgid ""
-"Habibi is being designed with memory and search on your devices. A place for "
-"your thoughts, plans, and everyday details, not a profile for advertisers."
+"Habibi is still in early development. These are not mobile app releases; "
+"there’s no app to download yet."
 msgstr ""
 
 #: site/index.njk:1
-msgid "Habibi — A little closer. A lot more private."
+msgid "Habibi — An agent of your own."
 msgstr ""
 
-#: site/index.njk:72
-msgid "Habibi’s sync service"
+#: site/_includes/layout.njk:25
+#: site/_includes/layout.njk:30
+msgid ""
+"Habibi. An agent of your own. An open-source personal agent in development."
 msgstr ""
 
-#: site/index.njk:67
-msgid "Here’s the design we’re working toward."
+#: site/index.njk:71
+msgid "In development"
 msgstr ""
 
-#: site/index.njk:47
+#: site/index.njk:48
 msgid "Interface concept, not a released app."
 msgstr ""
 
-#: site/index.njk:87
-msgid ""
-"It can read the prompts and selected context your device sends to it. The "
-"app is being designed to call your chosen provider directly, using "
-"credentials held on your device. Encryption for Habibi sync does not hide "
-"prompts from that provider. Its own privacy and retention policies apply."
-msgstr ""
-
-#: site/index.njk:85
-msgid "Just the important bits."
+#: site/index.njk:32
+msgid "Interface study"
 msgstr ""
 
 #: site/404.njk:16
 msgid "Let’s get you back to the beginning."
 msgstr ""
 
-#: site/index.njk:42
-msgid "Little things, remembered."
-msgstr ""
-
-#: site/index.njk:81
-msgid "Local-first memory"
-msgstr ""
-
-#: site/index.njk:37
-msgid "Lunch with Maya."
-msgstr ""
-
-#: site/_includes/layout.njk:55
-msgid "Made in the open"
-msgstr ""
-
-#: site/_includes/layout.njk:43
+#: site/_includes/layout.njk:47
 msgid "Main navigation"
 msgstr ""
 
-#: site/index.njk:24
-msgid "Meet Habibi"
-msgstr ""
-
-#: site/index.njk:1
+#: site/index.njk:41
 msgid ""
-"Meet Habibi, an open-source personal AI companion in development. Local "
-"memory, your choice of AI provider, and encrypted sync designed to keep you "
-"in control."
+"Maya mentioned Olive & Fig for lunch next time. Somewhere with a little "
+"courtyard."
 msgstr ""
 
-#: site/index.njk:69
+#: site/index.njk:55
 msgid ""
-"Memory, search, and the agent loop stay local. Your devices hold the vault "
-"key and encrypt content before sync."
+"Memory and search are intended to live on your devices. Longer-running work "
+"can go to a computer you pair, with access you explicitly grant. These are "
+"design goals; the mobile app isn’t built yet."
 msgstr ""
 
-#: site/_includes/layout.njk:59
-msgid "No analytics. No trackers. Just a hello."
-msgstr ""
-
-#: site/index.njk:85
-msgid "No fine print."
-msgstr ""
-
-#: site/index.njk:61
-msgid ""
-"No mystery about what’s being built. The code, decisions, and rough edges "
-"belong in the open, so you can look inside, ask questions, or make it your "
-"own."
-msgstr ""
-
-#: site/index.njk:91
-msgid ""
-"No. Local-first describes where memory, search, and the agent loop are "
-"intended to live. Using a remote inference provider requires a connection "
-"and sends selected context to that provider. There’s no planned silent "
-"fallback to a different remote provider."
-msgstr ""
-
-#: site/index.njk:75
-msgid ""
-"Not a promise of invisibility. A clear boundary around who can read what."
-msgstr ""
-
-#: site/index.njk:54
-msgid "Not a user profile."
-msgstr ""
-
-#: site/index.njk:80
-msgid "Not quite in your pocket."
-msgstr ""
-
-#: site/index.njk:90
-msgid ""
-"Not yet. This is an early open-source project, starting with a ciphertext-"
-"only sync prototype, not a released mobile app. The interface above is a "
-"concept. There’s no launch date or waitlist; you can follow progress and "
-"explore the code on"
+#: site/index.njk:52
+msgid "More than a transcript."
 msgstr ""
 
 #: site/404.njk:15
 msgid "Nothing here."
 msgstr ""
 
-#: site/index.njk:39
+#: site/changelog.njk:37
+#: site/changelog.njk:53
+msgid "October 25, 2026"
+msgstr ""
+
+#: site/index.njk:38
+msgid "Olive & Fig"
+msgstr ""
+
+#: site/index.njk:36
 msgid "Olive & Fig. You saved it after your walk together."
 msgstr ""
 
-#: site/index.njk:61
-msgid "Open from the beginning."
+#: site/_includes/layout.njk:56
+msgid "Open source. In development. No analytics."
 msgstr ""
 
-#: site/index.njk:95
-msgid "Open source."
+#: site/index.njk:29
+msgid "Open the source below the answer."
 msgstr ""
 
-#: site/_includes/layout.njk:58
-msgid "Open source. In development. Not yet an app you can download."
+#: site/index.njk:14
+msgid "Open-source personal agent · In development"
 msgstr ""
 
-#: site/index.njk:67
-msgid "Personal doesn’t have"
-msgstr ""
-
-#: site/index.njk:68
-msgid "Planned data flow"
-msgstr ""
-
-#: site/_includes/layout.njk:45
+#: site/_includes/layout.njk:48
+#: site/index.njk:60
 msgid "Privacy"
 msgstr ""
 
-#: site/index.njk:67
-msgid "Privacy, with the details left in"
+#: site/changelog.njk:38
+#: site/changelog.njk:54
+msgid "Published"
 msgstr ""
 
-#: site/index.njk:69
-msgid "Readable memories live here."
-msgstr ""
-
-#: site/index.njk:89
+#: site/changelog.njk:29
 msgid ""
-"Recovery requires both a recovery key you keep separately and an exported "
-"encrypted recovery bundle. The reference client can export encrypted "
-"recovery bundles; the mobile recovery interface isn’t built yet. Habibi’s "
-"operator won’t hold your vault key or recover your content for you. If you "
-"lose every device and either your recovery key or the encrypted bundle is "
-"unavailable, the operator cannot recover your content."
+"Published server and website releases, newest first. A little record of "
+"what’s changed, and when."
 msgstr ""
 
-#: site/index.njk:69
-msgid "STARTS WITH YOU"
+#: site/index.njk:74
+msgid "Read the source"
 msgstr ""
 
-#: site/index.njk:71
-msgid "Selected context · direct from your device"
+#: site/index.njk:48
+msgid "Remembering a place"
 msgstr ""
 
-#: site/index.njk:37
-msgid "She mentioned Olive & Fig."
-msgstr ""
-
-#: site/_includes/layout.njk:40
+#: site/_includes/layout.njk:44
 msgid "Skip to content"
 msgstr ""
 
-#: site/index.njk:81
-msgid "Small steps."
+#: site/changelog.njk:27
+msgid "Small steps, in the open"
+msgstr ""
+
+#: site/changelog.njk:1
+msgid ""
+"Small steps, in the open. Published server and website releases for Habibi, "
+"an open-source personal AI companion in development."
+msgstr ""
+
+#: site/index.njk:28
+msgid ""
+"Something you saved becomes something you can use. The answer keeps a path "
+"back to the original note."
+msgstr ""
+
+#: site/_includes/layout.njk:50
+msgid "Source"
+msgstr ""
+
+#: site/changelog.njk:42
+msgid "Steadier releases."
 msgstr ""
 
 #: site/404.njk:15
@@ -370,31 +252,44 @@ msgstr ""
 msgid "That page may have moved, or never quite existed."
 msgstr ""
 
-#: site/index.njk:40
-msgid "That’s the one. A little less to remember."
+#: site/index.njk:63
+msgid ""
+"The app is being designed to contact your chosen provider directly. That "
+"provider can read the prompts and context you send. Its retention policies "
+"apply; encrypted sync does not hide prompts from it."
 msgstr ""
 
-#: site/index.njk:88
+#: site/index.njk:54
 msgid ""
-"The design keeps synced content encrypted with a random vault key owned by "
-"your devices. The service stores ciphertext, not readable memories, content "
-"keys, or inference-provider credentials. It still sees account and "
-"operational sync metadata, such as object sizes and when sync requests "
-"happen. This is not anonymity."
+"The app we’re working toward can turn a conversation into a plan, a list you "
+"can change, or a useful reminder. Answers should have sources. Actions "
+"should be reviewable."
 msgstr ""
 
-#: site/index.njk:80
+#: site/index.njk:73
 msgid ""
-"The plan is deliberately small: an Elixir backend, Postgres for a little "
-"metadata, and affordable S3-compatible storage for encrypted objects. "
-"Stateless sync servers that can grow without becoming a home for your "
-"readable memories."
+"The first piece is a ciphertext-only sync prototype, built with Elixir, "
+"Postgres, and S3-compatible storage. There’s no mobile app to download and "
+"no launch date yet."
 msgstr ""
 
-#: site/index.njk:71
+#: site/index.njk:26
+msgid "The idea"
+msgstr ""
+
+#: site/index.njk:60
+msgid "The intended boundaries, without the fine print."
+msgstr ""
+
+#: site/index.njk:64
 msgid ""
-"The provider receives selected prompts and context to generate a response. "
-"Its privacy and retention policies apply."
+"The prototype stores ciphertext, not your content keys or provider "
+"credentials. It still sees account and sync metadata, including object sizes "
+"and request timing. This is not anonymity."
+msgstr ""
+
+#: site/index.njk:64
+msgid "The sync service"
 msgstr ""
 
 #: site/404.njk:1
@@ -403,87 +298,67 @@ msgid ""
 "AI companion in development."
 msgstr ""
 
-#: site/index.njk:80
-msgid "Very much in the works."
+#: site/changelog.njk:48
+#: site/changelog.njk:63
+msgid "View release on GitHub"
 msgstr ""
 
-#: site/index.njk:72
-msgid "WHEN YOU SYNC"
+#: site/index.njk:65
+msgid "What if I lose my devices?"
 msgstr ""
 
-#: site/index.njk:71
-msgid "WHEN YOU USE AI"
-msgstr ""
-
-#: site/index.njk:88
-msgid "What can Habibi’s sync service see?"
-msgstr ""
-
-#: site/index.njk:89
-msgid "What happens if I lose my devices?"
-msgstr ""
-
-#: site/index.njk:38
+#: site/index.njk:33
 msgid "What was that little place Maya wanted to try?"
 msgstr ""
 
-#: site/index.njk:38
-#: site/index.njk:40
-msgid "You:"
-msgstr ""
-
 #: site/index.njk:71
-msgid "Your chosen provider"
+msgid "Where things stand."
 msgstr ""
 
 #: site/index.njk:60
-msgid "Your companion. Your choice."
+msgid "Who can read what."
 msgstr ""
 
-#: site/index.njk:69
+#: site/index.njk:65
+msgid ""
+"You need both a separately kept recovery key and an exported encrypted "
+"recovery bundle. The reference client can export the bundle; the mobile "
+"recovery interface isn’t built. Without a remaining device or both parts of "
+"the recovery kit, the operator cannot recover your content."
+msgstr ""
+
+#: site/index.njk:33
+msgid "You:"
+msgstr ""
+
+#: site/index.njk:63
+msgid "Your AI provider"
+msgstr ""
+
+#: site/index.njk:62
 msgid "Your devices"
 msgstr ""
 
-#: site/index.njk:59
-msgid "Your life, in your hands."
+#: site/index.njk:62
+msgid ""
+"Your devices hold the vault key and encrypt content before sync. Local "
+"memory and search are planned for the app; the reference client already "
+"encrypts synced objects."
 msgstr ""
 
-#: site/index.njk:21
-msgid "Your memories on your devices. Your choice of AI provider."
-msgstr ""
-
-#: site/index.njk:95
-msgid "Yours by design."
-msgstr ""
-
-#: site/index.njk:34
-msgid "a little everyday help"
-msgstr ""
-
-#: site/_includes/layout.njk:42
-#: site/_includes/layout.njk:53
+#: site/_includes/layout.njk:46
+#: site/_includes/layout.njk:55
 msgid "habibi home"
 msgstr ""
 
-#: site/_includes/layout.njk:25
-#: site/_includes/layout.njk:30
-msgid ""
-"habibi. A little closer. A lot more private. An open-source companion, in "
-"the making."
+#: site/changelog.njk:61
+msgid "introduce private-by-design Habibi companion platform"
 msgstr ""
 
-#: site/index.njk:95
-msgid "of your everyday."
+#: site/changelog.njk:46
+msgid "name stable releases after Habibi"
 msgstr ""
 
-#: site/index.njk:18
-msgid "private."
-msgstr ""
-
-#: site/index.njk:67
-msgid "to mean public."
-msgstr ""
-
-#: site/index.njk:67
-msgid "“Private” should explain where your information goes."
+#: site/changelog.njk:45
+msgid "pin git-cliff to the selected stable baseline"
 msgstr ""

@@ -1,10 +1,21 @@
 import nunjucks from "nunjucks";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { readCatalogues, translate } from "./gettext.mjs";
+import { readTheme, themeCSS, themePath, nshTheme } from "./theme.mjs";
 
 export default function (eleventyConfig) {
   let catalogues = readCatalogues();
+  let theme = readTheme();
   eleventyConfig.on("eleventy.before", () => {
     catalogues = readCatalogues();
+    theme = readTheme();
+  });
+  eleventyConfig.on("eleventy.after", ({ dir }) => {
+    const assets = `${dir.output}/assets`;
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(`${assets}/theme.css`, themeCSS(theme));
+    writeFileSync(`${assets}/theme.json`, JSON.stringify(theme));
+    writeFileSync(`${assets}/nsh-theme.json`, JSON.stringify(nshTheme(theme)));
   });
   const homePath = (locale) => (locale === "en" ? "/" : `/${locale}/`);
   const environment = new nunjucks.Environment(
@@ -20,6 +31,7 @@ export default function (eleventyConfig) {
     );
   });
   eleventyConfig.setLibrary("njk", environment);
+  eleventyConfig.addGlobalData("theme", () => theme);
   eleventyConfig.addGlobalData("locales", () => Object.keys(catalogues).sort());
   eleventyConfig.addFilter("homePath", homePath);
   eleventyConfig.addFilter(
@@ -33,6 +45,7 @@ export default function (eleventyConfig) {
     /^(ar|fa|he|ur)(_|$)/.test(locale) ? "rtl" : "ltr",
   );
   eleventyConfig.addWatchTarget("../priv/gettext");
+  eleventyConfig.addWatchTarget(themePath.pathname);
   eleventyConfig.addPassthroughCopy("site/assets");
   // Eleventy's server binds all interfaces by default, including IPv4.
   eleventyConfig.setServerOptions({

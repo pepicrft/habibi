@@ -25,13 +25,18 @@ spec:
           type: RuntimeDefault
       {{- if .Values.imagePullSecret.enabled }}
       imagePullSecrets:
-        - name: {{ .Release.Name }}-registry
+        - name: {{ default (printf "%s-registry" .Release.Name) .Values.imagePullSecret.existingSecret }}
       {{- end }}
       containers:
         - name: migrate
           image: {{ include "habibi.image" . | quote }}
           imagePullPolicy: IfNotPresent
           command: ["/app/bin/habibi", "eval", "Habibi.Release.migrate()"]
+          {{- if not .Values.platform.enabled }}
+          envFrom:
+            - secretRef:
+                name: {{ required "external.existingSecret is required when platform.enabled=false" .Values.external.existingSecret }}
+          {{- end }}
           env:
             {{- include "habibi.env" . | nindent 12 }}
             - name: PHX_SERVER
@@ -43,16 +48,20 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if or .Values.platform.enabled .Values.external.databaseCASecret }}
             - name: database-ca
               mountPath: /database
               readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
+        {{- if or .Values.platform.enabled .Values.external.databaseCASecret }}
         - name: database-ca
           secret:
-            secretName: {{ .Release.Name }}-postgres-ca
+            secretName: {{ if .Values.platform.enabled }}{{ .Release.Name }}-postgres-ca{{ else }}{{ .Values.external.databaseCASecret }}{{ end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
