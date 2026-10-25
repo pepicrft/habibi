@@ -6,6 +6,8 @@ SOURCE=$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)
 FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/habibi-release.XXXXXX")
 trap 'rm -rf "$FIXTURE"' EXIT
 unset GITHUB_OUTPUT
+# Equal timestamps expose tag ordering bugs hidden by slower local runs.
+export GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_DATE=2026-01-01T00:00:00Z
 git init -q -b main "$FIXTURE"
 git -C "$FIXTURE" config user.name "Habibi release tests"
 git -C "$FIXTURE" config user.email "release-tests@example.invalid"

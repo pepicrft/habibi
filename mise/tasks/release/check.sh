@@ -29,7 +29,8 @@ latest=$(git -C "$ROOT" tag --merged HEAD --list 'habibi@*' 'server@*' |
 
 run_cliff() {
   if [[ -n "$latest" ]]; then
-    "${cliff[@]}" "$@" -- "${latest}..HEAD"
+    # Use the selected baseline, not git-cliff's timestamp ordering of older tags.
+    "${cliff[@]}" --tag-pattern "^${latest//./\.}$" "$@" -- "${latest}..HEAD"
   else
     "${cliff[@]}" "$@"
   fi
