@@ -20,8 +20,12 @@ for path in 'server/**/*' 'deploy/**/*' 'package*.json' 'mise.toml' 'mise.lock' 
   cliff+=(--include-path "$path")
 done
 
-latest=$(git -C "$ROOT" tag --merged HEAD --sort=version:refname --list 'server@*' |
-  awk '/^server@[0-9]+\.[0-9]+\.[0-9]+$/ { latest=$0 } END { print latest }')
+# Sort numeric versions across prefixes; server@0.1.0 was already published.
+latest=$(git -C "$ROOT" tag --merged HEAD --list 'habibi@*' 'server@*' |
+  jq -Rrs 'split("\n")
+    | map(select(test("^(habibi|server)@[0-9]+\\.[0-9]+\\.[0-9]+$")))
+    | sort_by([(split("@")[1] | split(".") | map(tonumber)), startswith("habibi@")])
+    | last // ""')
 
 run_cliff() {
   if [[ -n "$latest" ]]; then
@@ -36,15 +40,15 @@ count=$(jq '[.[].commits[]] | length' <<< "$context")
 should_release=true
 if [[ -n "$latest" && "$count" == 0 ]]; then
   should_release=false
-  version=${latest#server@}
+  version=${latest#*@}
 else
   version=$(run_cliff --bumped-version)
-  version=${version#server@}
+  version=${version#*@}
   if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "git-cliff returned an invalid stable version: $version" >&2
     exit 1
   fi
-  if [[ -n "$latest" ]] && ! jq -en --arg next "$version" --arg last "${latest#server@}" \
+  if [[ -n "$latest" ]] && ! jq -en --arg next "$version" --arg last "${latest#*@}" \
     '($next | split(".") | map(tonumber)) > ($last | split(".") | map(tonumber))' >/dev/null; then
     echo "The next version must exceed $latest." >&2
     exit 1
@@ -53,14 +57,14 @@ fi
 
 case "${1:-check}" in
   check)
-    outputs=$(printf 'should-release=%s\nnext-version=server@%s\nnext-version-number=%s\n' \
+    outputs=$(printf 'should-release=%s\nnext-version=habibi@%s\nnext-version-number=%s\n' \
       "$should_release" "$version" "$version")
     printf '%s\n' "$outputs"
     [[ -z "${GITHUB_OUTPUT:-}" ]] || printf '%s\n' "$outputs" >> "$GITHUB_OUTPUT"
     ;;
   notes)
     if [[ "$should_release" == true ]]; then
-      run_cliff --tag "server@$version" --strip all
+      run_cliff --tag "habibi@$version" --strip all
     fi
     ;;
   *) echo "Usage: $0 [check|notes]" >&2; exit 1 ;;

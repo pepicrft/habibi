@@ -42,5 +42,5 @@ commit_parsers = [
   { message = "^test", group = "<!-- 6 -->Testing" },
   { message = "^(chore|ci)", skip = true },
 ]
-tag_pattern = '^server@[0-9]+\.[0-9]+\.[0-9]+$'
+tag_pattern = '^(habibi|server)@[0-9]+\.[0-9]+\.[0-9]+$'
 sort_commits = "newest"

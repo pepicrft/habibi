@@ -24,6 +24,7 @@ expect() {
   local output
   output=$(bash "$CHECK")
   grep -qx "should-release=$1" <<< "$output"
+  grep -qx "next-version=habibi@$2" <<< "$output"
   grep -qx "next-version-number=$2" <<< "$output"
 }
 
@@ -43,21 +44,34 @@ change server/config.txt 'chore(server): internal maintenance'
 expect false 0.1.0
 change server/marketing/copy.txt 'fix(site): correct a privacy explanation'
 expect true 0.1.1
-git -C "$FIXTURE" tag server@0.1.1
+git -C "$FIXTURE" tag habibi@0.1.1
+expect false 0.1.1
 change deploy/chart.txt 'fix(deploy): correct production readiness'
 expect true 0.1.2
-git -C "$FIXTURE" tag server@0.1.2
+git -C "$FIXTURE" tag habibi@0.1.2
 change server/marketing/copy.txt 'feat(site): add another marketing page'
 expect true 0.2.0
-git -C "$FIXTURE" tag server@0.2.0
+git -C "$FIXTURE" tag habibi@0.2.0
 change server/protocol.txt 'feat(server)!: change the sync protocol'
-git -C "$FIXTURE" tag server@99.0.0-rc.1
+git -C "$FIXTURE" tag habibi@99.0.0-rc.1
 expect true 1.0.0
 git -C "$FIXTURE" checkout -qb unrelated
 change server/config.txt 'fix(server): only on another branch'
-git -C "$FIXTURE" tag server@99.0.0
+git -C "$FIXTURE" tag habibi@99.0.0
 git -C "$FIXTURE" checkout -q main
 expect true 1.0.0
+git -C "$FIXTURE" tag habibi@1.0.0
+git -C "$FIXTURE" checkout -qb feature
+change server/feature.txt 'feat(server): release a merged feature'
+git -C "$FIXTURE" checkout -q main
+git -C "$FIXTURE" merge -q --no-ff feature -m 'Merge pull request #1 from feature'
+expect true 1.1.0
+git -C "$FIXTURE" tag habibi@1.1.0
+git -C "$FIXTURE" checkout -qb maintenance
+change server/config.txt 'chore(server): merged maintenance'
+git -C "$FIXTURE" checkout -q main
+git -C "$FIXTURE" merge -q --no-ff maintenance -m 'Merge pull request #2 from maintenance'
+expect false 1.1.0
 
 touch "$FIXTURE/uncommitted"
 if bash "$CHECK" > /dev/null 2>&1; then echo "Dirty worktree was accepted" >&2; exit 1; fi
@@ -66,4 +80,4 @@ printf '\ninvalid = [\n' >> "$FIXTURE/cliff.toml"
 git -C "$FIXTURE" add .
 git -C "$FIXTURE" commit -qm 'ci: invalid configuration fixture'
 if bash "$CHECK" > /dev/null 2>&1; then echo "Broken cliff configuration was accepted" >&2; exit 1; fi
-echo "Release fixtures passed: bootstrap, no-op, filtering, bumps, tag reachability, prereleases and failures"
+echo "Release fixtures passed: bootstrap, prefix migration, merges, no-op, filtering, bumps, tag reachability, prereleases and failures"
