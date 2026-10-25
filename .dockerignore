@@ -1,0 +1,14 @@
+.git
+.amp
+.github
+node_modules
+**/node_modules
+_site
+server/_build
+server/deps
+server/priv/static
+server/test
+server/marketing/test
+**/.env
+**/.env.*
+**/erl_crash.dump

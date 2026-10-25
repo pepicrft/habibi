@@ -1,0 +1,11 @@
+[tools]
+node = "24.18.0"
+erlang = "29.0.3"
+elixir = "1.20.2-otp-29"
+git-cliff = "2.6.0"
+jq = "1.8.1"
+helm = "3.21.3"
+
+[tasks."release:notes"]
+description = "Preview release notes without creating a tag or release"
+run = "bash mise/tasks/release/check.sh notes"

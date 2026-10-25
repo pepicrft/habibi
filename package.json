@@ -1,0 +1,25 @@
+{
+  "name": "habibi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An open-source personal AI companion, in development.",
+  "workspaces": [
+    "server/marketing"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace server/marketing",
+    "dev": "npm run dev --workspace server/marketing",
+    "serve": "npm run serve --workspace server/marketing",
+    "gettext:extract": "npm run gettext:extract --workspace server/marketing",
+    "gettext:check": "npm run gettext:check --workspace server/marketing",
+    "test": "node --test client/*.test.mjs server/marketing/test/*.test.mjs",
+    "test:deploy": "node --test deploy/test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "js-yaml": "4.3.2"
+  }
+}

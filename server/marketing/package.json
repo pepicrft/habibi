@@ -1,0 +1,20 @@
+{
+  "name": "@habibi/marketing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node gettext.mjs --check && npm run clean && eleventy",
+    "clean": "node -e \"require('node:fs').rmSync('../priv/static/marketing', {recursive: true, force: true})\"",
+    "dev": "eleventy --serve --watch --port=8080",
+    "serve": "eleventy --serve --port=8080",
+    "gettext:extract": "node gettext.mjs",
+    "gettext:check": "node gettext.mjs --check"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.7",
+    "gettext-parser": "10.0.0",
+    "gray-matter": "4.0.3",
+    "nunjucks": "3.3.0"
+  }
+}

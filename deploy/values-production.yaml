@@ -1,0 +1,21 @@
+host: habibi.fyi
+# Keep experimental sync closed; the public deployment initially serves marketing.
+allowRegistration: false
+ingress:
+  enabled: true
+analytics:
+  enabled: true
+storage:
+  bucketName: pepicrft-habibi-ciphertext-production
+backup:
+  bucketName: pepicrft-habibi-postgres-backups
+nodeSelector:
+  node.cluster.x-k8s.io/pool: app
+postgres:
+  nodeSelector:
+    node.cluster.x-k8s.io/pool: stateful
+  tolerations:
+    - key: node.cluster.x-k8s.io/pool
+      operator: Equal
+      value: stateful
+      effect: NoSchedule

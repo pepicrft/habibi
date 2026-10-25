@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "habibi.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "habibi.labels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        {{- include "habibi.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if .Values.imagePullSecret.enabled }}
+      imagePullSecrets:
+        - name: {{ .Release.Name }}-registry
+      {{- end }}
+      containers:
+        - name: web
+          image: {{ include "habibi.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+            - name: epmd
+              containerPort: 4369
+            - name: distribution
+              containerPort: 9100
+          env:
+            {{- include "habibi.env" . | nindent 12 }}
+            - name: PHX_SERVER
+              value: "true"
+            - name: PHX_HOST
+              value: {{ .Values.host | quote }}
+            - name: ALLOW_REGISTRATION
+              value: {{ .Values.allowRegistration | quote }}
+            - name: DNS_CLUSTER_QUERY
+              value: {{ printf "%s-peers.%s.svc.cluster.local" .Release.Name .Release.Namespace | quote }}
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-ciphertext
+                  key: BUCKET_NAME
+            - name: S3_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-ciphertext
+                  key: AWS_ENDPOINT_URL_S3
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-ciphertext
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-ciphertext
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-ciphertext
+                  key: AWS_REGION
+            {{- if .Values.analytics.enabled }}
+            - name: SMOLANALYTICS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.analytics.secretName }}
+                  key: SMOLANALYTICS_HOST
+            - name: SMOLANALYTICS_WRITE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.analytics.secretName }}
+                  key: SMOLANALYTICS_WRITE_KEY
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "habibi.security" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: database-ca
+              mountPath: /database
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: database-ca
+          secret:
+            secretName: {{ .Release.Name }}-postgres-ca
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

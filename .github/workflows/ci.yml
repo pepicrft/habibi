@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: habibi
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: habibi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: ecto://habibi:disposable-ci-password@127.0.0.1:5432/habibi_test
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: "2026.9.1"
+          install_args: "node erlang elixir git-cliff jq helm"
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: helm lint deploy/helm/habibi --values deploy/values-production.yaml
+      - run: npm run test:deploy
+      - run: bash mise/tasks/release/test.sh
+      - run: mix deps.get --check-locked
+        working-directory: server
+      - run: mix format --check-formatted
+        working-directory: server
+      - run: mix compile --warnings-as-errors
+        working-directory: server
+      - run: mix ecto.setup
+        working-directory: server
+      - run: mix test
+        working-directory: server

@@ -1,0 +1,18 @@
+---
+layout: layout.njk
+title: "A little off the path — Habibi"
+description: "This page isn’t here. Find your way back to Habibi, an open-source personal AI companion in development."
+pagination:
+  data: locales
+  size: 1
+  alias: locale
+permalink: "{{ locale | notFoundPath }}"
+noindex: true
+---
+<main class="not-found wrap" id="main">
+  {% include "companion.njk" %}
+  <p class="eyebrow">404 / {{ dgettext("marketing", "A little off the path") }}</p>
+  <h1>{{ dgettext("marketing", "Nothing here.") }}<br>{{ dgettext("marketing", "Still good company.") }}</h1>
+  <p>{{ dgettext("marketing", "That page may have moved, or never quite existed.") }}<br>{{ dgettext("marketing", "Let’s get you back to the beginning.") }}</p>
+  <a class="button button-primary" href="{{ locale | homePath }}">{{ dgettext("marketing", "Back to Habibi") }} {% include "arrow.njk" %}</a>
+</main>

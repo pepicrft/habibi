@@ -1,0 +1,93 @@
+apiVersion: objectstorage.pepicrft.me/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: {{ .Release.Name }}-ciphertext
+spec:
+  bucketName: {{ required "storage.bucketName is required" .Values.storage.bucketName | quote }}
+  secretName: {{ .Release.Name }}-ciphertext
+  reclaimPolicy: Retain
+---
+apiVersion: objectstorage.pepicrft.me/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: {{ .Release.Name }}-postgres-backups
+spec:
+  bucketName: {{ required "backup.bucketName is required" .Values.backup.bucketName | quote }}
+  secretName: {{ .Release.Name }}-postgres-backups
+  reclaimPolicy: Retain
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ .Release.Name }}-postgres-backups
+spec:
+  configuration:
+    destinationPath: {{ printf "s3://%s/" .Values.backup.bucketName | quote }}
+    endpointURL: {{ .Values.backup.endpoint | quote }}
+    s3Credentials:
+      accessKeyId:
+        name: {{ .Release.Name }}-postgres-backups
+        key: AWS_ACCESS_KEY_ID
+      secretAccessKey:
+        name: {{ .Release.Name }}-postgres-backups
+        key: AWS_SECRET_ACCESS_KEY
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+  retentionPolicy: {{ .Values.backup.retention | quote }}
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-postgres
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  instances: 1
+  imageName: {{ .Values.postgres.image | quote }}
+  bootstrap:
+    initdb:
+      database: habibi
+      owner: habibi
+  storage:
+    storageClass: {{ .Values.postgres.storageClass | quote }}
+    size: {{ .Values.postgres.storageSize | quote }}
+  resources:
+    {{- toYaml .Values.postgres.resources | nindent 4 }}
+  affinity:
+    enablePodAntiAffinity: false
+    {{- with .Values.postgres.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.postgres.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: {{ .Release.Name }}-postgres-backups
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ .Release.Name }}-postgres-daily
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  cluster:
+    name: {{ .Release.Name }}-postgres

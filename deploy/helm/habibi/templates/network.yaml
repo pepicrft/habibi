@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  selector:
+    {{- include "habibi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-peers
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "habibi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: epmd
+      port: 4369
+      targetPort: epmd
+    - name: distribution
+      port: 9100
+      targetPort: distribution
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-web
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "habibi.labels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+              app.kubernetes.io/component: controller
+      ports:
+        - port: 4000
+          protocol: TCP
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "habibi.labels" . | nindent 14 }}
+              app.kubernetes.io/component: web
+      ports:
+        - port: 4369
+          protocol: TCP
+        - port: 9100
+          protocol: TCP
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.host | quote }}
+    external-dns.alpha.kubernetes.io/ingress-hostname-source: annotation-only
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}
+                port:
+                  number: 80
+  tls:
+    - secretName: {{ .Release.Name }}-tls
+      hosts:
+        - {{ .Values.host | quote }}
+{{- end }}

@@ -1,0 +1,44 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/pepicrft/habibi
+  tag: latest
+  digest: ""
+host: habibi.example.com
+allowRegistration: false
+poolSize: 5
+analytics:
+  enabled: false
+  secretName: analytics-client
+imagePullSecret:
+  enabled: true
+  secretStoreName: infisical-salibu
+ingress:
+  enabled: false
+  className: nginx
+  issuer: letsencrypt-cloudflare
+postgres:
+  image: ghcr.io/cloudnative-pg/postgresql:18.3-standard-trixie
+  storageClass: hcloud-volumes
+  storageSize: 10Gi
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+storage:
+  bucketName: ""
+backup:
+  bucketName: ""
+  endpoint: https://fsn1.your-objectstorage.com
+  retention: 7d
+  schedule: "0 15 3 * * *"
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+nodeSelector: {}

@@ -1,0 +1,10 @@
+/node_modules/
+/_site/
+/npm-debug.log*
+/server/_build/
+/server/deps/
+/server/erl_crash.dump
+/server/.env
+/server/.env.*
+/server/priv/static/marketing/
+/server/marketing/node_modules/

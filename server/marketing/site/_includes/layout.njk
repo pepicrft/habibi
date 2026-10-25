@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="{{ locale | languageTag }}" dir="{{ locale | textDirection }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#FAF8EF">
+    <title>{{ dgettext("marketing", title) }}</title>
+    <meta name="description" content="{{ dgettext('marketing', description) }}">
+    <link rel="canonical" href="https://habibi.fyi{{ page.url }}">
+{% if not noindex %}
+{% for alternate in locales %}
+    <link rel="alternate" hreflang="{{ alternate | languageTag }}" href="https://habibi.fyi{{ alternate | homePath }}">
+{% endfor %}
+    <link rel="alternate" hreflang="x-default" href="https://habibi.fyi/">
+{% endif %}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="habibi">
+    <meta property="og:title" content="{{ dgettext('marketing', title) }}">
+    <meta property="og:description" content="{{ dgettext('marketing', description) }}">
+    <meta property="og:url" content="https://habibi.fyi{{ page.url }}">
+    <meta property="og:image" content="https://habibi.fyi/assets/social.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{ dgettext('marketing', 'habibi. A little closer. A lot more private. An open-source companion, in the making.') }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ dgettext('marketing', title) }}">
+    <meta name="twitter:description" content="{{ dgettext('marketing', description) }}">
+    <meta name="twitter:image" content="https://habibi.fyi/assets/social.png">
+    <meta name="twitter:image:alt" content="{{ dgettext('marketing', 'habibi. A little closer. A lot more private. An open-source companion, in the making.') }}">
+{% if noindex %}
+    <meta name="robots" content="noindex">
+{% endif %}
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="/assets/fonts/dm-serif-display-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{{ dgettext("marketing", "Skip to content") }}</a>
+    <header class="site-header wrap">
+      <a class="wordmark" href="{{ locale | homePath }}" aria-label="{{ dgettext('marketing', 'habibi home') }}">{% include "companion.njk" %}<span>habibi</span></a>
+      <nav aria-label="{{ dgettext('marketing', 'Main navigation') }}">
+        <a href="{{ locale | homePath }}#about">{{ dgettext("marketing", "About") }}</a>
+        <a href="{{ locale | homePath }}#privacy">{{ dgettext("marketing", "Privacy") }}</a>
+        <a href="{{ locale | homePath }}#building">{{ dgettext("marketing", "Building") }}</a>
+        <a class="nav-github" href="https://github.com/pepicrft/habibi" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+    {{ content | safe }}
+    <footer class="site-footer wrap">
+      <div class="footer-top">
+        <a class="wordmark" href="{{ locale | homePath }}" aria-label="{{ dgettext('marketing', 'habibi home') }}">{% include "companion.njk" %}<span>habibi</span></a>
+        <p>{{ dgettext("marketing", "A little company. On your terms.") }}</p>
+        <a class="text-link" href="https://github.com/pepicrft/habibi" rel="noopener noreferrer">{{ dgettext("marketing", "Made in the open") }} <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="footer-bottom">
+        <p>{{ dgettext("marketing", "Open source. In development. Not yet an app you can download.") }}</p>
+        <p>{{ dgettext("marketing", "No analytics. No trackers. Just a hello.") }}</p>
+      </div>
+    </footer>
+  </body>
+</html>
