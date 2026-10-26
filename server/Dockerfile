@@ -9,7 +9,7 @@ COPY server/marketing/package.json server/marketing/package.json
 RUN npm ci
 COPY server/marketing server/marketing
 COPY server/priv/gettext server/priv/gettext
-COPY server/priv/theme.json server/priv/theme.json
+COPY server/priv/theme.json server/priv/theme-variants.json server/priv/
 RUN npm run build
 
 FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-bookworm-20260623-slim AS builder

@@ -12,7 +12,7 @@ import {
   appendFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { readNativeThemes } from "../theme.mjs";
@@ -22,23 +22,23 @@ test("the public marketing build localizes routes and metadata, escapes translat
   const fixture = mkdtempSync(join(tmpdir(), "habibi-marketing-"));
   try {
     const marketing = join(fixture, "server/marketing");
-    cpSync(join(root, "server/marketing"), marketing, {
-      recursive: true,
-      filter: (path) => !path.includes("node_modules"),
-    });
-    cpSync(
-      join(root, "server/priv/gettext"),
-      join(fixture, "server/priv/gettext"),
-      { recursive: true },
-    );
-    cpSync(
-      join(root, "server/priv/theme.json"),
-      join(fixture, "server/priv/theme.json"),
-    );
-    cpSync(
-      join(root, "server/priv/theme-variants.json"),
-      join(fixture, "server/priv/theme-variants.json"),
-    );
+    // Use the image's actual inputs so missing COPY sources fail before release.
+    const stage = readFileSync(join(root, "server/Dockerfile"), "utf8")
+      .split(/^FROM /m)[1];
+    for (const [, sources, destination] of stage.matchAll(/^COPY (.+) (\S+)$/gm)) {
+      for (const source of sources.split(/\s+/)) {
+        const target = join(
+          fixture,
+          destination,
+          destination.endsWith("/") ? basename(source) : "",
+        );
+        mkdirSync(dirname(target), { recursive: true });
+        cpSync(join(root, source), target, {
+          recursive: true,
+          filter: (path) => !path.includes("node_modules"),
+        });
+      }
+    }
     mkdirSync(join(fixture, "client"));
     cpSync(join(root, "client/theme.mjs"), join(fixture, "client/theme.mjs"));
     symlinkSync(
