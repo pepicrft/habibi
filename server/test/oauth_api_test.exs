@@ -16,6 +16,37 @@ defmodule Habibi.OAuthAPITest do
     :ok
   end
 
+  test "capabilities publicly describe the current deployment without accepting request overrides" do
+    previous = Application.fetch_env!(:habibi, :allow_registration)
+    on_exit(fn -> Application.put_env(:habibi, :allow_registration, previous) end)
+
+    for registration <- [true, false] do
+      Application.put_env(:habibi, :allow_registration, registration)
+
+      expected = %{
+        "version" => 1,
+        "authentication" => %{
+          "passkeys" => true,
+          "phone" => false,
+          "accountRegistration" => registration
+        },
+        "oauth" => %{"dynamicClientRegistration" => registration},
+        "sync" => %{"encryptedSnapshots" => true, "vaultCreation" => registration},
+        "themes" => %{"catalog" => "/assets/themes.json"}
+      }
+
+      response = request(:get, "/v1/capabilities")
+      assert response.status == 200
+      assert body(response) == expected
+      assert get_resp_header(response, "content-type") == ["application/json; charset=utf-8"]
+      assert get_resp_header(response, "cache-control") == ["no-store"]
+      assert get_resp_header(response, "set-cookie") == []
+
+      assert request(:get, "/v1/capabilities?phone=true&catalog=https%3A%2F%2Fevil.example")
+             |> body() == expected
+    end
+  end
+
   test "discovery and registration expose only the public native profile" do
     metadata = request(:get, "/.well-known/oauth-authorization-server") |> body()
     assert metadata["code_challenge_methods_supported"] == ["S256"]
@@ -265,6 +296,66 @@ defmodule Habibi.OAuthAPITest do
              {"authorization", "Bearer " <> second},
              {"x-habibi-vault-token", vault.token}
            ]).status == 200
+  end
+
+  test "closed registration preserves OAuth metadata, existing authorization and authenticated sync" do
+    client = register_client()
+    {exchange, _} = authorize_client(client)
+    tokens = request(:post, "/oauth/token", exchange) |> successful_token()
+    authorization = [{"authorization", "Bearer " <> tokens["access_token"]}]
+
+    vault = %{
+      "id" => Ecto.UUID.generate(),
+      "token" => Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+    }
+
+    assert request(:post, "/v1/vaults", vault, authorization).status == 201
+    metadata = request(:get, "/.well-known/oauth-authorization-server") |> body()
+
+    previous = Application.fetch_env!(:habibi, :allow_registration)
+    Application.put_env(:habibi, :allow_registration, false)
+    on_exit(fn -> Application.put_env(:habibi, :allow_registration, previous) end)
+
+    assert body(request(:get, "/v1/capabilities"))["sync"] == %{
+             "encryptedSnapshots" => true,
+             "vaultCreation" => false
+           }
+
+    assert request(:get, "/.well-known/oauth-authorization-server") |> body() == metadata
+
+    for {path, params, headers} <- [
+          {"/oauth/register", %{"client_name" => "Closed"}, []},
+          {"/v1/vaults", vault, authorization}
+        ] do
+      response = request(:post, path, params, headers)
+      assert response.status == 403
+      assert body(response) == %{"error" => "registration_disabled"}
+    end
+
+    assert request(:post, "/v1/vaults", vault).status == 401
+
+    {existing_exchange, _} = authorize_client(client)
+    assert request(:post, "/oauth/token", existing_exchange).status == 200
+    refreshed = request(:post, "/oauth/token", refresh(exchange, tokens)) |> successful_token()
+    assert me(refreshed).status == 200
+
+    path = "/v1/vaults/#{vault["id"]}/records"
+    headers = [{"x-habibi-vault-token", vault["token"]} | authorization]
+    id = Ecto.UUID.generate()
+    ciphertext = "HAB1" <> :crypto.strong_rand_bytes(73)
+
+    uploaded =
+      conn(:put, path <> "/" <> id, ciphertext)
+      |> put_req_header("content-type", "application/octet-stream")
+      |> put_req_header("authorization", "Bearer " <> tokens["access_token"])
+      |> put_req_header("x-habibi-vault-token", vault["token"])
+      |> endpoint()
+
+    assert uploaded.status == 201
+    assert body(request(:get, path, nil, headers))["records"] |> hd() |> Map.fetch!("id") == id
+    assert request(:get, path <> "/" <> id, nil, headers).resp_body == ciphertext
+    assert request(:get, path, nil, authorization).status == 401
+    assert request(:get, path, nil, [{"x-habibi-vault-token", vault["token"]}]).status == 401
   end
 
   test "code-only clients receive no refresh token and grants have an absolute lifetime" do

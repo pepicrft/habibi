@@ -43,6 +43,10 @@ defmodule Habibi.PasskeysAPITest do
 
     assert replay.status == 400
 
+    previous = Application.fetch_env!(:habibi, :allow_registration)
+    Application.put_env(:habibi, :allow_registration, false)
+    on_exit(fn -> Application.put_env(:habibi, :allow_registration, previous) end)
+
     for {count, status} <- [{3, 200}, {2, 400}, {4, 200}] do
       login = browser_post(context.page, "/auth/passkeys/options", %{kind: "login"}, context.csrf)
       data = client_data(body(login)["challenge"], "webauthn.get")
@@ -110,6 +114,9 @@ defmodule Habibi.PasskeysAPITest do
 
   test "registration is closed by default policy and database-backed throttling cannot be bypassed with forwarded headers",
        context do
+    options =
+      browser_post(context.page, "/auth/passkeys/options", %{kind: "register"}, context.csrf)
+
     previous = Application.fetch_env!(:habibi, :allow_registration)
     Application.put_env(:habibi, :allow_registration, false)
     on_exit(fn -> Application.put_env(:habibi, :allow_registration, previous) end)
@@ -121,6 +128,16 @@ defmodule Habibi.PasskeysAPITest do
 
     assert browser_post(context.page, "/auth/passkeys/options", %{kind: "register"}, context.csrf).status ==
              400
+
+    assert browser_post(
+             options,
+             "/auth/passkeys/finish",
+             registration(context, options),
+             context.csrf
+           ).status ==
+             400
+
+    assert Habibi.Repo.aggregate(Habibi.Passkeys.Account, :count) == 0
 
     for n <- 1..61 do
       conn =
