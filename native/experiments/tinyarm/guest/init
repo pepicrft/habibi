@@ -1,0 +1,36 @@
+#!/bin/sh
+# Unauthenticated, unaudited simulator prototype. No drives, host shares or net.
+set -eu
+export PATH=/usr/bin:/bin
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /proc /sys /run /tmp /workspace
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs -o size=32m,nosuid,nodev tmpfs /tmp
+chmod 1777 /tmp
+mount -t tmpfs -o size=64m,nosuid,nodev tmpfs /workspace
+mkdir -p /workspace/home /workspace/kit
+chown 1000:1000 /workspace/home /workspace/kit
+chmod 755 /workspace /workspace/home /workspace/kit
+gzip -dc /lib/modules/virtio_mmio.ko.gz > /run/virtio_mmio.ko
+insmod /run/virtio_mmio.ko || exec sleep 2147483647
+rm /run/virtio_mmio.ko
+while [ ! -c /dev/hvc0 ] || [ ! -c /dev/hvc1 ]; do sleep 0.1; done
+chmod 600 /dev/hvc0 /dev/hvc1
+# TinyARM recognizes TEN consecutive '=' on console0, suppresses them and
+# automatically sends '=\n'. Its embedded input queues do not drain before this.
+exec 3<> /dev/hvc0
+stty -echo <&3
+printf '==========' >&3
+IFS= read -r ack <&3
+if [ "$ack" != '=' ]; then
+    printf 'guest: bad TinyARM acknowledgement\n' > /dev/hvc0
+    exec sleep 2147483647
+fi
+# Canonical TTY input silently truncates JSON lines at 4095 bytes. Raw mode is
+# mandatory, and also prevents output CRLF conversion and echo into the RPC.
+# Keep each terminal open across stty and its reader. Last-close can reset hvc
+# termios and discard the acknowledgement before a later shell redirection.
+exec 0<> /dev/hvc1
+stty raw -echo <&0
+exec /usr/bin/python3 -I -B /opt/habibi/rpc.py >&0 2> /dev/hvc0 3>&-

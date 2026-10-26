@@ -1,0 +1,28 @@
+diff --git a/src/tinyarm/boot.zig b/src/tinyarm/boot.zig
+index 33f3a60..a98d250 100644
+--- a/src/tinyarm/boot.zig
++++ b/src/tinyarm/boot.zig
+@@ -30,7 +30,7 @@ pub const RuntimeDevices = struct {
+     /// Ports of the multiport console device (after the consoles); 0: none.
+     port_count: u8 = 0,
+     drive_count: u8 = 0,
+-    fs_count: u8 = 3,
++    fs_count: u8 = 0,
+     eth_count: u8 = 0,
+     /// CPUs in the device tree; more than one selects the GICv3.
+     cpu_count: u8 = 1,
+diff --git a/src/tinyarm/devices.zig b/src/tinyarm/devices.zig
+index a79ba29..0e7e000 100644
+--- a/src/tinyarm/devices.zig
++++ b/src/tinyarm/devices.zig
+@@ -798,10 +798,6 @@ pub const DeviceBus = struct {
+             try devices.append(allocator, VirtioDevice.block(irq, drive_size));
+             irq += 1;
+         }
+-        for (&[_][]const u8{ "wasi0", "wasi1", "wasi2" }) |tag| {
+-            try devices.append(allocator, VirtioDevice.nineP(irq, tag));
+-            irq += 1;
+-        }
+ 
+         return .{
+             .clint = Clint.initRealTime(),

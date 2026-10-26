@@ -1,0 +1,4 @@
+module TinyARM {
+    header "TinyARMShim.h"
+    export *
+}
