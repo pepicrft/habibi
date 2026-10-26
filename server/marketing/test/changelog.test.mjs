@@ -27,6 +27,7 @@ test("the offline changelog localizes published notes, routes and metadata witho
       recursive: true,
     });
     cpSync(join(root, "server/priv/theme.json"), join(fixture, "server/priv/theme.json"));
+    cpSync(join(root, "server/priv/theme-variants.json"), join(fixture, "server/priv/theme-variants.json"));
     symlinkSync(join(root, "node_modules"), join(fixture, "node_modules"), "dir");
 
     for (const locale of ["es", "ar"]) {

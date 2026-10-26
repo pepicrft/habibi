@@ -8,3 +8,7 @@
 /server/.env.*
 /server/priv/static/marketing/
 /server/marketing/node_modules/
+/native/.once/
+/native/target/
+/native/android/.gradle/
+/native/android/local.properties

@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { readNativeThemes } from "../theme.mjs";
 
 test("the public marketing build localizes routes and metadata, escapes translations and detects stale extraction", () => {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -33,6 +34,10 @@ test("the public marketing build localizes routes and metadata, escapes translat
     cpSync(
       join(root, "server/priv/theme.json"),
       join(fixture, "server/priv/theme.json"),
+    );
+    cpSync(
+      join(root, "server/priv/theme-variants.json"),
+      join(fixture, "server/priv/theme-variants.json"),
     );
     mkdirSync(join(fixture, "client"));
     cpSync(join(root, "client/theme.mjs"), join(fixture, "client/theme.mjs"));
@@ -80,6 +85,10 @@ test("the public marketing build localizes routes and metadata, escapes translat
     assert.deepEqual(
       JSON.parse(readFileSync(join(output, "assets/theme.json"))),
       JSON.parse(readFileSync(join(fixture, "server/priv/theme.json"))),
+    );
+    assert.deepEqual(
+      JSON.parse(readFileSync(join(output, "assets/themes.json"))),
+      readNativeThemes(),
     );
     // The native-ready frame map must describe the shipped atlas, not CSS geometry.
     const mascotDirectory = join(output, "assets/mascot");
@@ -209,6 +218,44 @@ test("the public marketing build localizes routes and metadata, escapes translat
     assert.equal(nativeTheme.cssVars.light.secondary, theme.colors.muted);
     assert.equal(nativeTheme.cssVars.theme["space-6"], "27px");
     assert.equal(nativeTheme.cssVars.theme["font-sans"], "system-ui");
+    const nativeThemes = JSON.parse(
+      readFileSync(join(output, "assets/themes.json")),
+    );
+    const forest = nativeThemes.themes.find(({ id }) => id === "forest");
+    assert.equal(forest.colors[mascot.tintToken], "#a13265");
+    assert.equal(forest.colors.background, "#ecf5e1");
+    assert.equal(forest.colors.surface, "#ecf5e1");
+    assert.equal(forest.colors.onPrimary, "#ecf5e1");
+    for (const entry of nativeThemes.themes) {
+      assert.equal(entry.fonts.body, "system-ui");
+      assert.equal(entry.space[6], 27);
+      assert.equal(entry.lineHeights.body, 1.73);
+      assert.equal(entry.fontWeights.button, 625);
+    }
+    const bundledThemes = run(
+      "--input-type=module",
+      "-e",
+      'import {readNativeThemes} from "./theme.mjs"; process.stdout.write(JSON.stringify(readNativeThemes()));',
+    );
+    assert.deepEqual(JSON.parse(bundledThemes), nativeThemes);
+
+    // Descriptor edits must also rebuild the public asset and offline source.
+    const variantsPath = join(fixture, "server/priv/theme-variants.json");
+    const variants = JSON.parse(readFileSync(variantsPath));
+    variants.themes[0].colors.modes.dark.primary = "#c5ddc6";
+    writeFileSync(variantsPath, JSON.stringify(variants));
+    run(join(root, "node_modules/@11ty/eleventy/cmd.cjs"));
+    const updatedThemes = JSON.parse(readFileSync(join(output, "assets/themes.json")));
+    assert.equal(updatedThemes.themes[0].colors.modes.dark.primary, "#c5ddc6");
+    assert.equal(updatedThemes.themes[0].colors.primary, "#a13265");
+    assert.deepEqual(
+      JSON.parse(run(
+        "--input-type=module",
+        "-e",
+        'import {readNativeThemes} from "./theme.mjs"; process.stdout.write(JSON.stringify(readNativeThemes()));',
+      )),
+      updatedThemes,
+    );
     assert.deepEqual(JSON.parse(readFileSync(join(output, "locales.json"))), [
       "en",
     ]);

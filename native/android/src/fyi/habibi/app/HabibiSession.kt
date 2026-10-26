@@ -1,0 +1,717 @@
+package fyi.habibi.app
+
+import android.app.Application
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.OutputStream
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.time.Instant
+import java.time.LocalDate
+import java.util.UUID
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+object HabibiCore {
+    init { System.loadLibrary("habibi_core") }
+    external fun execute(input: String): String
+}
+
+class HabibiApplication : Application() {
+    // Test injection is application-scoped and cannot be selected through intents.
+    internal var injectedSession: HabibiSession? = null
+    internal var voiceRecognizerFactory: (() -> DeviceRecognizer)? = null
+    internal var injectedThemes: NativeThemes? = null
+    internal val themes get() = injectedThemes ?: realThemes
+    private val realThemes by lazy { NativeThemes(this) }
+    internal val session: HabibiSession get() = injectedSession ?: realSession
+    private val realSession by lazy {
+        HabibiSession(SecureVaultStorage(this), { HabibiCore.execute(it) },
+            oauth = NativeOAuth(SecureVaultStorage(this, "oauth-v1"), HttpSyncTransport()))
+    }
+}
+
+internal interface VaultStorage {
+    fun load(): JSONObject?
+    /** Return only when the whole identity + document record is durable. */
+    fun save(record: JSONObject)
+}
+
+internal class SecureVaultStorage(context: Context, private val recordName: String = "vault-v1",
+    private val keyProvider: ((Boolean) -> SecretKey)? = null) : VaultStorage {
+    private val preferences = context.getSharedPreferences(if (recordName == "vault-v1") "habibi.sealed-vault" else "habibi.sealed-$recordName", Context.MODE_PRIVATE)
+    private val alias = "fyi.habibi.app.$recordName"
+
+    private fun key(create: Boolean): SecretKey {
+        keyProvider?.let { return it(create) }
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (store.getKey(alias, null) as? SecretKey)?.let { return it }
+        check(create) { "The device encryption key is unavailable. Your saved vault has not been changed." }
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
+            init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
+            generateKey()
+        }
+    }
+
+    @Synchronized override fun load(): JSONObject? {
+        val stored = preferences.getString(recordName, null) ?: return null
+        check(stored.length <= 12 * 1024 * 1024) { "Protected storage is too large. Your vault has not been changed." }
+        val envelope = JSONObject(stored)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(false), GCMParameterSpec(128, Base64.decode(envelope.getString("iv"), Base64.NO_WRAP)))
+        cipher.updateAAD(recordName.toByteArray(Charsets.UTF_8))
+        return JSONObject(String(cipher.doFinal(Base64.decode(envelope.getString("data"), Base64.NO_WRAP)), Charsets.UTF_8))
+    }
+
+    @Synchronized override fun save(record: JSONObject) {
+        val plaintext = record.toString().toByteArray(Charsets.UTF_8)
+        check(plaintext.size <= 8 * 1024 * 1024) { "Protected storage is too large. Your previous data is unchanged." }
+        val previous = preferences.getString(recordName, null)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        // A successful explicit recovery can replace a vault whose device key
+        // was lost. Loading never creates a replacement key or resets data.
+        cipher.init(Cipher.ENCRYPT_MODE, key(true))
+        cipher.updateAAD(recordName.toByteArray(Charsets.UTF_8))
+        val envelope = JSONObject().put("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .put("data", Base64.encodeToString(cipher.doFinal(plaintext), Base64.NO_WRAP))
+        if (!preferences.edit().putString(recordName, envelope.toString()).commit()) {
+            // SharedPreferences updates memory before its disk write. Restore its
+            // previous memory value too; a failed candidate must never be restored.
+            val rollback = preferences.edit()
+            if (previous == null) rollback.remove(recordName) else rollback.putString(recordName, previous)
+            check(rollback.commit()) { "Storage failed. Close Habibi and retry; no updated state was published." }
+            error("Could not save your vault. Your previous data is unchanged.")
+        }
+    }
+}
+
+internal data class ChatLine(val role: String, val text: String, val id: String = UUID.randomUUID().toString(),
+    val component: String? = null, val createdAt: String = Instant.now().toString(), val detail: String? = null,
+    val entryId: String? = null)
+internal class Conversation(val id: String = UUID.randomUUID().toString(), val createdAt: String = Instant.now().toString()) {
+    @Volatile var lines: List<ChatLine> = emptyList()
+    @Volatile var draft = ""
+    @Volatile var draftRevision = 0L
+    @Volatile var definition: JSONObject? = null
+    @Volatile var toolResult: String? = null
+    val history = JSONArray()
+    var selectionStart = 0
+    var selectionEnd = 0
+    var scrollY = 0
+    var following = true
+    val title get() = lines.firstOrNull { it.role == "You" }?.text?.lineSequence()?.firstOrNull()?.take(72) ?: "New conversation"
+}
+internal data class KitReview(val ticket: Long, val recordFingerprint: String, val review: String, val callId: String?, val run: AtomicBoolean?)
+private class CoreFailure(message: String) : Exception(message)
+
+/** Application-owned session. Every bridge, storage and network call is serialized.
+ * Only durable candidates become public state. No identity is ever handed to UI. */
+internal class HabibiSession(
+    private val storage: VaultStorage,
+    private val bridge: (String) -> String,
+    private val worker: Executor = Executors.newSingleThreadExecutor(),
+    private val publish: ((() -> Unit) -> Unit) = { Handler(Looper.getMainLooper()).post(it) },
+    private val transport: InferenceTransport = HttpInferenceTransport(),
+    private val oauth: NativeOAuth? = null,
+    private val syncTransport: SyncTransport = HttpSyncTransport(),
+) {
+    private var record: JSONObject? = null
+    @Volatile var state: JSONObject? = null; private set
+    @Volatile var loaded = false; private set
+    @Volatile var loadFailed = false; private set
+    @Volatile var busy = false; private set
+    @Volatile var error: String? = null; private set
+    @Volatile var review: KitReview? = null; private set
+    @Volatile var syncOrigin = SyncOrigin.production; private set
+    @Volatile var syncConnected = false; private set
+    @Volatile var syncRemovalFailed = false; private set
+    @Volatile var syncMessage = "Not connected · Manual encrypted sync is optional."; private set
+    @Volatile var syncHeads: List<String> = emptyList(); private set
+    @Volatile var syncConflict = false; private set
+    @Volatile var syncPending = false; private set
+    @Volatile var syncDecision = ""; private set
+    private val syncLock = AtomicBoolean(false)
+    val syncing get() = syncLock.get()
+    val authorizing get() = oauth?.authorizing() == true
+    @Volatile var conversations: List<Conversation> = listOf(Conversation()); private set
+    @Volatile var conversation: Conversation = conversations.first(); private set
+    var draft: JSONObject?
+        get() = conversation.definition
+        private set(value) {
+            synchronized(archiveLock) { conversation.definition = value; archiveRevision++ }
+            scheduleConversationSave()
+        }
+    var toolResult: String?
+        get() = conversation.toolResult
+        private set(value) { conversation.toolResult = value }
+    var lines: List<ChatLine>
+        get() = conversation.lines
+        private set(value) {
+            synchronized(archiveLock) { conversation.lines = value; archiveRevision++ }
+            scheduleConversationSave()
+        }
+    @Volatile var chatting = false; private set
+    @Volatile var connected = false; private set
+    var inferenceConsent = false
+    private val history get() = conversation.history
+    private val pendingWork = AtomicInteger()
+    private var endpoint: InferenceEndpoint? = null
+    @Volatile private var run: AtomicBoolean? = null
+    private var requests = 0
+    private var reviewTicket = 0L
+    private val listeners = linkedSetOf<() -> Unit>()
+    private val archiveLock = Any()
+    private var archiveRevision = 0L
+    private var savedArchiveRevision = 0L
+    private var failedArchiveRevision: Long? = null
+    private var archiveError: String? = null
+    private val flushQueued = AtomicBoolean(false)
+    private val entrySubmission = AtomicBoolean(false)
+    private val autosaveHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val autosave = Runnable { flushConversations() }
+    // Onboarding/form UI is ephemeral. Conversation drafts use only the encrypted vault.
+    var onboardingName = ""
+    var onboardingGoals = linkedSetOf<String>()
+    var onboardingStyle = "warm"
+    var conversationDraft: String
+        get() = conversation.draft
+        set(value) {
+            synchronized(archiveLock) {
+                if (syncing) return // Editor is disabled while the remote candidate owns the install gate.
+                if (conversation.draft == value) return
+                conversation.draft = value; conversation.draftRevision++; archiveRevision++
+            }
+            scheduleConversationSave()
+        }
+    val formDrafts = mutableMapOf<String, String>()
+
+    fun observe(listener: () -> Unit) { listeners.add(listener) }
+    fun unobserve(listener: () -> Unit) { listeners.remove(listener) }
+    private fun changed() = publish { listeners.toList().forEach { it() } }
+    private fun failure(cause: Throwable) {
+        // Never log exceptions, request payloads, recovery data or identity.
+        error = when (cause) {
+            is UnsatisfiedLinkError -> "The native core is unavailable in this build. Your saved vault is unchanged."
+            else -> cause.message ?: "That did not work. Your saved vault is unchanged."
+        }
+    }
+    private fun work(action: () -> Unit) {
+        // Reserve work before enqueueing: a quick second tap cannot switch the
+        // active history while a send/tool call is waiting for the worker.
+        pendingWork.incrementAndGet(); busy = true
+        worker.execute {
+            busy = true; error = archiveError; changed()
+            try { action() } catch (cause: Exception) { failure(cause) }
+            catch (cause: UnsatisfiedLinkError) { failure(cause) }
+            finally { busy = pendingWork.decrementAndGet() > 0; changed() }
+        }
+    }
+
+    private fun call(operation: String, payload: JSONObject = JSONObject()): JSONObject {
+        val request = JSONObject(payload.toString()).put("operation", operation).toString()
+        check(request.toByteArray(Charsets.UTF_8).size <= 8 * 1024 * 1024) { "Native request is too large. Your saved vault is unchanged." }
+        val envelope = JSONObject(bridge(request))
+        envelope.optJSONObject("error")?.let { throw CoreFailure(it.optString("message", "Native operation failed")) }
+        return envelope.getJSONObject("ok")
+    }
+    private fun authenticated(): JSONObject = JSONObject((record ?: error("Create or restore your Habibi first.")).toString())
+    private fun install(candidate: JSONObject) {
+        val identity = candidate.opt("identity") ?: authenticated().get("identity")
+        val nextRecord = JSONObject().put("identity", identity).put("document", candidate.get("document"))
+        val nextState = if (candidate.has("state")) candidate.getJSONObject("state") else state
+            ?: error("A metadata-only candidate needs an existing unlocked vault.")
+        storage.save(nextRecord) // The publication gate: never move below state assignment.
+        record = nextRecord
+        if (candidate.has("state")) state = JSONObject(nextState.toString())
+        loadFailed = false
+    }
+
+    private fun scheduleConversationSave() {
+        autosaveHandler.removeCallbacks(autosave)
+        if (entrySubmission.get()) return // Submission owns its archived message until the atomic install finishes.
+        autosaveHandler.postDelayed(autosave, 500)
+    }
+    /** Also used on lifecycle departure and for retry after a failed save. A
+     * pending review owns its document fingerprint until the decision finishes. */
+    fun flushConversations() {
+        if (!loaded || state == null || review != null || entrySubmission.get()) return
+        if (synchronized(archiveLock) { archiveRevision == savedArchiveRevision }) return
+        if (!flushQueued.compareAndSet(false, true)) return
+        work {
+            try { checkpointConversations(retry = true) } finally { flushQueued.set(false) }
+        }
+    }
+    private fun archivedConversations(): JSONArray = JSONArray().apply {
+        conversations.forEach { chat ->
+            put(JSONObject().put("id", chat.id).put("createdAt", chat.createdAt).put("composer", chat.draft)
+                .put("draft", chat.definition?.let { JSONObject(it.toString()) }).put("messages", JSONArray().apply {
+                    chat.lines.forEach { line ->
+                        put(JSONObject().put("id", line.id).put("createdAt", line.createdAt).put("text", line.text)
+                            .put("kind", when (line.role) { "You" -> "user"; "Habibi" -> "assistant"; else -> "tool" })
+                            .put("component", line.component?.let(::JSONObject)).put("detail", line.detail)
+                            .apply { line.entryId?.let { put("entryId", it) } })
+                    }
+                }))
+        }
+    }
+    private fun checkpointConversations(retry: Boolean = false) {
+        if (record == null || review != null) return
+        val (revision, snapshot) = synchronized(archiveLock) {
+            if (archiveRevision == savedArchiveRevision) return
+            if (!retry && archiveRevision == failedArchiveRevision) return
+            autosaveHandler.removeCallbacks(autosave)
+            archiveRevision to archivedConversations()
+        }
+        try {
+            install(call("save_conversations", authenticated().put("conversations", snapshot)))
+            synchronized(archiveLock) { savedArchiveRevision = revision }
+            failedArchiveRevision = null
+            if (error == archiveError) error = null
+            archiveError = null
+            // An edit during storage.save belongs to the next snapshot. Never
+            // loop here: continuous typing or a failing disk must not spin.
+            if (synchronized(archiveLock) { archiveRevision != savedArchiveRevision }) scheduleConversationSave()
+        } catch (cause: Exception) {
+            failedArchiveRevision = revision
+            failure(cause)
+            archiveError = "Conversation changes are not saved. ${error.orEmpty()} Edit your draft or leave this screen to retry."
+            error = archiveError
+        }
+    }
+    private fun restoredConversations(value: JSONObject): List<Conversation> {
+        val archived = value.optJSONArray("conversations") ?: JSONArray()
+        return (0 until archived.length()).map { index ->
+            val item = archived.getJSONObject(index)
+            Conversation(item.getString("id"), item.getString("createdAt")).apply {
+                draft = item.getString("composer")
+                definition = item.optJSONObject("draft")?.let { JSONObject(it.toString()) }
+                val messages = item.getJSONArray("messages")
+                lines = (0 until messages.length()).map { messageIndex ->
+                    val message = messages.getJSONObject(messageIndex)
+                    ChatLine(when (message.getString("kind")) { "user" -> "You"; "assistant" -> "Habibi"; else -> "Kit tool" },
+                        message.getString("text"), message.getString("id"), message.optJSONObject("component")?.toString(),
+                        message.getString("createdAt"), message.optString("detail").takeIf { message.has("detail") && !message.isNull("detail") },
+                        message.optString("entryId").takeIf { message.has("entryId") && !message.isNull("entryId") })
+                }
+                toolResult = lines.lastOrNull { it.detail != null }?.detail
+                // Only display text resumes context. Tool calls, outputs, reviews,
+                // approvals and pending work can never be replayed after launch.
+                lines.filter { it.role == "You" || it.role == "Habibi" }.forEach {
+                    history.put(JSONObject().put("role", if (it.role == "You") "user" else "assistant").put("content", it.text))
+                }
+            }
+        }.ifEmpty { listOf(Conversation()) }
+    }
+    private fun replaceConversations(restored: List<Conversation>, selected: String? = null) {
+        autosaveHandler.removeCallbacks(autosave)
+        synchronized(archiveLock) {
+            conversations = restored; conversation = restored.firstOrNull { it.id == selected } ?: restored.first()
+            archiveRevision++; savedArchiveRevision = archiveRevision
+        }
+        archiveError = null; failedArchiveRevision = null; inferenceConsent = false
+    }
+
+    fun configureSync(origin: SyncOrigin) = work {
+        check(!syncing && !authorizing) { "Cancel authorization before changing sync origin." }
+        syncOrigin = origin
+        syncRemovalFailed = false
+        syncHeads = emptyList(); syncConflict = false; syncPending = false; syncDecision = ""
+        syncConnected = oauth?.connected(origin) == true
+        syncMessage = if (syncConnected) "Connected · Tap Sync now to check encrypted versions." else "Not connected · Sign in to enable manual encrypted sync."
+    }
+    private fun coordinator() = EncryptedSync(syncTransport, { (oauth ?: error("OAuth is unavailable in this build.")).access(syncOrigin) }, syncOrigin,
+        { operation, arguments ->
+            val payload = authenticated().put("origin", syncOrigin.issuer)
+            arguments.keys().forEach { key -> payload.put(key, arguments.get(key)) }
+            call(operation, payload)
+        }, { candidate ->
+            val selected = conversation.id
+            val nextState = candidate.optJSONObject("state")
+            val restored = nextState?.let(::restoredConversations)
+            install(candidate)
+            if (restored != null) {
+                // A remote selection resets protocol/tool/consent and form state,
+                // even when stable message/conversation IDs happen to match.
+                run?.set(true); run = null; requests = 0; review = null; chatting = false
+                formDrafts.clear(); replaceConversations(restored, selected)
+            }
+            updateSyncStatus(candidate)
+        })
+    private fun updateSyncStatus(status: JSONObject) {
+        syncPending = status.optJSONObject("pending") != null
+        syncConflict = status.getBoolean("conflict")
+        val heads = status.getJSONArray("heads")
+        syncHeads = (0 until heads.length()).map { heads.getJSONObject(it).getString("id") }
+        syncDecision = recordFingerprint()
+        syncConnected = oauth?.connected(syncOrigin) == true
+        syncMessage = when {
+            syncPending -> "Pending encrypted upload · Retry Sync now; the exact saved snapshot will be reused."
+            syncConflict -> "Conflict · No version was silently selected. Choose explicitly below."
+            !syncConnected -> "Not connected · Local changes and sync progress are kept. Sign in again."
+            status.getBoolean("dirty") -> "Connected · Local changes are pending. Tap Sync now to upload an encrypted snapshot."
+            else -> "Connected · Encrypted versions checked. New edits wait for Sync now."
+        }
+    }
+    fun inspectSync() = work {
+        syncConnected = oauth?.connected(syncOrigin) == true
+        if (record != null) updateSyncStatus(coordinator().status())
+    }
+    fun beginSyncAuthorization(openBrowser: (String) -> Unit) {
+        if (busy || syncing) return
+        work {
+            val auth = oauth ?: error("OAuth is unavailable in this build.")
+            val url = auth.begin(syncOrigin)
+            syncMessage = "Authorization open in your browser · Return here after consent, or cancel."
+            publish { if (auth.authorizing()) openBrowser(url) }
+        }
+    }
+    fun cancelSyncAuthorization() {
+        oauth?.cancel()
+        syncMessage = "Authorization cancelled · No callback can resume it. Sign in again when ready."
+        changed()
+    }
+    fun syncCallback(raw: String) = work {
+        try {
+            (oauth ?: error("OAuth is unavailable in this build.")).callback(raw, syncOrigin)
+            syncConnected = true
+            syncMessage = "Connected · Account sign-in does not recover keys. Tap Sync now to sync this vault."
+        } catch (cause: Exception) {
+            syncConnected = oauth?.connected(syncOrigin) == true
+            syncMessage = "Authorization did not finish · Sign in again. Local data is unchanged."
+            throw cause
+        }
+    }
+    fun disconnectSync() {
+        oauth?.cancel()
+        work {
+            syncConnected = false
+            try {
+                val revoked = (oauth ?: error("OAuth is unavailable in this build.")).disconnect(syncOrigin)
+                syncRemovalFailed = false
+                syncMessage = if (revoked) "Disconnected · Grant revoked. Local vault, keys, pending uploads and scan progress are kept."
+                    else "Disconnected locally · Server revocation could not be confirmed. The grant may remain active until expiry. Local vault and sync progress are kept."
+            } catch (cause: Exception) {
+                syncRemovalFailed = true
+                syncMessage = "Disconnect did not finish · Local credentials could not be removed. A restart may restore them. Retry disconnect; the server grant may still be active. Your vault is unchanged."
+                throw cause
+            }
+        }
+    }
+    fun syncNow() = performSync(null, null, emptyList(), null)
+    fun resolveSync(choice: String, selected: String?, displayedHeads: List<String>, decision: String) = performSync(choice, selected, displayedHeads, decision)
+    private fun performSync(choice: String?, selected: String?, displayedHeads: List<String>, decision: String?) {
+        if (busy || !syncLock.compareAndSet(false, true)) return
+        work {
+            try {
+                check(!chatting && review == null) { "Stop the conversation and resolve any Kit review before syncing." }
+                check(formDrafts.isEmpty()) { "Save your open personalization or entry form before syncing. Unsaved forms will not be replaced." }
+                checkpointConversations(retry = true)
+                check(archiveError == null && synchronized(archiveLock) { archiveRevision == savedArchiveRevision }) { "Save conversation changes successfully before syncing." }
+                if (choice != null) check(recordFingerprint() == decision) { "Your local data changed since confirmation. Review the versions and choose again." }
+                syncMessage = "Checking encrypted versions · Editing is paused until sync finishes."
+                changed()
+                val coordinator = coordinator()
+                val result = if (choice == null) coordinator.run() else coordinator.resolve(choice, selected, displayedHeads)
+                updateSyncStatus(result)
+            } catch (cause: Exception) {
+                // Surface DURABLE pending/conflict state even after lost replies.
+                runCatching { updateSyncStatus(coordinator().status()) }
+                syncMessage = "Sync paused / offline · ${syncMessage} Retry Sync now."
+                throw cause
+            } finally { syncLock.set(false) }
+        }
+    }
+
+    fun start() { if (!loaded) reload() }
+    fun reload() = work {
+        try {
+            val saved = storage.load()
+            if (saved != null) {
+                val restored = call("restore", saved)
+                val chats = restoredConversations(restored.getJSONObject("state"))
+                record = saved
+                state = restored.getJSONObject("state")
+                replaceConversations(chats)
+            }
+            loadFailed = false
+        } catch (cause: Exception) {
+            loadFailed = true
+            throw cause
+        } finally { loaded = true }
+    }
+    fun create(profile: JSONObject) = work {
+        check(loaded && !loadFailed && record == null) { "A saved vault already exists or could not be read. Restore it instead of replacing it." }
+        install(call("create", JSONObject().put("profile", profile)))
+    }
+    fun recover(backup: Any, recoveryKey: String, saved: () -> Unit = {}) = work {
+        check(!chatting && review == null) { "Stop the conversation and resolve any kit review before restoring." }
+        val candidate = call("recover", JSONObject().put("backup", backup).put("recoveryKey", recoveryKey))
+        val chats = restoredConversations(candidate.getJSONObject("state"))
+        install(candidate)
+        replaceConversations(chats)
+        publish(saved)
+    }
+    fun updateProfile(profile: JSONObject) = work {
+        install(call("profile", authenticated().put("profile", profile)))
+        formDrafts.keys.filter { it.startsWith("profile_") }.forEach(formDrafts::remove)
+    }
+    fun updateAppearance(theme: String, appearance: String) {
+        if (busy || chatting || review != null || syncing) return
+        require(ThemeCatalog.validId.matches(theme) && appearance in setOf("system", "light", "dark"))
+        work {
+            check(!chatting && review == null && !syncing) { "Finish the conversation, review or sync before changing appearance." }
+            val profile = JSONObject((state ?: error("Create a vault first.")).getJSONObject("profile").toString())
+                .put("theme", theme).put("appearance", appearance)
+            install(call("profile", authenticated().put("profile", profile)))
+        }
+    }
+    fun addEntry(id: String, values: JSONObject, saved: () -> Unit) = work {
+        install(call("add_entry", authenticated().put("id", id).put("values", values)))
+        publish(saved)
+    }
+    fun summary(id: String, complete: (JSONObject?) -> Unit) = work {
+        val result = call("summary", authenticated().put("id", id).put("today", LocalDate.now().toString()))
+        publish { complete(result) }
+    }
+    fun exportRecovery(complete: (JSONObject) -> Unit) = work {
+        checkpointConversations(retry = true)
+        check(archiveError == null) { archiveError.orEmpty() }
+        val result = call("export_recovery", authenticated())
+        publish { complete(result) } // Caller displays backup and key separately; never stored in UI state.
+    }
+    /** SAF streams avoid Android's ~1 MiB intent/clipboard transaction ceiling.
+     * The selected file contains only the encrypted backup, NEVER its key. */
+    fun writeRecoveryFile(backup: String, open: () -> OutputStream?) = work {
+        val bytes = backup.toByteArray(Charsets.UTF_8)
+        check(bytes.size <= 8 * 1024 * 1024) { "Encrypted backup is too large." }
+        try { (open() ?: error("No destination")).use { it.write(bytes); it.flush() } }
+        catch (_: Exception) { error("Could not write the encrypted backup file. Keep your original backup and try exporting again.") }
+    }
+    fun readRecoveryFile(open: () -> InputStream?, complete: (JSONObject) -> Unit) = work {
+        val backup = try {
+            val bytes = (open() ?: error("No source")).use { input ->
+                val output = ByteArrayOutputStream(); val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer); if (count < 0) break
+                    check(output.size() + count <= 8 * 1024 * 1024)
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            JSONObject(String(bytes, Charsets.UTF_8))
+        } catch (_: Exception) { error("Could not read an encrypted backup JSON file (maximum 8 MiB). No vault was changed.") }
+        publish { complete(backup) }
+    }
+    fun tool(name: String, arguments: JSONObject) = work {
+        check(review == null) { "Resolve the current kit review first." }
+        val output = executeTool(name, arguments)
+        val pending = output.optJSONObject("review")
+        if (pending != null) queueReview(pending, null, null)
+        else lines = lines + ChatLine("Kit tool", "$name completed" + if (output.has("draft")) ". Draft ready to review." else ".", detail = toolResult)
+        checkpointConversations()
+    }
+    private fun executeTool(name: String, arguments: JSONObject): JSONObject {
+        // The core's review is bound to the input document too. Flush BEFORE
+        // asking for it, never between receiving it and capturing the fingerprint.
+        checkpointConversations()
+        val output = call("kit_tool", authenticated().put("name", name).put("arguments", arguments).put("today", LocalDate.now().toString()))
+        output.optJSONObject("draft")?.let { draft = it }
+        toolResult = output.opt("result")?.toString()
+        return output
+    }
+    private fun recordFingerprint() = Base64.encodeToString(MessageDigest.getInstance("SHA-256")
+        .digest(authenticated().toString().toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+    private fun queueReview(value: JSONObject, callId: String?, currentRun: AtomicBoolean?) {
+        review = KitReview(++reviewTicket, recordFingerprint(), value.toString(), callId, currentRun)
+        changed()
+    }
+    fun decide(ticket: Long, approved: Boolean) = work {
+        val pending = review?.takeIf { it.ticket == ticket } ?: return@work
+        var result: Any = JSONObject().put("approved", false).put("changed", false)
+        try {
+            if (approved && pending.run?.get() != true) {
+                check(recordFingerprint() == pending.recordFingerprint) { "Your vault changed during review. Nothing was approved. Ask for a new review." }
+                val candidate = call("commit_kit", authenticated().put("review", JSONObject(pending.review)))
+                install(candidate)
+                result = candidate.opt("result") ?: JSONObject().put("approved", true).put("changed", true)
+                lines = lines + ChatLine("Notice", "Kit change approved and saved on this device.")
+            }
+        } catch (cause: Exception) {
+            if (pending.callId != null) appendTool(pending.callId, result)
+            chatting = false
+            throw cause
+        } finally {
+            review = null
+            checkpointConversations(retry = true)
+        }
+        if (pending.callId != null) {
+            appendTool(pending.callId, result)
+            val active = pending.run
+            if (active != null && !active.get()) continueChat(active)
+        }
+    }
+
+    fun configure(endpoint: InferenceEndpoint?) = work {
+        if (!chatting) { this.endpoint = endpoint; connected = endpoint != null }
+    }
+    val canSwitchConversation get() = !busy && !chatting && review == null
+    fun newConversation(): Boolean {
+        if (!canSwitchConversation) return false
+        synchronized(archiveLock) {
+            conversation = Conversation(); conversations = conversations + conversation; archiveRevision++
+        }
+        scheduleConversationSave()
+        changed()
+        return true
+    }
+    fun selectConversation(id: String): Boolean {
+        if (id == conversation.id) return true
+        if (!canSwitchConversation) return false
+        conversation = conversations.firstOrNull { it.id == id } ?: return false
+        changed()
+        return true
+    }
+    fun send(message: String) {
+        if (busy || chatting || review != null) return
+        val sentDraftRevision = conversation.draftRevision
+        work {
+            check(!chatting) { "A reply is already running." }
+            check(endpoint != null) { "Not connected. A developer must connect an inference bridge for conversations. Your local vault and Kits still work." }
+            check(message.isNotBlank()) { "Write a message first." }
+            check(review == null) { "Resolve the kit review first." }
+            history.put(JSONObject().put("role", "user").put("content", message))
+            lines = lines + ChatLine("You", message)
+            synchronized(archiveLock) {
+                if (conversation.draftRevision == sentDraftRevision && conversationDraft.trim() == message.trim()) conversationDraft = ""
+            }
+            checkpointConversations()
+            val active = AtomicBoolean(false); run = active; chatting = true; requests = 0
+            changed()
+            continueChat(active)
+        }
+    }
+    val canSubmitKitEntry get() = loaded && state != null && !busy && !chatting && review == null && !syncing && !entrySubmission.get()
+
+    /** A private user action, never an agent tool/output. The core binds the
+     * archived message to its installed Kit and atomically stamps its receipt. */
+    fun submitKitEntry(conversationId: String, messageId: String, values: JSONObject) {
+        if (!canSubmitKitEntry || conversation.id != conversationId) return
+        val chat = conversation
+        val message = chat.lines.firstOrNull { it.id == messageId && it.entryId == null } ?: return
+        if (message.component?.let { JSONObject(it).optString("type") } != "kit_entry") return
+        val submitted = JSONObject(values.toString())
+        if (!entrySubmission.compareAndSet(false, true)) return
+        autosaveHandler.removeCallbacks(autosave)
+        work {
+            try {
+                check(conversation === chat && !chatting && review == null && !syncing) { "Finish the conversation, review or sync before saving an entry." }
+                checkpointConversations(retry = true)
+                check(archiveError == null) { archiveError.orEmpty() }
+                val candidate = call("submit_kit_entry", authenticated().put("conversationId", conversationId)
+                    .put("messageId", messageId).put("values", submitted))
+                val entryId = candidate.getJSONObject("result").getString("entryId")
+                check(entryId.isNotBlank()) { "The entry receipt is missing. Your saved vault is unchanged." }
+                install(candidate)
+                synchronized(archiveLock) {
+                    // This receipt is already durable. Keep the same conversation
+                    // and any composer edits made during either storage write.
+                    chat.lines = chat.lines.map { if (it.id == messageId) it.copy(entryId = entryId) else it }
+                }
+            } finally {
+                entrySubmission.set(false)
+                if (synchronized(archiveLock) { archiveRevision != savedArchiveRevision }) scheduleConversationSave()
+            }
+        }
+    }
+    /** A renderer event is untrusted. Revalidate against this conversation's
+     * original card and allow only a local disclosure of its existing data. */
+    fun componentSource(conversationId: String, messageId: String, action: String, complete: (JSONObject) -> Unit) {
+        if (conversation.id != conversationId || action != "show_source") return
+        val serialized = lines.firstOrNull { it.id == messageId }?.component ?: return
+        work {
+            if (conversation.id != conversationId) return@work
+            val validated = call("validate_component", JSONObject().put("component", JSONObject(serialized))).getJSONObject("component")
+            val actions = validated.getJSONArray("actions")
+            if ((0 until actions.length()).none { actions.getJSONObject(it).getString("id") == action }) return@work
+            val data = JSONObject(validated.getJSONObject("data").toString())
+            publish { if (conversation.id == conversationId && lines.any { it.id == messageId && it.component == serialized }) complete(data) }
+        }
+    }
+    private fun appendTool(callId: String, result: Any) {
+        history.put(JSONObject().put("type", "function_call_output").put("call_id", callId).put("output", result.toString()))
+    }
+    private fun continueChat(active: AtomicBoolean) {
+        try {
+            while (!active.get() && requests++ < 8) {
+                val request = call("agent_request", JSONObject().put("history", history).put("today", LocalDate.now().toString()))
+                val response = transport.send(endpoint ?: error("Not connected"), request.getJSONObject("body"), active)
+                if (active.get()) break
+                val parsed = call("agent_response", JSONObject().put("response", response))
+                parsed.optJSONArray("output")?.let { output -> for (index in 0 until output.length()) history.put(output.get(index)) }
+                parsed.optString("reply").takeIf { it.isNotBlank() }?.let {
+                    lines = lines + ChatLine("Habibi", it); checkpointConversations(); changed()
+                }
+                val tool = parsed.optJSONObject("tool") ?: break
+                val callId = tool.getString("callId")
+                try {
+                    if (tool.getString("name") == "present_component") {
+                        val component = call("validate_component", JSONObject().put("component", tool.getJSONObject("arguments").getJSONObject("component"))).getJSONObject("component")
+                        if (active.get()) break
+                        lines = lines + ChatLine("Habibi", component.getString("fallback"), component = component.toString())
+                        appendTool(callId, JSONObject().put("displayed", true))
+                        checkpointConversations()
+                        changed()
+                        continue
+                    }
+                    val output = executeTool(tool.getString("name"), tool.getJSONObject("arguments"))
+                    if (active.get()) { appendTool(callId, JSONObject().put("approved", false).put("changed", false)); break }
+                    val pending = output.optJSONObject("review")
+                    if (pending != null) { queueReview(pending, callId, active); return }
+                    appendTool(callId, output.opt("result") ?: JSONObject())
+                    lines = lines + ChatLine("Kit tool", "${tool.getString("name")} completed" + if (output.has("draft")) ". Draft ready to review." else ".", detail = toolResult)
+                    checkpointConversations()
+                    changed()
+                } catch (cause: Exception) {
+                    val reason = if (cause is CoreFailure) cause.message else "The local tool failed. No change was published."
+                    appendTool(callId, JSONObject().put("error", reason))
+                    lines = lines + ChatLine("Kit tool", reason ?: "The local tool failed.")
+                    checkpointConversations()
+                    changed() // Let the agent correct invalid synthetic inputs/definitions within the same cap.
+                }
+            }
+            if (!active.get() && requests > 8) error("Conversation paused after eight requests. Send another message to continue.")
+        } finally {
+            checkpointConversations()
+            if (review?.run !== active) { chatting = false; changed() }
+        }
+    }
+    fun stop() {
+        run?.set(true)
+        transport.cancel()
+        work {
+            review?.takeIf { it.run != null }?.let {
+                if (it.callId != null) appendTool(it.callId, JSONObject().put("approved", false).put("changed", false))
+                review = null
+            }
+            chatting = false
+            lines = lines + ChatLine("Notice", "Stopped. Previously saved changes are kept.")
+            checkpointConversations()
+        }
+    }
+}

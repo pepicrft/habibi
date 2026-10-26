@@ -1,0 +1,96 @@
+import XCTest
+
+final class OnboardingTests: XCTestCase {
+    func testNativeOnboardingAndProfileKits() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--sync-url", "http://localhost:4000"]
+        app.launch()
+        // Once reinstalls this disposable test app, removing its document but
+        // retaining Keychain. Exercise the explicit incomplete-setup recovery.
+        if app.buttons["Discard orphaned key"].waitForExistence(timeout: 3) {
+            app.buttons["Discard orphaned key"].tap()
+            app.buttons["Discard key & restart setup"].tap()
+        }
+        if app.buttons["habibi.create"].waitForExistence(timeout: 10) {
+            app.buttons["habibi.create"].tap()
+            let name = app.textFields["habibi.name"]
+            XCTAssertTrue(name.waitForExistence(timeout: 5))
+            name.tap()
+            name.typeText("Noor")
+            app.buttons["habibi.continue"].tap()
+            let health = app.switches["habibi.interest.health"]
+            health.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -30, dy: 0)).tap()
+            XCTAssertEqual(health.value as? String, "1")
+            app.buttons["habibi.continue"].tap()
+            app.swipeUp()
+            let understood = app.switches["habibi.understood"]
+            understood.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -30, dy: 0)).tap()
+            XCTAssertEqual(understood.value as? String, "1")
+            XCTAssertTrue(app.buttons["habibi.continue"].isEnabled)
+            app.buttons["habibi.continue"].tap()
+        }
+        let home = app.buttons.matching(NSPredicate(format: "identifier == 'house' OR label == 'Home'")).firstMatch
+        let conversations = app.buttons.matching(NSPredicate(format: "identifier == 'bubble.left.and.bubble.right' OR label == 'Conversations'")).firstMatch
+        let profile = app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 10))
+        XCTAssertTrue(conversations.exists)
+        let heartling = app.buttons["habibi.heartling"]
+        XCTAssertTrue(heartling.exists)
+        heartling.tap()
+        XCTAssertEqual(heartling.value as? String, "A curious hello")
+        profile.tap()
+        app.buttons["habibi.profile.appearance"].tap()
+        app.buttons["habibi.theme.clay"].tap()
+        let clay = app.buttons["habibi.theme.clay"]
+        let selected = NSPredicate(format: "selected == true")
+        expectation(for: selected, evaluatedWith: clay)
+        waitForExpectations(timeout: 5)
+        app.navigationBars.buttons["Profile"].tap()
+        app.buttons["habibi.profile.kits"].tap()
+        XCTAssertTrue(app.navigationBars["Kits"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["habibi.kits.create"].exists)
+        app.buttons["habibi.kits.create"].tap()
+        let composer = app.descendants(matching: .any).matching(identifier: "habibi.composer").firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertEqual(composer.value as? String, "Help me make my own Kit.")
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertTrue(app.buttons["habibi.microphone"].exists)
+        XCTAssertFalse(app.buttons["habibi.send"].isEnabled)
+        app.navigationBars.buttons["Conversations"].tap()
+        XCTAssertTrue(app.buttons["habibi.conversation.new"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.tabBars.count, 1)
+        app.buttons["habibi.conversation.new"].tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertNotEqual(composer.value as? String, "Help me make my own Kit.")
+        composer.tap()
+        composer.typeText("Second independent draft")
+        let keyboardDone = app.buttons["habibi.keyboard.done"]
+        XCTAssertTrue(keyboardDone.waitForExistence(timeout: 5))
+        keyboardDone.tap()
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(composer.value as? String, "Second independent draft")
+        app.navigationBars.buttons["Conversations"].tap()
+        app.buttons.containing(.staticText, identifier: "Help me make my own Kit.").firstMatch.tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertEqual(composer.value as? String, "Help me make my own Kit.")
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "habibi.conversations.saved").firstMatch.waitForExistence(timeout: 5))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(home.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["habibi.create"].exists)
+        conversations.tap()
+        app.buttons.containing(.staticText, identifier: "Help me make my own Kit.").firstMatch.tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertEqual(composer.value as? String, "Help me make my own Kit.")
+        XCTAssertEqual(app.tabBars.count, 0)
+        app.navigationBars.buttons["Conversations"].tap()
+        app.buttons.containing(.staticText, identifier: "Second independent draft").firstMatch.tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertEqual(composer.value as? String, "Second independent draft")
+        app.navigationBars.buttons["Conversations"].tap()
+        profile.tap()
+        app.buttons["habibi.profile.appearance"].tap()
+        XCTAssertTrue(app.buttons["habibi.theme.clay"].isSelected)
+    }
+}

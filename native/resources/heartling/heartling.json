@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "image": "heartling.png",
+  "width": 1152,
+  "height": 768,
+  "frameWidth": 384,
+  "frameHeight": 384,
+  "columns": 3,
+  "tintToken": "primary",
+  "blendMode": "hard-light",
+  "states": {
+    "idle": {
+      "frames": [
+        0
+      ]
+    },
+    "curious": {
+      "frames": [
+        1
+      ]
+    },
+    "delighted": {
+      "frames": [
+        2
+      ]
+    },
+    "sleepy": {
+      "frames": [
+        3
+      ]
+    },
+    "attentive": {
+      "frames": [
+        4
+      ]
+    },
+    "blink": {
+      "frames": [
+        5
+      ]
+    }
+  }
+}

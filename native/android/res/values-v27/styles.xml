@@ -1,0 +1,5 @@
+<resources>
+    <style name="HabibiTheme" parent="HabibiThemeBase">
+        <item name="android:windowLightNavigationBar">?attr/isLightTheme</item>
+    </style>
+</resources>

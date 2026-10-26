@@ -1,0 +1,207 @@
+[workspace]
+include = ["once.toml"]
+exclude = ["**/Cargo.toml"]
+
+[modules]
+paths = ["modules/*.star"]
+
+[infrastructure.cache]
+provider = "local"
+
+[[target]]
+name = "HabibiDependencies"
+kind = "cargo_dependencies"
+[target.attrs]
+manifest = "Cargo.toml"
+lockfile = "Cargo.lock"
+vendor_dir = ".once/vendor"
+resolver_inputs = ["Cargo.toml", "Cargo.lock", "core/Cargo.toml"]
+
+[[target]]
+name = "HabibiAndroidDependencies"
+kind = "cargo_dependencies"
+[target.attrs]
+manifest = "Cargo.toml"
+lockfile = "Cargo.lock"
+vendor_dir = ".once/vendor"
+target = "aarch64-linux-android"
+build_script_tools = ["aarch64-linux-android-clang", "clang", "llvm-ar"]
+resolver_inputs = ["Cargo.toml", "Cargo.lock", "core/Cargo.toml"]
+
+[[target]]
+name = "HabibiIOSDependencies"
+kind = "cargo_dependencies"
+[target.attrs]
+manifest = "Cargo.toml"
+lockfile = "Cargo.lock"
+vendor_dir = ".once/vendor"
+target = "aarch64-apple-ios-sim"
+resolver_inputs = ["Cargo.toml", "Cargo.lock", "core/Cargo.toml"]
+
+[[target]]
+name = "HabibiDeviceDependencies"
+kind = "cargo_dependencies"
+[target.attrs]
+manifest = "Cargo.toml"
+lockfile = "Cargo.lock"
+vendor_dir = ".once/vendor"
+target = "aarch64-apple-ios"
+resolver_inputs = ["Cargo.toml", "Cargo.lock", "core/Cargo.toml"]
+
+[[target]]
+name = "HabibiCoreTests"
+kind = "rust_test"
+srcs = ["core/src/**/*.rs", "core/assets/*"]
+deps = ["./HabibiDependencies"]
+[target.attrs]
+crate_name = "habibi_core"
+crate_root = "core/src/lib.rs"
+cargo_package = "habibi-core"
+edition = "2024"
+rustc_flags = ["-Dwarnings"]
+
+[[target]]
+name = "HabibiCoreAndroid"
+kind = "rust_library"
+srcs = ["core/src/**/*.rs", "core/assets/*"]
+deps = ["./HabibiAndroidDependencies"]
+[target.attrs]
+crate_name = "habibi_core"
+crate_root = "core/src/lib.rs"
+cargo_package = "habibi-core"
+edition = "2024"
+target = "aarch64-linux-android"
+crate_type = "cdylib"
+android_abi = "arm64-v8a"
+android_api = 26
+linker_flags = ["-Wl,-z,max-page-size=16384", "-Wl,-z,common-page-size=16384"]
+
+[[target]]
+name = "HabibiCoreIOS"
+kind = "rust_library"
+srcs = ["core/src/**/*.rs", "core/assets/*"]
+deps = ["./HabibiIOSDependencies"]
+[target.attrs]
+crate_name = "habibi_core"
+crate_root = "core/src/lib.rs"
+cargo_package = "habibi-core"
+edition = "2024"
+target = "aarch64-apple-ios-sim"
+crate_type = "staticlib"
+
+[[target]]
+name = "HabibiCoreDevice"
+kind = "rust_library"
+srcs = ["core/src/**/*.rs", "core/assets/*"]
+deps = ["./HabibiDeviceDependencies"]
+[target.attrs]
+crate_name = "habibi_core"
+crate_root = "core/src/lib.rs"
+cargo_package = "habibi-core"
+edition = "2024"
+target = "aarch64-apple-ios"
+crate_type = "staticlib"
+
+[[target]]
+name = "HabibiCoreFFI"
+kind = "apple_system_module"
+[target.attrs]
+modulemap = "core/include/module.modulemap"
+headers = ["core/include/habibi_core.h"]
+header_dirs = ["core/include"]
+
+[[target]]
+name = "HabibiAndroid"
+kind = "habibi_android_application"
+srcs = ["android/src/**/*.kt", "android/nsh-src/**/*.kt", "android/res/**/*", "android/AndroidManifest.xml", "android/*.gradle.kts", "android/gradle.properties", "android/gradle.lockfile", "android/debug/**/*", "cards/assets/nsh/*", "resources/heartling/*", "resources/themes.json", "ATLAS_LICENSE"]
+deps = ["./HabibiCoreAndroid"]
+[target.dependencies]
+nsh = ["./HabibiNSHAndroid"]
+
+[[target]]
+name = "HabibiSimulatorSDK"
+kind = "habibi_apple_sdk"
+[target.attrs]
+sdk = "iphonesimulator"
+
+[[target]]
+name = "HabibiDeviceSDK"
+kind = "habibi_apple_sdk"
+[target.attrs]
+sdk = "iphoneos"
+
+[[target]]
+name = "HabibiNSHSimulator"
+kind = "habibi_nsh_apple"
+[target.attrs]
+sdk = "simulator"
+
+[[target]]
+name = "HabibiNSHDevice"
+kind = "habibi_nsh_apple"
+[target.attrs]
+sdk = "device"
+
+[[target]]
+name = "HabibiNSHAndroid"
+kind = "habibi_nsh_android"
+
+[[target]]
+name = "HabibiIOS"
+kind = "apple_application"
+srcs = ["ios/Sources/**/*.swift"]
+deps = ["./HabibiCoreIOS", "./HabibiCoreFFI", "./HabibiSimulatorSDK", "./HabibiNSHSimulator"]
+[target.attrs]
+platform = "ios"
+sdk_frameworks = ["Security", "UniformTypeIdentifiers", "AVFoundation", "Speech", "AuthenticationServices", "CryptoKit"]
+resources = ["cards/assets/nsh/*", "resources/heartling/*", "resources/themes.json", "ATLAS_LICENSE"]
+bundle_id = "fyi.habibi.app"
+product_name = "Habibi"
+minimum_os = "17.0"
+sdk_variant = "simulator"
+families = ["iphone", "ipad"]
+info_plist = "ios/Info.plist"
+entitlements = "ios/Simulator.entitlements"
+swift_flags = ["-DDEBUG"]
+
+[[target]]
+name = "HabibiIOSDevice"
+kind = "apple_application"
+srcs = ["ios/Sources/**/*.swift"]
+deps = ["./HabibiCoreDevice", "./HabibiCoreFFI", "./HabibiDeviceSDK", "./HabibiNSHDevice"]
+[target.attrs]
+platform = "ios"
+sdk_frameworks = ["Security", "UniformTypeIdentifiers", "AVFoundation", "Speech", "AuthenticationServices", "CryptoKit"]
+resources = ["cards/assets/nsh/*", "resources/heartling/*", "resources/themes.json", "ATLAS_LICENSE"]
+bundle_id = "fyi.habibi.app"
+product_name = "Habibi"
+minimum_os = "17.0"
+sdk_variant = "device"
+families = ["iphone", "ipad"]
+info_plist = "ios/Info.plist"
+
+[[target]]
+name = "HabibiIOSTests"
+kind = "apple_test_bundle"
+srcs = ["ios/Tests/**/*.swift", "ios/Sources/HabibiStore.swift", "ios/Sources/HabibiModels.swift", "ios/Sources/HabibiSession.swift", "ios/Sources/HabibiSync.swift", "ios/Sources/HabibiSyncAccount.swift", "ios/Sources/HabibiVoiceInput.swift", "ios/Sources/HabibiConversationScrollState.swift", "ios/Sources/HabibiComponentView.swift", "ios/Sources/HabibiBrand.swift", "ios/Sources/HabibiAppearance.swift", "ios/Sources/HabibiHeartling.swift"]
+deps = ["./HabibiCoreIOS", "./HabibiCoreFFI", "./HabibiSimulatorSDK", "./HabibiNSHSimulator"]
+[target.attrs]
+platform = "ios"
+minimum_os = "17.0"
+sdk_variant = "simulator"
+bundle_id = "fyi.habibi.app.tests"
+sdk_frameworks = ["Security", "AVFoundation", "Speech", "AuthenticationServices", "CryptoKit"]
+resources = ["resources/heartling/heartling.png", "resources/heartling/heartling.json", "resources/themes.json"]
+swift_testing = true
+
+[[target]]
+name = "HabibiIOSUITests"
+kind = "apple_test_bundle"
+srcs = ["ios/UITests/**/*.swift"]
+deps = ["./HabibiIOS"]
+[target.attrs]
+platform = "ios"
+minimum_os = "17.0"
+sdk_variant = "simulator"
+bundle_id = "fyi.habibi.app.uitests"
+ui_testing = true

@@ -1,0 +1,90 @@
+{
+  "defaultTheme": "forest",
+  "themes": [
+    {
+      "id": "forest",
+      "name": "Forest",
+      "colors": {
+        "modes": {
+          "dark": {
+            "text": "#e7eee7",
+            "background": "#18211b",
+            "primary": "#a8c6ac",
+            "secondary": "#c6ddc8",
+            "accent": "#334b39",
+            "muted": "#26382c",
+            "textMuted": "#acbaad",
+            "border": "#536957",
+            "focus": "#a8c6ac",
+            "memoryBorder": "#78997e",
+            "bubble": "#2c4031"
+          }
+        }
+      }
+    },
+    {
+      "id": "clay",
+      "name": "Clay",
+      "colors": {
+        "text": "#342720",
+        "background": "#fbf5ef",
+        "primary": "#874a32",
+        "secondary": "#65351f",
+        "accent": "#eed9cb",
+        "muted": "#f1e7de",
+        "textMuted": "#705b4e",
+        "border": "#dfcdbd",
+        "focus": "#874a32",
+        "memoryBorder": "#ab8064",
+        "bubble": "#f0dfd1",
+        "modes": {
+          "dark": {
+            "text": "#f4e8df",
+            "background": "#281e19",
+            "primary": "#e4ad8c",
+            "secondary": "#f3c6a9",
+            "accent": "#583b2c",
+            "muted": "#3d2d24",
+            "textMuted": "#c9b4a5",
+            "border": "#83614d",
+            "focus": "#e4ad8c",
+            "memoryBorder": "#b18c72",
+            "bubble": "#493226"
+          }
+        }
+      }
+    },
+    {
+      "id": "lavender",
+      "name": "Lavender",
+      "colors": {
+        "text": "#30283b",
+        "background": "#f8f5fc",
+        "primary": "#695084",
+        "secondary": "#4f386a",
+        "accent": "#e5daef",
+        "muted": "#eee7f4",
+        "textMuted": "#695974",
+        "border": "#d8cce3",
+        "focus": "#695084",
+        "memoryBorder": "#a28ab7",
+        "bubble": "#e9e0f2",
+        "modes": {
+          "dark": {
+            "text": "#eee7f5",
+            "background": "#231c2c",
+            "primary": "#c8afe2",
+            "secondary": "#e0c9f5",
+            "accent": "#493758",
+            "muted": "#352a42",
+            "textMuted": "#bfb0cd",
+            "border": "#76618a",
+            "focus": "#c8afe2",
+            "memoryBorder": "#a086b8",
+            "bubble": "#40304f"
+          }
+        }
+      }
+    }
+  ]
+}

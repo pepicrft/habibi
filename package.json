@@ -10,6 +10,7 @@
   "scripts": {
     "build": "npm run build --workspace server/marketing",
     "dev": "npm run dev --workspace server/marketing",
+    "kits:dev": "node client/kits-dev.mjs",
     "serve": "npm run serve --workspace server/marketing",
     "gettext:extract": "npm run gettext:extract --workspace server/marketing",
     "gettext:check": "npm run gettext:check --workspace server/marketing",
@@ -20,6 +21,9 @@
     "node": ">=24"
   },
   "devDependencies": {
-    "js-yaml": "4.3.2"
+    "@jitl/quickjs-singlefile-browser-release-sync": "0.32.0",
+    "esbuild": "0.28.2",
+    "js-yaml": "4.3.2",
+    "quickjs-emscripten-core": "0.32.0"
   }
 }

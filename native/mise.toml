@@ -1,0 +1,52 @@
+[tools]
+"github:tuist/once" = "0.68.2"
+rust = "1.96.0"
+java = "temurin-21"
+gradle = "8.13.0"
+
+[env]
+ONCE_CACHE_PROVIDER = "local"
+
+[tasks."prepare:rust"]
+run = "CARGO_HTTP_MULTIPLEXING=false cargo vendor --quiet --locked .once/vendor > /dev/null"
+
+[tasks."prepare:themes"]
+run = "node resources/prepare_themes.mjs"
+
+[tasks.check]
+depends = ["prepare:rust", "prepare:themes"]
+run = ["once query validate-workspace", "cargo fmt --all -- --check", "cargo clippy --locked --workspace --all-targets -- -D warnings", "once test HabibiCoreTests"]
+
+[tasks."build:ios"]
+depends = ["prepare:rust", "prepare:themes"]
+run = "once build HabibiIOS"
+
+[tasks."build:ios-device"]
+depends = ["prepare:rust", "prepare:themes"]
+run = "once build HabibiIOSDevice"
+
+[tasks."test:ios"]
+depends = ["prepare:rust", "prepare:themes"]
+run = "once test HabibiIOSTests"
+
+[tasks."test:ios-ui"]
+depends = ["prepare:rust", "prepare:themes"]
+run = "once test HabibiIOSUITests"
+
+[tasks."build:android"]
+depends = ["prepare:rust", "prepare:themes"]
+run = '''
+set -eu
+: "${ANDROID_NDK_HOME:?Set ANDROID_NDK_HOME to Android NDK 27.3.13750724}"
+host=linux-x86_64
+if [ "$(uname -s)" = Darwin ]; then host=darwin-x86_64; fi
+tools="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$host/bin"
+mkdir -p .once/android-tools
+ln -sf "$tools/aarch64-linux-android26-clang" .once/android-tools/aarch64-linux-android-clang
+export PATH="$PWD/.once/android-tools:$tools:$PATH"
+once build HabibiAndroid
+'''
+
+[tasks."test:android"]
+depends = ["build:android"]
+run = "gradle -p android testDebugUnitTest testReleaseUnitTest lintDebug -x stageNative --console=plain"

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- NSH is loaded reflectively only on API 28+. API 26–27 use native text/actions. -->
+    <uses-sdk tools:overrideLibrary="com.longbridge.nsh" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+    </queries>
+    <application android:name=".HabibiApplication" android:label="Habibi" android:icon="@drawable/ic_heart"
+        android:theme="@style/HabibiTheme" android:allowBackup="false" android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true"
+        android:usesCleartextTraffic="false" android:enableOnBackInvokedCallback="true">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Android's scheme-only filter intentionally admits candidates;
+                     the in-memory OAuth transaction validates the ENTIRE URI. -->
+                <data android:scheme="fyi.habibi.android" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

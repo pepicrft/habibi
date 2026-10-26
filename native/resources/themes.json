@@ -1,0 +1,357 @@
+{
+  "version": 1,
+  "defaultTheme": "forest",
+  "themes": [
+    {
+      "colors": {
+        "surface": "#f8f6ef",
+        "onPrimary": "#f8f6ef",
+        "text": "#242e28",
+        "background": "#f8f6ef",
+        "primary": "#35483d",
+        "secondary": "#202e25",
+        "accent": "#dde5d6",
+        "muted": "#eeeee3",
+        "textMuted": "#62695e",
+        "border": "#dcded2",
+        "focus": "#35483d",
+        "memoryBorder": "#9aa98f",
+        "bubble": "#e8ebdf",
+        "modes": {
+          "dark": {
+            "surface": "#18211b",
+            "onPrimary": "#18211b",
+            "text": "#e7eee7",
+            "background": "#18211b",
+            "primary": "#a8c6ac",
+            "secondary": "#c6ddc8",
+            "accent": "#334b39",
+            "muted": "#26382c",
+            "textMuted": "#acbaad",
+            "border": "#536957",
+            "focus": "#a8c6ac",
+            "memoryBorder": "#78997e",
+            "bubble": "#2c4031"
+          }
+        }
+      },
+      "fonts": {
+        "body": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "heading": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "monospace": "ui-monospace, SFMono-Regular, Consolas, monospace"
+      },
+      "fontSizes": [
+        12,
+        14,
+        16,
+        20,
+        24,
+        32,
+        48,
+        64
+      ],
+      "fontWeights": {
+        "body": 400,
+        "heading": 550,
+        "button": 550,
+        "bold": 700
+      },
+      "lineHeights": {
+        "body": 1.65,
+        "heading": 1.1,
+        "control": 1.5
+      },
+      "space": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        32,
+        40,
+        48,
+        56,
+        64
+      ],
+      "radii": {
+        "control": 4,
+        "bubble": 16,
+        "pill": 100
+      },
+      "borderWidths": {
+        "hairline": 1,
+        "focus": 3
+      },
+      "styles": {
+        "root": {
+          "fontFamily": "body",
+          "fontSize": 2,
+          "fontWeight": "body",
+          "lineHeight": "body",
+          "color": "text",
+          "bg": "background",
+          "colorScheme": "light",
+          "fontSynthesis": "none"
+        }
+      },
+      "fontFaces": [
+        {
+          "fontFamily": "DM Sans",
+          "src": "url('/assets/fonts/dm-sans-latin-wght-normal.woff2') format('woff2')",
+          "fontStyle": "normal",
+          "fontWeight": "100 900",
+          "fontDisplay": "swap"
+        }
+      ],
+      "buttons": {
+        "primary": {
+          "color": "background",
+          "bg": "primary",
+          "fontWeight": "button",
+          "&:hover": {
+            "color": "background",
+            "bg": "secondary"
+          }
+        }
+      },
+      "id": "forest",
+      "name": "Forest"
+    },
+    {
+      "colors": {
+        "surface": "#fbf5ef",
+        "onPrimary": "#fbf5ef",
+        "text": "#342720",
+        "background": "#fbf5ef",
+        "primary": "#874a32",
+        "secondary": "#65351f",
+        "accent": "#eed9cb",
+        "muted": "#f1e7de",
+        "textMuted": "#705b4e",
+        "border": "#dfcdbd",
+        "focus": "#874a32",
+        "memoryBorder": "#ab8064",
+        "bubble": "#f0dfd1",
+        "modes": {
+          "dark": {
+            "surface": "#281e19",
+            "onPrimary": "#281e19",
+            "text": "#f4e8df",
+            "background": "#281e19",
+            "primary": "#e4ad8c",
+            "secondary": "#f3c6a9",
+            "accent": "#583b2c",
+            "muted": "#3d2d24",
+            "textMuted": "#c9b4a5",
+            "border": "#83614d",
+            "focus": "#e4ad8c",
+            "memoryBorder": "#b18c72",
+            "bubble": "#493226"
+          }
+        }
+      },
+      "fonts": {
+        "body": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "heading": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "monospace": "ui-monospace, SFMono-Regular, Consolas, monospace"
+      },
+      "fontSizes": [
+        12,
+        14,
+        16,
+        20,
+        24,
+        32,
+        48,
+        64
+      ],
+      "fontWeights": {
+        "body": 400,
+        "heading": 550,
+        "button": 550,
+        "bold": 700
+      },
+      "lineHeights": {
+        "body": 1.65,
+        "heading": 1.1,
+        "control": 1.5
+      },
+      "space": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        32,
+        40,
+        48,
+        56,
+        64
+      ],
+      "radii": {
+        "control": 4,
+        "bubble": 16,
+        "pill": 100
+      },
+      "borderWidths": {
+        "hairline": 1,
+        "focus": 3
+      },
+      "styles": {
+        "root": {
+          "fontFamily": "body",
+          "fontSize": 2,
+          "fontWeight": "body",
+          "lineHeight": "body",
+          "color": "text",
+          "bg": "background",
+          "colorScheme": "light",
+          "fontSynthesis": "none"
+        }
+      },
+      "fontFaces": [
+        {
+          "fontFamily": "DM Sans",
+          "src": "url('/assets/fonts/dm-sans-latin-wght-normal.woff2') format('woff2')",
+          "fontStyle": "normal",
+          "fontWeight": "100 900",
+          "fontDisplay": "swap"
+        }
+      ],
+      "buttons": {
+        "primary": {
+          "color": "background",
+          "bg": "primary",
+          "fontWeight": "button",
+          "&:hover": {
+            "color": "background",
+            "bg": "secondary"
+          }
+        }
+      },
+      "id": "clay",
+      "name": "Clay"
+    },
+    {
+      "colors": {
+        "surface": "#f8f5fc",
+        "onPrimary": "#f8f5fc",
+        "text": "#30283b",
+        "background": "#f8f5fc",
+        "primary": "#695084",
+        "secondary": "#4f386a",
+        "accent": "#e5daef",
+        "muted": "#eee7f4",
+        "textMuted": "#695974",
+        "border": "#d8cce3",
+        "focus": "#695084",
+        "memoryBorder": "#a28ab7",
+        "bubble": "#e9e0f2",
+        "modes": {
+          "dark": {
+            "surface": "#231c2c",
+            "onPrimary": "#231c2c",
+            "text": "#eee7f5",
+            "background": "#231c2c",
+            "primary": "#c8afe2",
+            "secondary": "#e0c9f5",
+            "accent": "#493758",
+            "muted": "#352a42",
+            "textMuted": "#bfb0cd",
+            "border": "#76618a",
+            "focus": "#c8afe2",
+            "memoryBorder": "#a086b8",
+            "bubble": "#40304f"
+          }
+        }
+      },
+      "fonts": {
+        "body": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "heading": "\"DM Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "monospace": "ui-monospace, SFMono-Regular, Consolas, monospace"
+      },
+      "fontSizes": [
+        12,
+        14,
+        16,
+        20,
+        24,
+        32,
+        48,
+        64
+      ],
+      "fontWeights": {
+        "body": 400,
+        "heading": 550,
+        "button": 550,
+        "bold": 700
+      },
+      "lineHeights": {
+        "body": 1.65,
+        "heading": 1.1,
+        "control": 1.5
+      },
+      "space": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        32,
+        40,
+        48,
+        56,
+        64
+      ],
+      "radii": {
+        "control": 4,
+        "bubble": 16,
+        "pill": 100
+      },
+      "borderWidths": {
+        "hairline": 1,
+        "focus": 3
+      },
+      "styles": {
+        "root": {
+          "fontFamily": "body",
+          "fontSize": 2,
+          "fontWeight": "body",
+          "lineHeight": "body",
+          "color": "text",
+          "bg": "background",
+          "colorScheme": "light",
+          "fontSynthesis": "none"
+        }
+      },
+      "fontFaces": [
+        {
+          "fontFamily": "DM Sans",
+          "src": "url('/assets/fonts/dm-sans-latin-wght-normal.woff2') format('woff2')",
+          "fontStyle": "normal",
+          "fontWeight": "100 900",
+          "fontDisplay": "swap"
+        }
+      ],
+      "buttons": {
+        "primary": {
+          "color": "background",
+          "bg": "primary",
+          "fontWeight": "button",
+          "&:hover": {
+            "color": "background",
+            "bg": "secondary"
+          }
+        }
+      },
+      "id": "lavender",
+      "name": "Lavender"
+    }
+  ]
+}

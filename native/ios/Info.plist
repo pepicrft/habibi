@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleIdentifier</key><string>fyi.habibi.app</string>
+    <key>CFBundleExecutable</key><string>Habibi</string>
+    <key>CFBundleName</key><string>Habibi</string>
+    <key>CFBundleDisplayName</key><string>Habibi</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleURLTypes</key><array><dict>
+        <key>CFBundleURLName</key><string>fyi.habibi.oauth</string>
+        <key>CFBundleURLSchemes</key><array><string>fyi.habibi.ios</string></array>
+    </dict></array>
+    <key>MinimumOSVersion</key><string>17.0</string>
+    <key>LSRequiresIPhoneOS</key><true/>
+    <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+    <key>UILaunchScreen</key><dict/>
+    <key>NSMicrophoneUsageDescription</key><string>Record a message and turn it into editable text on this device. Audio is not uploaded.</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>Transcribe your message on this device. Nothing is sent until you tap Send.</string>
+    <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+    <key>UISupportedInterfaceOrientations</key><array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+</dict></plist>

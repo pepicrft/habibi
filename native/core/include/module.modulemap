@@ -1,0 +1,4 @@
+module HabibiCoreFFI {
+    header "habibi_core.h"
+    export *
+}

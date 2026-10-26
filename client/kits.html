@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kits · Habibi</title>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/kits.css">
+    <script type="module" src="/kits-workbench.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="wordmark" href="#/conversation" aria-label="Habibi home">habibi<span> / Workbench</span></a>
+      <span class="prototype">Local workbench · experimental</span>
+      <div id="vault-actions" hidden>
+        <button id="backup" class="quiet" type="button">Encrypted backup</button>
+        <button id="lock" class="quiet" type="button">Lock</button>
+      </div>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">Small tools. Your way.</p>
+        <h1>A little tool,<br>made for you.</h1>
+        <p>Describe what you want to keep track of. Make a Kit, give it a name, and make it part of your day.</p>
+      </section>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <section id="locked" class="panel unlock">
+        <div>
+          <p class="eyebrow">Your private workbench</p>
+          <h2 id="unlock-title">Create a local vault</h2>
+          <p id="unlock-copy">Choose a passphrase to encrypt your Kits and entries in this browser. It cannot be reset. Keep encrypted backups somewhere safe.</p>
+          <p class="small">This is an unaudited reference client, not the native app. Use disposable data, not sensitive health information.</p>
+        </div>
+        <form id="unlock-form">
+          <label for="passphrase">Vault passphrase</label>
+          <input id="passphrase" type="password" minlength="12" maxlength="1024" required autocomplete="off" placeholder="At least 12 characters">
+          <button class="button-primary" id="unlock-button">Open workbench</button>
+          <label class="file-link" for="restore-file">Or restore an encrypted backup</label>
+          <input id="restore-file" type="file" accept=".json,application/json" hidden>
+          <p class="small">Restore uses the passphrase above and requires an empty workbench.</p>
+        </form>
+      </section>
+      <nav id="app-navigation" class="app-navigation" aria-label="Workbench" hidden>
+        <button type="button" id="nav-chat">Conversation</button>
+        <button type="button" id="nav-profile">Profile</button>
+      </nav>
+      <section id="provider-panel" hidden>
+        <details id="provider-settings">
+          <summary id="provider-summary">OpenAI connection · used for conversation and generation</summary>
+          <div class="connection">
+            <div id="api-controls">
+              <label for="api-key">API key · kept only in memory</label>
+              <input id="api-key" type="password" autocomplete="off" maxlength="512" spellcheck="false">
+              <label for="model">Model with Structured Outputs and function-calling support</label>
+              <input id="model" value="gpt-5-mini" maxlength="100" spellcheck="false">
+            </div>
+            <label class="consent"><input id="provider-consent" type="checkbox"><span id="provider-disclosure">Send my messages, requested Kit definitions, and synthetic test results to OpenAI. Saved entries stay local unless I paste them myself.</span></label>
+            <p id="provider-note" class="small">You control disclosure. Provider retention policies still apply; nothing is sent until you submit a message or generation request.</p>
+          </div>
+        </details>
+      </section>
+      <section id="tool-approval" class="panel approval" aria-label="Review Kit change" aria-live="polite" hidden></section>
+      <section id="conversation" class="panel conversation" hidden>
+        <div class="detail-heading"><div><p class="eyebrow">In conversation</p><h2>What would you like to make?</h2></div><button type="button" id="chat-clear" class="quiet">Clear chat</button></div>
+        <p>Ask Habibi to make a little tool for your day. It can write and test a Kit, then ask you before saving, updating, or removing it.</p>
+        <div id="chat-transcript" class="chat-transcript" role="log" aria-label="Conversation"></div>
+        <ol id="tool-log" class="tool-log" aria-label="Local Kit operations"></ol>
+        <form id="chat-form">
+          <label for="chat-message">Message Habibi</label>
+          <textarea id="chat-message" rows="3" maxlength="4000" required placeholder="Make me a workout tracker for exercises, reps, and weight. Call it Rep Log."></textarea>
+          <div class="toolbar generation-actions"><button id="chat-send" class="button-primary">Send message</button><button type="button" id="chat-stop" hidden>Stop</button><button type="button" id="chat-open-kits" class="quiet">View your Kits ↗</button></div>
+        </form>
+        <p class="small">Conversation stays in page memory only. Tools can read Kit definitions, not saved entries. Changes require a separate review.</p>
+      </section>
+      <section id="profile" class="panel profile" hidden>
+        <p class="eyebrow">Your profile</p><h2>Make Habibi yours.</h2>
+        <p>Personal tools you create and choose to keep.</p>
+        <button type="button" id="profile-kits" class="profile-link"><span><strong>Kits</strong><span>Your private, user-authored tools</span></span><span aria-hidden="true">↗</span></button>
+        <p class="small">Local workbench profile · no account or cloud sync</p>
+      </section>
+      <section id="workspace" hidden>
+        <button type="button" id="kits-back" class="quiet breadcrumb">← Profile</button>
+        <div class="workspace-heading">
+          <div><p class="eyebrow">Made by you</p><h2>Your Kits</h2></div>
+          <div class="toolbar">
+            <button type="button" id="import-button" class="quiet">Import Kit JSON</button>
+            <input id="import-file" type="file" accept=".json,application/json" hidden>
+            <button type="button" id="new-kit" class="button-primary">＋ Create a Kit</button>
+          </div>
+        </div>
+        <div class="workbench-grid">
+          <aside>
+            <nav id="kit-list" aria-label="Installed Kits"></nav>
+            <p class="small privacy-note">Encrypted in this browser.<br>No account, sync, or analytics.<br>Remember to download backups.</p>
+          </aside>
+          <div>
+            <section id="creator" class="panel">
+              <p class="eyebrow">Start with an idea</p>
+              <h2>What would help you?</h2>
+              <form id="create-form">
+                <label for="prompt">Describe your Kit</label>
+                <textarea id="prompt" rows="4" maxlength="4000" required placeholder="A calorie tracker where I can log meals and see my total for today…"></textarea>
+                <div class="toolbar generation-actions">
+                  <button class="button-primary" id="generate">Generate draft</button>
+                  <button type="button" id="stop-generation" hidden>Stop</button>
+                </div>
+              </form>
+              <div class="examples">
+                <p class="small">No API key? Start with an editable example. These are templates, not AI-generated results.</p>
+                <button type="button" id="example-calories">↗ Calorie tracker</button>
+                <button type="button" id="example-workouts">↗ Workout tracker</button>
+              </div>
+            </section>
+            <section id="draft" class="panel" hidden>
+              <p class="eyebrow">Draft · not installed</p>
+              <h2>Make it yours.</h2>
+              <label for="kit-name">Name</label><input id="kit-name" maxlength="60" required>
+              <label for="kit-description">Description</label><textarea id="kit-description" rows="2" maxlength="300" required></textarea>
+              <h3>What it keeps track of</h3>
+              <ul id="draft-fields" class="field-list"></ul>
+              <div class="permission-note"><strong>Only its own entries.</strong> JavaScript can calculate summaries, but cannot access the network, files, other Kits, or save changes. You save entries through Habibi’s form.</div>
+              <details><summary>Review the JavaScript</summary><label for="kit-source" class="small">Runs inside QuickJS compiled to WebAssembly. No dependencies or imports.</label><textarea id="kit-source" class="code" rows="12" spellcheck="false"></textarea></details>
+              <div id="draft-preview" class="metrics" aria-label="Empty-data preview"></div>
+              <p class="small">The check runs with no entries. It checks compatibility, not whether the calculations are correct.</p>
+              <div class="toolbar">
+                <button type="button" id="install-kit" class="button-primary">Check &amp; install Kit</button>
+                <button type="button" id="export-definition">Export definition</button>
+                <button type="button" id="discard-draft" class="quiet">Discard draft</button>
+              </div>
+            </section>
+            <section id="kit-detail" class="panel" hidden></section>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>Habibi Kits · Private little tools, built around you. <span>Local-only prototype. Not medical advice.</span></footer>
+  </body>
+</html>

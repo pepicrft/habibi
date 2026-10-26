@@ -1,0 +1,639 @@
+[
+  {
+    "type": "function",
+    "name": "list_kits",
+    "description": "List installed Kit IDs, names and descriptions. Never returns entries.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "type": "function",
+    "name": "read_kit",
+    "description": "Read a Kit definition for editing. Never returns saved entries.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Installed Kit ID returned by list_kits; never a name."
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "name": "write_kit",
+    "description": "Stage a new or revised draft for the user to inspect. Does not persist or install it.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definition"
+      ],
+      "properties": {
+        "definition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "apiVersion",
+            "name",
+            "description",
+            "fields",
+            "source"
+          ],
+          "properties": {
+            "apiVersion": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "unit",
+                  "min",
+                  "max"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "number",
+                      "date"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "min": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "max": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "name": "evaluate_kit",
+    "description": "Run actual sandboxed JavaScript with synthetic example values, not saved user entries. Returns text metrics.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definition",
+        "entries_json"
+      ],
+      "properties": {
+        "definition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "apiVersion",
+            "name",
+            "description",
+            "fields",
+            "source"
+          ],
+          "properties": {
+            "apiVersion": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "unit",
+                  "min",
+                  "max"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "number",
+                      "date"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "min": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "max": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        },
+        "entries_json": {
+          "type": "string",
+          "description": "JSON array of up to 20 synthetic field-value objects matching this definition. Use [] for an empty-data test."
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "name": "save_kit",
+    "description": "Check and install a new Kit only after the host obtains user approval. Each install has independent, empty data.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definition"
+      ],
+      "properties": {
+        "definition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "apiVersion",
+            "name",
+            "description",
+            "fields",
+            "source"
+          ],
+          "properties": {
+            "apiVersion": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "unit",
+                  "min",
+                  "max"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "number",
+                      "date"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "min": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "max": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "name": "update_kit",
+    "description": "Update name, description or code after host approval. Fields must stay exactly unchanged; existing entries are preserved. No migrations.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "definition"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Installed Kit ID returned by list_kits; never a name."
+        },
+        "definition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "apiVersion",
+            "name",
+            "description",
+            "fields",
+            "source"
+          ],
+          "properties": {
+            "apiVersion": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "unit",
+                  "min",
+                  "max"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "number",
+                      "date"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "min": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "max": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "name": "remove_kit",
+    "description": "Remove a Kit AND its saved entries only after explicit host approval. Older backups are unaffected.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Installed Kit ID returned by list_kits; never a name."
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "name": "present_component",
+    "strict": true,
+    "description": "Display a result_table v1 or a native kit_entry v1 card inside the conversation. Read the installed Kit definition before presenting its entry card; the host derives inputs from its actual fields. Optional prefill items are proposed values from this conversation, never saved entries. The user edits and explicitly saves locally; the model receives only displayed:true, not entered values. Never claim an entry was saved. No arbitrary UI, code, URLs or capabilities. Maximum32KiB; all string limits UTF-8 bytes. result_table:8 columns,20 rows,120 cells, exact row widths; show_source only reveals supplied data locally.",
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component"
+      ],
+      "properties": {
+        "component": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "version",
+                "data",
+                "actions",
+                "fallback"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "result_table"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "title",
+                    "columns",
+                    "rows"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "columns": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "maxItems": 20,
+                      "items": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 500
+                        }
+                      }
+                    }
+                  }
+                },
+                "actions": {
+                  "type": "array",
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "enum": [
+                          "show_source"
+                        ]
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      }
+                    }
+                  }
+                },
+                "fallback": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "version",
+                "data",
+                "actions",
+                "fallback"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "kit_entry"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "title",
+                    "kitId",
+                    "prefill"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "kitId": {
+                      "type": "string",
+                      "description": "Exact installed Kit UUID returned by list_kits or save_kit."
+                    },
+                    "prefill": {
+                      "type": "array",
+                      "maxItems": 12,
+                      "description": "Unique declared field keys only. Leave fields absent for the user to enter.",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "key",
+                          "value"
+                        ],
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -1000000000,
+                                "maximum": 1000000000
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "enum": [
+                          "save_entry"
+                        ]
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      }
+                    }
+                  }
+                },
+                "fallback": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

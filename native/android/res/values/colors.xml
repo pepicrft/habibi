@@ -1,0 +1,12 @@
+<resources>
+    <color name="paper">#f8f6ef</color>
+    <color name="primary">#35483d</color>
+    <color name="on_primary">#ffffff</color>
+    <color name="ink">#242e28</color>
+    <color name="secondary">#62695e</color>
+    <color name="accent">#dde5d6</color>
+    <color name="surface">#fffdf8</color>
+    <color name="outline">#c6cec0</color>
+    <color name="panel">#d9fffdf8</color>
+    <color name="glow">#88d3bd94</color>
+</resources>

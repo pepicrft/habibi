@@ -5,6 +5,36 @@ import { compile, serialize, stringify } from "stylis";
 
 export const themePath = new URL("../priv/theme.json", import.meta.url);
 export const readTheme = () => JSON.parse(readFileSync(themePath, "utf8"));
+export const themeVariantsPath = new URL("../priv/theme-variants.json", import.meta.url);
+export const readThemeVariants = () =>
+  JSON.parse(readFileSync(themeVariantsPath, "utf8"));
+
+// Each entry is an ordinary Theme UI theme, with stable selection metadata.
+// Forest inherits every light token from theme.json; descriptors only override
+// colors, so shared typography, spacing and component variants cannot drift.
+export function nativeThemes(theme, variants) {
+  const palette = (colors) => ({
+    surface: colors.background,
+    onPrimary: colors.background,
+    ...colors,
+  });
+  return {
+    version: 1,
+    defaultTheme: variants.defaultTheme,
+    themes: variants.themes.map(({ id, name, colors }) => ({
+      ...theme,
+      id,
+      name,
+      colors: {
+        ...palette({ ...theme.colors, ...colors }),
+        modes: { dark: palette(colors.modes.dark) },
+      },
+    })),
+  };
+}
+
+// Shared by the public asset build and native offline resource preparation.
+export const readNativeThemes = () => nativeThemes(readTheme(), readThemeVariants());
 
 // NSH consumes shadcn-style cssVars, not React context or Theme UI's sx prop.
 // Map semantic roles rather than assuming similarly named tokens mean the same.
