@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import SwiftUI
+import UIKit
 
 // Public presentation data only. Preferences belong to the encrypted profile;
 // this catalog never receives a vault identifier, OAuth header or sync token.
@@ -128,6 +129,7 @@ struct HabibiAppearanceView: View {
                 HStack { Spacer(); HabibiHeartling().frame(width: 128, height: 128); Spacer() }
                 Text("Heartling wears your colors. Tap to say hello.").font(.footnote).foregroundStyle(palette.muted)
             }
+            HabibiAppIconSection()
             Section("Theme") {
                 ForEach(appearance.catalog.themes) { theme in
                     Button { save(theme: theme.id) } label: {
@@ -180,6 +182,65 @@ struct HabibiAppearanceView: View {
                 _ = try await session.persist("profile", arguments: ["profile": value])
                 error = nil
             } catch { self.error = "Could not save your appearance. Your previous preference is unchanged." }
+        }
+    }
+}
+
+private enum HabibiAppIcon: String, CaseIterable, Identifiable {
+    case forest, midnight, blossom
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var alternateName: String? { self == .forest ? nil : title }
+}
+
+private struct HabibiAppIconSection: View {
+    @Environment(\.habibiPalette) private var palette
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedName: String?
+    @State private var changing = false
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            ForEach(HabibiAppIcon.allCases) { icon in
+                Button { select(icon) } label: {
+                    HStack(spacing: 16) {
+                        Image(uiImage: UIImage(contentsOfFile: Bundle.main.url(
+                            forResource: "icon_\(icon.rawValue)", withExtension: "png")!.path)!)
+                            .resizable().aspectRatio(contentMode: .fit)
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .accessibilityHidden(true)
+                        Text(icon.title).foregroundStyle(palette.ink)
+                        Spacer()
+                        if selectedName == icon.alternateName { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
+                    }.padding(.vertical, 4).contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("habibi.icon.\(icon.rawValue)")
+                .accessibilityAddTraits(selectedName == icon.alternateName ? .isSelected : [])
+                .disabled(changing || !UIApplication.shared.supportsAlternateIcons)
+            }
+            if changing { ProgressView("Changing app icon…") }
+            if let error { Text(error).font(.footnote).foregroundStyle(palette.muted).accessibilityIdentifier("habibi.icon.error") }
+        } header: { Text("App icon") } footer: {
+            Text(UIApplication.shared.supportsAlternateIcons
+                 ? "Choose the Heartling on your Home Screen. This choice stays on this device, separate from your synced theme."
+                 : "Changing app icons is not available on this device.")
+        }
+        .onAppear { selectedName = UIApplication.shared.alternateIconName }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { selectedName = UIApplication.shared.alternateIconName }
+        }
+    }
+
+    private func select(_ icon: HabibiAppIcon) {
+        guard !changing, selectedName != icon.alternateName else { return }
+        changing = true
+        error = nil
+        Task { @MainActor in
+            defer { changing = false; selectedName = UIApplication.shared.alternateIconName }
+            do { try await UIApplication.shared.setAlternateIconName(icon.alternateName) }
+            catch { self.error = "Could not change the app icon. Please try again." }
         }
     }
 }

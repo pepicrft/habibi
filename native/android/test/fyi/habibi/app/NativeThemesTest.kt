@@ -47,6 +47,34 @@ class NativeThemesTest {
         }
     }
 
+    @Test @Config(sdk = [28, 35])
+    fun iconChoicesKeepOneLauncherSurviveRecreationAndLeaveVaultAndOAuthEntryUnchanged() {
+        val session = inject()
+        val savedProfile = session.state!!.getJSONObject("profile").toString()
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(app.packageName)
+        val callback = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("fyi.habibi.android://callback"))
+            .addCategory(Intent.CATEGORY_BROWSABLE).setPackage(app.packageName)
+        fun launcherName() = app.packageManager.queryIntentActivities(launcher, 0).map { it.activityInfo.name }
+        assertEquals(listOf("${app.packageName}.LauncherForest"), launcherName())
+        var controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        for (id in listOf("midnight", "blossom", "forest")) {
+            val activity = controller.get(); activity.appearance()
+            val choice = activity.tagged("app_icon_$id") as RadioButton
+            assertNotNull(choice.compoundDrawablesRelative[0])
+            choice.performClick()
+            assertTrue(choice.isChecked)
+            val title = id.replaceFirstChar { it.uppercaseChar() }
+            assertEquals(listOf("${app.packageName}.Launcher$title"), launcherName())
+            assertEquals(listOf("${app.packageName}.MainActivity"), app.packageManager.queryIntentActivities(callback, 0).map { it.activityInfo.name })
+            assertEquals(savedProfile, session.state!!.getJSONObject("profile").toString())
+            controller.pause().stop().destroy()
+            controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+            controller.get().appearance()
+            assertTrue((controller.get().tagged("app_icon_$id") as RadioButton).isChecked)
+        }
+        controller.pause().stop().destroy()
+    }
+
     @Test fun bundledServerCatalogSupportsLegacyProfilesUnknownIdsAndSystemModesWithoutWrites() {
         val catalog = ThemeCatalog.parse(bytes())
         assertEquals("forest", catalog.defaultTheme)

@@ -45,6 +45,31 @@ final class OnboardingTests: XCTestCase {
         let selected = NSPredicate(format: "selected == true")
         expectation(for: selected, evaluatedWith: clay)
         waitForExpectations(timeout: 5)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for icon in ["midnight", "blossom", "forest"] {
+            let choice = app.buttons["habibi.icon.\(icon)"]
+            for _ in 0..<4 where !choice.isHittable { app.swipeDown() }
+            app.swipeDown()
+            XCTAssertTrue(choice.isEnabled)
+            choice.tap()
+            let notice = springboard.alerts.firstMatch
+            if notice.waitForExistence(timeout: 3) { notice.buttons["OK"].tap() }
+            if app.alerts.firstMatch.exists { app.alerts.buttons["OK"].tap() }
+            expectation(for: selected, evaluatedWith: choice)
+            waitForExpectations(timeout: 10)
+            XCTAssertFalse(app.staticTexts["habibi.icon.error"].exists)
+            let settings = XCTAttachment(screenshot: app.screenshot())
+            settings.name = "AppIcon-\(icon)-Settings"; settings.lifetime = .keepAlways; add(settings)
+            XCUIDevice.shared.press(.home)
+            XCTAssertTrue(springboard.icons["Habibi"].waitForExistence(timeout: 10))
+            let launcher = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            launcher.name = "AppIcon-\(icon)-Home"; launcher.lifetime = .keepAlways; add(launcher)
+            app.terminate(); app.launch()
+            XCTAssertTrue(home.waitForExistence(timeout: 10))
+            profile.tap(); app.buttons["habibi.profile.appearance"].tap()
+            XCTAssertTrue(choice.isSelected, "The operating system must retain \(icon) after relaunch")
+            XCTAssertTrue(app.buttons["habibi.theme.clay"].isSelected, "Icon choice must not change the synced theme")
+        }
         app.navigationBars.buttons["Profile"].tap()
         app.buttons["habibi.profile.kits"].tap()
         XCTAssertTrue(app.navigationBars["Kits"].waitForExistence(timeout: 5))

@@ -10,6 +10,35 @@
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
     <key>CFBundleVersion</key><string>1</string>
+    <!-- Once compiles the catalog but does not merge actool's partial plist. -->
+    <key>CFBundleIcons</key><dict>
+        <key>CFBundlePrimaryIcon</key><dict>
+            <key>CFBundleIconName</key><string>AppIcon</string>
+            <key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array>
+        </dict>
+        <key>CFBundleAlternateIcons</key><dict>
+            <key>Midnight</key><dict>
+                <key>CFBundleIconFiles</key><array><string>AppIconMidnight</string></array>
+            </dict>
+            <key>Blossom</key><dict>
+                <key>CFBundleIconFiles</key><array><string>AppIconBlossom</string></array>
+            </dict>
+        </dict>
+    </dict>
+    <key>CFBundleIcons~ipad</key><dict>
+        <key>CFBundlePrimaryIcon</key><dict>
+            <key>CFBundleIconName</key><string>AppIcon</string>
+            <key>CFBundleIconFiles</key><array><string>AppIcon60x60</string><string>AppIcon76x76</string></array>
+        </dict>
+        <key>CFBundleAlternateIcons</key><dict>
+            <key>Midnight</key><dict>
+                <key>CFBundleIconFiles</key><array><string>AppIconMidnight</string><string>AppIconMidnight83.5</string></array>
+            </dict>
+            <key>Blossom</key><dict>
+                <key>CFBundleIconFiles</key><array><string>AppIconBlossom</string><string>AppIconBlossom83.5</string></array>
+            </dict>
+        </dict>
+    </dict>
     <key>CFBundleURLTypes</key><array><dict>
         <key>CFBundleURLName</key><string>fyi.habibi.oauth</string>
         <key>CFBundleURLSchemes</key><array><string>fyi.habibi.ios</string></array>

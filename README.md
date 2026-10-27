@@ -2,6 +2,8 @@
 
 An open-source personal AI companion, in the making. The static home is designed for **https://habibi.fyi**.
 
+The app logo is [`assets/logo.png`](assets/logo.png), a 1024×1024 PNG for GitHub and other integrations.
+
 This repository contains an Eleventy website, an Elixir/Phoenix ciphertext-sync prototype, a Web Crypto reference client, and development native iOS/Android apps. **There is no released mobile app. The sync protocol and native vault are experimental and have not been independently audited. Do not entrust them with real personal data yet.**
 
 ## Native apps

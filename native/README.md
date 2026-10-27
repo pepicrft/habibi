@@ -39,6 +39,20 @@ The current Once target builds ARM64. Gradle packages the JNI library, real
 Android resources and locked Android dependencies. See [android/README.md](android/README.md)
 for its packaging contract and standalone JVM tests. Both apps use `fyi.habibi.app`.
 
+## App icons
+
+Profile → Appearance offers Forest (the default/GitHub logo), Midnight and
+Blossom. Icon choice belongs to the operating system on each device, not the
+encrypted profile or sync. iOS uses UIKit alternate icons; Android switches
+launcher aliases without disabling the activity that handles OAuth callbacks.
+
+The opaque Forest master is [`../assets/logo.png`](../assets/logo.png);
+the other masters are `resources/app-icons/{midnight,blossom}.png`. After editing
+one, run `python3 resources/prepare_app_icon.py` (Pillow and NumPy) and retain the
+generated Android layers and iOS primary/preview/alternate PNGs. Android artwork fits
+the central 66dp adaptive-icon safe zone and includes Android 13+ monochrome
+layers. Neither platform bakes rounded corners into the master.
+
 ## Use host inference in the simulator
 
 From the repository root, start one opt-in development bridge with an already

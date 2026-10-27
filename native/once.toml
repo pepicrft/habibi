@@ -154,7 +154,9 @@ deps = ["./HabibiCoreIOS", "./HabibiCoreFFI", "./HabibiSimulatorSDK", "./HabibiN
 [target.attrs]
 platform = "ios"
 sdk_frameworks = ["Security", "UniformTypeIdentifiers", "AVFoundation", "Speech", "AuthenticationServices", "CryptoKit"]
-resources = ["cards/assets/nsh/*", "resources/heartling/*", "resources/kits/*", "resources/themes.json", "ATLAS_LICENSE"]
+resources = ["cards/assets/nsh/*", "resources/heartling/*", "resources/kits/*", "resources/app-icons/ios/*", "resources/themes.json", "ATLAS_LICENSE"]
+asset_catalogs = ["ios/Assets.xcassets"]
+app_icon = "AppIcon"
 bundle_id = "fyi.habibi.app"
 product_name = "Habibi"
 minimum_os = "17.0"
@@ -172,7 +174,9 @@ deps = ["./HabibiCoreDevice", "./HabibiCoreFFI", "./HabibiDeviceSDK", "./HabibiN
 [target.attrs]
 platform = "ios"
 sdk_frameworks = ["Security", "UniformTypeIdentifiers", "AVFoundation", "Speech", "AuthenticationServices", "CryptoKit"]
-resources = ["cards/assets/nsh/*", "resources/heartling/*", "resources/kits/*", "resources/themes.json", "ATLAS_LICENSE"]
+resources = ["cards/assets/nsh/*", "resources/heartling/*", "resources/kits/*", "resources/app-icons/ios/*", "resources/themes.json", "ATLAS_LICENSE"]
+asset_catalogs = ["ios/Assets.xcassets"]
+app_icon = "AppIcon"
 bundle_id = "fyi.habibi.app"
 product_name = "Habibi"
 minimum_os = "17.0"

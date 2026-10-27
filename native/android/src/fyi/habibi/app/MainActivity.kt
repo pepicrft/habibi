@@ -476,7 +476,29 @@ class MainActivity : AppCompatActivity() {
         val savedTheme = profile.optString("theme", catalog.defaultTheme)
         val appearance = profile.optString("appearance", "system")
         val enabled = session.loaded && !session.busy && !session.chatting && session.review == null && !session.syncing
-        return page("Appearance", "Theme colors come from the server's public Theme UI catalog. Your choices save in your encrypted profile and travel with recovery and sync.") {
+        return page("Appearance", "Theme and mode save in your encrypted profile and travel with recovery and sync. Your app icon stays on this device.") {
+            addView(heading("App icon", 20f))
+            val selectedIcon = AppIcon.current(this@MainActivity)
+            addView(RadioGroup(this@MainActivity).apply {
+                AppIcon.entries.forEach { icon ->
+                    addView(RadioButton(this@MainActivity).apply {
+                        id = View.generateViewId(); tag = "app_icon_${icon.id}"; text = icon.title
+                        contentDescription = "${icon.title} app icon"; minimumHeight = dp(76)
+                        applyThemeColors(); isChecked = icon == selectedIcon
+                        val preview = getDrawable(icon.resource)!!.apply { setBounds(0, 0, dp(56), dp(56)) }
+                        setCompoundDrawablesRelative(preview, null, null, null); compoundDrawablePadding = dp(16)
+                        setOnCheckedChangeListener { _, checked ->
+                            if (checked) try { icon.select(this@MainActivity) }
+                            catch (_: Exception) {
+                                render()
+                                MaterialAlertDialogBuilder(this@MainActivity).setTitle("Could not change app icon")
+                                    .setMessage("Please try again. Your launcher may take a moment to update.").setPositiveButton("OK", null).show()
+                            }
+                        }
+                    })
+                }
+            })
+            addView(label("Choose the Heartling in your launcher. Android may take a moment to update it. Themed icons use your wallpaper colors.", 13f, true))
             if (catalog.themes.none { it.id == savedTheme }) addView(label("Your saved theme '$savedTheme' is unavailable. Showing ${catalog.resolve(null).name} without changing your preference.", 14f, true))
             if (!enabled) addView(label("Finish the conversation, review or sync before changing appearance.", 14f, true))
             addView(heading("Theme", 20f))
