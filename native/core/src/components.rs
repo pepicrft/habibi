@@ -180,8 +180,7 @@ mod tests {
             json!({"operation":"agent_request","today":"2026-10-25","history":[{"role":"user","content":"Show a table"}]}),
         );
         let tools = request["ok"]["body"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 8);
-        assert_eq!(tools.last().unwrap()["name"], "present_component");
+        assert!(tools.iter().any(|tool| tool["name"] == "present_component"));
     }
 
     #[test]

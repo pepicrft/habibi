@@ -139,7 +139,7 @@ node native/resources/prepare_quickjs.mjs
 ```
 
 The trusted conversation loop exposes seven Kit tools: list/read/write/evaluate/
-save/update/remove, plus the native-only `present_component` display operation.
+save/update/remove, plus native-only `present_component` and `react_to_message` operations.
 Connecting a bundled service Kit adds its reviewed service tools to that loop.
 Evaluation receives **synthetic data**, not saved entries.
 Save/update/remove require host-owned approval, tied to the current encrypted
@@ -258,6 +258,19 @@ not executable tool calls or tool results. Archive saves defer while a Kit revie
 owns the document revision. Older backups without conversations still open.
 The pinned composer, prompt index and jump-to-latest follow Atlas's native
 conversation design; incoming output does not pull a reader away from history.
+
+Habibi can acknowledge a user message with a reaction instead of another text
+bubble. `react_to_message` takes `{message_id,emoji}`, using a stable user-message
+ID from the active conversation and one of 👍 ❤️ 😂 🎉 😮 😢. A successful reaction
+ends the turn without another inference request; another reaction replaces the
+previous one on that message. Reactions never approve or execute Kit operations.
+Both native apps show an accessible badge and include it in encrypted saves,
+recovery and manual sync. Only the active conversation's user-message text, IDs
+and existing Habibi reactions are supplied as reaction targets; drafts and other
+conversations are excluded. Restore rebuilds text context and supplies saved
+reactions separately, without replaying their original tool calls. Old backups
+without reactions still open; upgrade both clients before syncing reacted messages
+because older clients reject the added archive field.
 
 Dictation uses Apple Speech's required on-device recognition on iOS and Android's
 on-device recognizer on Android 12+. There is no generic/cloud recognizer fallback,

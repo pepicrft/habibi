@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { kitTools } from "./kits-agent.mjs";
 import { kitGenerationSchema, validateKit } from "./kits.mjs";
 import githubKit from "../native/core/assets/github-kit.json" with { type: "json" };
+import nativeTools from "../native/core/assets/kit-tools.json" with { type: "json" };
 
 // Native-only display protocol. The browser reference still has seven Kit tools.
 // The host validates the complete component in Rust before rendering it.
@@ -65,7 +66,7 @@ export const nativeKitTools = [...kitTools, {
       },
     }] } },
   },
-}];
+}, nativeTools.find(tool => tool.name === "react_to_message")];
 
 export const decisionSchema = {
   type: "object", additionalProperties: false,

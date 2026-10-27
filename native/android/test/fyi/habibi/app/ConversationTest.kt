@@ -47,6 +47,31 @@ class ConversationTest {
         session.start(); session.create(profile()); session.configure(InferenceEndpoint("http://10.0.2.2:8083/inference", "test"))
         return session
     }
+    @Test fun reactionsUpdateExistingRowsWithAnAccessibleBadgeWithoutReplacingTheComposer() {
+        val transport = FixtureTransport(); val session = inject(transport)
+        session.send("That's all for now")
+        val target = session.lines.first().id
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val activity = controller.get()
+        activity.open(session); activity.layoutNow()
+        val row = activity.tagged("message_$target")
+        val composer = activity.tagged("conversation_message") as TextInputEditText
+        composer.setText("Unsent draft"); composer.setSelection(3)
+        val badge = activity.tagged("reaction_$target") as TextView
+        assertEquals(View.GONE, badge.visibility)
+        for (emoji in listOf("👍", "❤️")) {
+            transport.replies.add(JSONObject().put("tool", JSONObject().put("name", "react_to_message").put("callId", "reaction")
+                .put("arguments", JSONObject().put("message_id", target).put("emoji", emoji))))
+            session.send("Thanks"); activity.layoutNow()
+            assertSame(row, activity.tagged("message_$target"))
+            assertSame(badge, activity.tagged("reaction_$target"))
+            assertEquals(View.VISIBLE, badge.visibility); assertEquals(emoji, badge.text.toString())
+            assertEquals("Habibi reacted $emoji", badge.contentDescription)
+            assertFalse(badge.isClickable)
+            assertSame(composer, activity.tagged("conversation_message"))
+        }
+        controller.pause().stop().destroy()
+    }
+
     @Test fun inboxPushHidesTabsAcrossImeInsetsAndBackRestoresDraftAndCursor() {
         val session = inject(); val first = session.conversation.id
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val activity = controller.get()

@@ -973,7 +973,8 @@ mod tests {
                 "account":"noor-dev","accessToken":"private-synced-github-token","scope":"read:user"}}),
         );
         let conversations = json!([{"id":crypto::id().unwrap(),"createdAt":"2026-10-26T10:00:00Z","composer":"Private draft 🏃",
-            "draft":definition,"messages":[{"id":crypto::id().unwrap(),"createdAt":"2026-10-26T10:01:00Z","kind":"assistant","text":"25 min",
+            "draft":definition,"messages":[{"id":crypto::id().unwrap(),"createdAt":"2026-10-26T10:00:30Z","kind":"user","text":"Thanks!","reaction":"❤️"},
+            {"id":crypto::id().unwrap(),"createdAt":"2026-10-26T10:01:00Z","kind":"assistant","text":"25 min",
             "component":{"type":"result_table","version":1,"data":{"title":"Walking plan","columns":["Minutes"],"rows":[["25"]]},
             "actions":[{"id":"show_source","label":"View data"}],"fallback":"25 minutes"}}]}]);
         source.write("save_conversations", json!({"conversations":conversations}));

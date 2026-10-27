@@ -16,6 +16,7 @@ struct HabibiMessage: Identifiable {
     var component: HabibiComponent?
     var detail: String?
     var entryId: String?
+    var reaction: String?
 }
 
 struct HabibiConversation: Identifiable {
@@ -38,7 +39,7 @@ private func conversationDate(_ value: String) throws -> Date {
 }
 
 extension HabibiMessage: Codable {
-    private enum CodingKeys: String, CodingKey { case id, createdAt, kind, text, component, detail, entryId }
+    private enum CodingKeys: String, CodingKey { case id, createdAt, kind, text, component, detail, entryId, reaction }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -49,6 +50,7 @@ extension HabibiMessage: Codable {
         component = try values.decodeIfPresent(HabibiComponent.self, forKey: .component)
         detail = try values.decodeIfPresent(String.self, forKey: .detail)
         entryId = try values.decodeIfPresent(String.self, forKey: .entryId)
+        reaction = try values.decodeIfPresent(String.self, forKey: .reaction)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -60,6 +62,7 @@ extension HabibiMessage: Codable {
         try values.encodeIfPresent(component, forKey: .component)
         try values.encodeIfPresent(detail, forKey: .detail)
         try values.encodeIfPresent(entryId, forKey: .entryId)
+        try values.encodeIfPresent(reaction, forKey: .reaction)
     }
 }
 
@@ -487,8 +490,14 @@ final class HabibiSession: ObservableObject {
                     let requestHistory = history
                     let today = habibiDay()
                     let connections = agentConnections
+                    let reactionTargets: [[String: Any]] = messages.filter { $0.kind == "user" }.suffix(80).map {
+                        var target: [String: Any] = ["messageId": $0.id.uuidString.lowercased(), "text": $0.text]
+                        target["reaction"] = $0.reaction
+                        return target
+                    }
                     let prepared = try await Task.detached {
-                        try HabibiCore.execute(["operation": "agent_request", "history": requestHistory, "today": today, "connections": connections])
+                        try HabibiCore.execute(["operation": "agent_request", "history": requestHistory, "today": today, "connections": connections,
+                                                "reactionTargets": reactionTargets])
                     }.value
                     var request = URLRequest(url: inferenceURL)
                     request.httpMethod = "POST"
@@ -516,6 +525,19 @@ final class HabibiSession: ObservableObject {
                     guard let tool = step["tool"] as? [String: Any], let name = tool["name"] as? String,
                           let arguments = tool["arguments"] as? [String: Any], let callID = tool["callId"] as? String else {
                         throw HabibiFailure(message: "Invalid inference step.")
+                    }
+                    if name == "react_to_message" {
+                        guard let target = arguments["message_id"] as? String, let id = UUID(uuidString: target),
+                              let index = messages.firstIndex(where: { $0.id == id && $0.kind == "user" }),
+                              let emoji = arguments["emoji"] as? String else {
+                            history.append(["type": "function_call_output", "call_id": callID, "output": "{\"error\":\"User message not found in this conversation.\"}"])
+                            continue
+                        }
+                        try Task.checkCancellation()
+                        messages[index].reaction = emoji
+                        history.append(["type": "function_call_output", "call_id": callID, "output": "{\"reacted\":true}"])
+                        await flushConversations()
+                        return
                     }
                     if name == "present_component" {
                         guard let card = step["component"],

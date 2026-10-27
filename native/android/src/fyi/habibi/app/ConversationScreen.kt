@@ -17,6 +17,7 @@ import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
@@ -253,6 +254,17 @@ internal class ConversationScreen(
                             }
                         }
                     }.also { cards.add(it) })
+                    if (line.role == "You") addView(context.label("", 20f).apply {
+                        tag = "reaction_${line.id}"
+                        visibility = View.GONE
+                        setPadding(context.dp(10), context.dp(4), context.dp(10), context.dp(4))
+                        background = GradientDrawable().apply {
+                            setColor(context.color(R.color.surface)); cornerRadius = context.dp(20).toFloat()
+                            setStroke(context.dp(1), context.color(R.color.outline))
+                        }
+                        layoutParams = LinearLayout.LayoutParams(-2, -2).apply { topMargin = context.dp(4) }
+                        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    })
                 }
                 messageViews[line.id] = row; messages.addView(row)
             }
@@ -261,7 +273,14 @@ internal class ConversationScreen(
         }
         // Receipts update existing messages without appending a line or
         // rebuilding other native editors or NSH result-table renderers.
-        chat.lines.forEach { line -> entryCards[line.id]?.render(line) }
+        chat.lines.forEach { line ->
+            entryCards[line.id]?.render(line)
+            messageViews[line.id]?.findViewWithTag<TextView>("reaction_${line.id}")?.apply {
+                text = line.reaction.orEmpty()
+                contentDescription = "Habibi reacted ${line.reaction.orEmpty()}"
+                visibility = if (line.reaction == null) View.GONE else View.VISIBLE
+            }
+        }
         val key = listOf(chat.definition?.toString(), chat.toolResult, session.busy, session.chatting, session.review?.ticket)
         if (key != toolKey) {
             toolKey = key; tools.removeAllViews()

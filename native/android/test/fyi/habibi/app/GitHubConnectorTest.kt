@@ -328,8 +328,12 @@ class GitHubConnectorTest {
         val agentRequests = core.calls.filter { it.getString("operation") == "agent_request" }
         assertEquals(3, agentRequests.size)
         agentRequests.forEach {
-            assertEquals(setOf("operation", "history", "today", "connections"), it.keys().asSequence().toSet())
+            assertEquals(setOf("operation", "history", "today", "connections", "reactionTargets"), it.keys().asSequence().toSet())
             assertEquals("[\"github\"]", it.getJSONArray("connections").toString())
+            val targets = it.getJSONArray("reactionTargets")
+            assertEquals(1, targets.length())
+            assertEquals(setOf("messageId", "text", "reaction"), targets.getJSONObject(0).keys().asSequence().toSet())
+            assertEquals("Read my GitHub profile and public repositories", targets.getJSONObject(0).getString("text"))
         }
         assertFalse(inference.bodies.first().toString().contains("private-octocat"))
         val descriptors = core.calls.filter { it.getString("operation") == "connection_request" }

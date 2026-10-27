@@ -10,6 +10,22 @@ use crate::{
 };
 
 #[derive(Serialize, Deserialize)]
+pub enum Reaction {
+    #[serde(rename = "👍")]
+    Like,
+    #[serde(rename = "❤️")]
+    Love,
+    #[serde(rename = "😂")]
+    Laugh,
+    #[serde(rename = "🎉")]
+    Celebrate,
+    #[serde(rename = "😮")]
+    Surprised,
+    #[serde(rename = "😢")]
+    Sad,
+}
+
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Conversation {
     id: String,
@@ -33,6 +49,8 @@ struct Message {
     detail: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     entry_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reaction: Option<Reaction>,
 }
 
 pub fn validate(conversations: &mut [Conversation]) -> Result<()> {
@@ -62,6 +80,7 @@ pub fn validate(conversations: &mut [Conversation]) -> Result<()> {
                     .as_ref()
                     .is_some_and(|value| value.len() > 256 * 1024)
                 || (message.component.is_some() && message.kind != "assistant")
+                || (message.reaction.is_some() && message.kind != "user")
             {
                 return Err(Error::invalid("Invalid saved conversation message."));
             }

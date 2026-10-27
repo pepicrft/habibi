@@ -141,10 +141,19 @@ test("unknown calls, provider failures, cancellation and excessive tool loops fa
 
 test("native display tools are opt-in protocol data; the browser retains only seven Kit tools", async () => {
   assert.equal(kitTools.length, 7);
-  assert.equal(nativeKitTools.length, 8);
+  assert.equal(nativeKitTools.length, 9);
   assert.equal(decisionSchema.properties.name.enum.includes("present_component"), false);
   assert.equal(nativeDecisionSchema.properties.name.enum.includes("present_component"), true);
   assert.deepEqual(JSON.parse(await readFile(new URL("../native/core/assets/kit-tools.json", import.meta.url), "utf8")), nativeKitTools);
+  const reaction = { kind: "tool", name: "react_to_message", arguments_json: JSON.stringify({ message_id: "1fdce3f4-e43b-4690-a8cf-d963e65a0059", emoji: "👍" }), reply: "" };
+  assert.throws(() => kitInferenceResponse(reaction));
+  for (const tools of [nativeKitTools, connectedGitHubTools]) {
+    const result = kitInferenceResponse(reaction, true, tools);
+    assert.equal(result.output[0].name, "react_to_message");
+    assert.equal(result.output[0].arguments, reaction.arguments_json);
+    const stream = JSON.stringify({ type: "result", subtype: "success", result: JSON.stringify(reaction) });
+    assert.equal(harnessInferenceResponse("amp", stream, tools).output[0].name, "react_to_message");
+  }
   const card = { type: "result_table", version: 1, data: { title: "Test", columns: ["Value"], rows: [["7"]] }, actions: [{ id: "show_source", label: "View data" }], fallback: "Value: 7" };
   const decision = { kind: "tool", name: "present_component", arguments_json: JSON.stringify({ component: card }), reply: "" };
   assert.throws(() => kitInferenceResponse(decision));

@@ -239,10 +239,17 @@ struct HabibiConversationView: View {
                         .foregroundStyle(message.kind == "user" ? palette.onPrimary : palette.ink)
                         .background(message.kind == "user" ? palette.accent : palette.surface,
                                     in: RoundedRectangle(cornerRadius: 20))
+                    if let reaction = message.reaction {
+                        Text(reaction).font(.title3).padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(palette.surface, in: Capsule())
+                            .overlay { Capsule().strokeBorder(palette.accent.opacity(0.25)) }
+                            .accessibilityLabel("Habibi reacted \(reaction)")
+                            .accessibilityIdentifier("habibi.reaction.\(message.id)")
+                    }
                     Text(message.createdAt.formatted(date: .omitted, time: .shortened)).font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 12)
                 }
                 if message.kind != "user" { Spacer(minLength: 40) }
-            }.accessibilityIdentifier("habibi.message.\(message.id)")
+            }.accessibilityElement(children: .contain).accessibilityIdentifier("habibi.message.\(message.id)")
         }
     }
 

@@ -158,7 +158,8 @@ fn kit_entry_protocol_is_bounded_strict_and_display_only_for_the_model() {
             "save_kit",
             "update_kit",
             "remove_kit",
-            "present_component"
+            "present_component",
+            "react_to_message"
         ]
     );
     let instructions = request["body"]["instructions"].as_str().unwrap();

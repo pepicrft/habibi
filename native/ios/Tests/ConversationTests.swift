@@ -2,6 +2,66 @@ import Foundation
 import Speech
 import Testing
 
+private actor ReactionInference: HabibiSyncHTTP {
+    let target: String
+    private var requests: [URLRequest] = []
+    init(target: UUID) { self.target = target.uuidString.lowercased() }
+    func captured() -> [URLRequest] { requests }
+    func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        let emoji = requests.count == 1 ? "👍" : "❤️"
+        let arguments = try JSONSerialization.data(withJSONObject: ["message_id": target, "emoji": emoji])
+        let data = try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+            ["type": "function_call", "name": "react_to_message", "call_id": "reaction-\(requests.count)",
+             "arguments": String(decoding: arguments, as: UTF8.self)]
+        ]])
+        return (data, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+@MainActor
+@Test func agentReactionsEndTheTurnWithoutTextAndRestoreEncrypted() async throws {
+    let storage = MemoryPersistence()
+    let target = HabibiMessage(kind: "user", text: "That's all for now")
+    let inference = ReactionInference(target: target.id)
+    let session = HabibiSession(store: HabibiStore(persistence: storage),
+        inferenceURL: URL(string: "https://inference.example/inference")!, inferenceHTTP: inference)
+    #expect(await session.create(.init(name: "Noor", goals: ["learning"], style: "warm")))
+    session.newConversation()
+    let conversationID = try #require(session.activeConversationID)
+    session.messages = [target]
+    session.cloudConsent = true
+    for (index, emoji) in ["👍", "❤️"].enumerated() {
+        session.composer = "Thanks"
+        session.send()
+        for _ in 0..<500 {
+            if !session.chatRunning { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(!session.chatRunning)
+        #expect(await inference.captured().count == index + 1)
+        #expect(session.messages.count == index + 2)
+        #expect(session.messages.allSatisfy { $0.kind == "user" })
+        #expect(session.messages.first?.reaction == emoji)
+        #expect(session.messages.first?.id == target.id)
+        #expect(session.messages.first?.createdAt == target.createdAt)
+        #expect(session.review == nil)
+        #expect(session.conversationsSaved)
+    }
+    let restarted = HabibiSession(store: HabibiStore(persistence: storage))
+    await restarted.start()
+    restarted.openConversation(conversationID)
+    #expect(restarted.messages.first?.reaction == "❤️")
+    #expect(restarted.conversations[0].history.allSatisfy { $0["type"] == nil })
+    #expect(!restarted.cloudConsent)
+    let requests = await inference.captured()
+    let body = try #require(requests.last?.httpBody)
+    let wire = String(decoding: body, as: UTF8.self)
+    #expect(wire.contains(target.id.uuidString.lowercased()))
+    #expect(wire.contains("react_to_message"))
+    #expect(wire.contains("reacted")) // The next send closes the previous tool call.
+}
+
 @MainActor
 private final class VoiceCapture: HabibiVoiceCapturing {
     var updates: [(@MainActor (HabibiVoiceCaptureUpdate) -> Void)] = []

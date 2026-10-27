@@ -21,6 +21,50 @@ class ConversationPersistenceTest {
     private fun FixtureCore.operations() = calls.map { it.getString("operation") }
     private fun advance(milliseconds: Long = 500) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(milliseconds))
 
+    @Test fun agentReactionEndsTurnReplacesInPlaceAndSurvivesRelaunch() {
+        val store = MemoryVault(); val core = FixtureCore(); val transport = FixtureTransport()
+        val session = fixtureSession(store, core, transport)
+        session.start(); session.create(profile()); session.configure(endpoint); session.send("Let's make a plan")
+        val target = session.lines.first()
+        val original = session.lines
+        for (emoji in listOf("👍", "❤️")) {
+            val before = transport.bodies.size
+            transport.replies.add(JSONObject().put("tool", JSONObject().put("name", "react_to_message").put("callId", "reaction-$before")
+                .put("arguments", JSONObject().put("message_id", target.id).put("emoji", emoji))))
+            session.send("Thanks, that's all")
+            assertEquals(before + 1, transport.bodies.size)
+            assertFalse(session.chatting); assertNull(session.review); assertNull(session.error)
+            assertEquals(emoji, session.lines.first().reaction)
+            assertEquals(target.id, session.lines.first().id); assertEquals(target.createdAt, session.lines.first().createdAt)
+            assertEquals(original.count { it.role == "Habibi" }, session.lines.count { it.role == "Habibi" })
+            assertFalse(session.lines.any { it.role == "Kit tool" })
+        }
+        val restoredCore = FixtureCore(); val restarted = fixtureSession(store, restoredCore)
+        restarted.start(); assertEquals(session.lines, restarted.lines)
+        restarted.configure(endpoint); restarted.send("Continue")
+        val request = restoredCore.calls.last { it.getString("operation") == "agent_request" }
+        val targets = request.getJSONArray("reactionTargets")
+        assertEquals("❤️", targets.getJSONObject(0).getString("reaction"))
+        assertEquals(target.id, targets.getJSONObject(0).getString("messageId"))
+        assertFalse(request.getJSONArray("history").toString().contains("function_call"))
+    }
+
+    @Test fun agentCannotReactToOtherConversationsOrAssistantMessages() {
+        val store = MemoryVault(); val core = FixtureCore(); val transport = FixtureTransport()
+        val session = fixtureSession(store, core, transport)
+        session.start(); session.create(profile()); session.configure(endpoint); session.send("First thread")
+        val foreign = session.lines.first().id
+        session.newConversation(); session.send("Second thread")
+        val assistant = session.lines.last().id
+        for (id in listOf(foreign, assistant, UUID.randomUUID().toString())) {
+            transport.replies.add(JSONObject().put("tool", JSONObject().put("name", "react_to_message").put("callId", "invalid")
+                .put("arguments", JSONObject().put("message_id", id).put("emoji", "👍"))))
+            session.send("Acknowledge this")
+            assertTrue(session.conversations.flatMap { it.lines }.none { it.reaction != null })
+            assertFalse(session.chatting); assertNull(session.review)
+        }
+    }
+
     @Test fun relaunchRestoresIndependentUnicodeDraftsCardsDefinitionsIdsAndTimes() {
         val store = MemoryVault(); val core = FixtureCore(); val transport = FixtureTransport()
         val session = fixtureSession(store, core, transport)

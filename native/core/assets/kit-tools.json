@@ -635,5 +635,26 @@
         }
       }
     }
+  },
+  {
+    "type": "function",
+    "name": "react_to_message",
+    "strict": true,
+    "description": "Acknowledge a user message with one emoji instead of a text reply. Replaces Habibi's previous reaction on that message. Ends this turn without another reply. Never grants approval or performs a requested task.",
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "emoji"],
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "description": "Exact messageId from the supplied reaction targets in this conversation."
+        },
+        "emoji": {
+          "type": "string",
+          "enum": ["👍", "❤️", "😂", "🎉", "😮", "😢"]
+        }
+      }
+    }
   }
 ]

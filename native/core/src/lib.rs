@@ -196,6 +196,8 @@ enum Command {
         today: String,
         #[serde(default)]
         connections: Vec<String>,
+        #[serde(default, rename = "reactionTargets")]
+        reaction_targets: Vec<agent::ReactionTarget>,
     },
     AgentResponse {
         response: Value,
@@ -435,7 +437,8 @@ fn dispatch(command: Command) -> Result<Value> {
             history,
             today,
             connections,
-        } => agent::request(history, &today, &connections),
+            reaction_targets,
+        } => agent::request(history, &today, &connections, reaction_targets),
         Command::AgentResponse { response } => agent::response(response),
         Command::ValidateComponent { component } => {
             Ok(json!({"component":components::validate(component)?}))
@@ -638,7 +641,7 @@ mod tests {
     fn transcript() -> Value {
         json!([{"id":"7b9efe67-c157-44d2-b5eb-d78057dc6e22","createdAt":"2026-10-26T13:01:02.123456789Z",
         "composer":"Tomorrow: caminata 🏃🏽‍♀️","messages":[
-            {"id":"1fdce3f4-e43b-4690-a8cf-d963e65a0059","createdAt":"2026-10-26T13:01:02Z","kind":"user","text":"Private walking journal"},
+            {"id":"1fdce3f4-e43b-4690-a8cf-d963e65a0059","createdAt":"2026-10-26T13:01:02Z","kind":"user","text":"Private walking journal","reaction":"👍"},
             {"id":"c087bd67-efca-493b-8abc-34245d7ca8a4","createdAt":"2026-10-26T13:01:03Z","kind":"tool","text":"evaluate_kit finished","detail":"{\"synthetic\":true}"},
             {"id":"326c2270-a709-46a4-a3b5-5fecb59a7cc6","createdAt":"2026-10-26T13:01:04Z","kind":"assistant","text":"Tuesday: 25 minutes",
              "component":{"type":"result_table","version":1,"data":{"title":"Walking plan","columns":["Day","Minutes"],"rows":[["Tuesday","25"]]},"actions":[{"id":"show_source","label":"View data"}],"fallback":"Tuesday: 25 minutes"}}
@@ -717,6 +720,9 @@ mod tests {
             ("/0/approval", json!({"approved":true})),
             ("/0/createdAt", json!("not a date")),
             ("/0/messages/0/kind", json!("system")),
+            ("/0/messages/0/kind", json!("assistant")),
+            ("/0/messages/0/kind", json!("tool")),
+            ("/0/messages/0/reaction", json!("not an emoji")),
             ("/0/messages/2/component/actions/0/id", json!("delete")),
         ] {
             let mut invalid = transcript();

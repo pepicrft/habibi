@@ -103,7 +103,7 @@ internal class SecureVaultStorage(context: Context, private val recordName: Stri
 
 internal data class ChatLine(val role: String, val text: String, val id: String = UUID.randomUUID().toString(),
     val component: String? = null, val createdAt: String = Instant.now().toString(), val detail: String? = null,
-    val entryId: String? = null)
+    val entryId: String? = null, val reaction: String? = null)
 internal class Conversation(val id: String = UUID.randomUUID().toString(), val createdAt: String = Instant.now().toString()) {
     @Volatile var lines: List<ChatLine> = emptyList()
     @Volatile var draft = ""
@@ -291,7 +291,7 @@ internal class HabibiSession(
                         put(JSONObject().put("id", line.id).put("createdAt", line.createdAt).put("text", line.text)
                             .put("kind", when (line.role) { "You" -> "user"; "Habibi" -> "assistant"; else -> "tool" })
                             .put("component", line.component?.let(::JSONObject)).put("detail", line.detail)
-                            .apply { line.entryId?.let { put("entryId", it) } })
+                            .apply { line.entryId?.let { put("entryId", it) }; line.reaction?.let { put("reaction", it) } })
                     }
                 }))
         }
@@ -333,7 +333,8 @@ internal class HabibiSession(
                     ChatLine(when (message.getString("kind")) { "user" -> "You"; "assistant" -> "Habibi"; else -> "Kit tool" },
                         message.getString("text"), message.getString("id"), message.optJSONObject("component")?.toString(),
                         message.getString("createdAt"), message.optString("detail").takeIf { message.has("detail") && !message.isNull("detail") },
-                        message.optString("entryId").takeIf { message.has("entryId") && !message.isNull("entryId") })
+                        message.optString("entryId").takeIf { message.has("entryId") && !message.isNull("entryId") },
+                        message.optString("reaction").takeIf { message.has("reaction") && !message.isNull("reaction") })
                 }
                 toolResult = lines.lastOrNull { it.detail != null }?.detail
                 // Only display text resumes context. Tool calls, outputs, reviews,
@@ -810,7 +811,13 @@ internal class HabibiSession(
                 // Only availability IDs, never account names, credentials or the
                 // vault document, are sent when advertising connected tools.
                 val connections = JSONArray().apply { if (githubAccount?.expired == false) put("github") }
-                val request = call("agent_request", JSONObject().put("history", history).put("today", LocalDate.now().toString()).put("connections", connections))
+                val targets = JSONArray().apply {
+                    lines.filter { it.role == "You" }.takeLast(80).forEach {
+                        put(JSONObject().put("messageId", it.id).put("text", it.text).put("reaction", it.reaction ?: JSONObject.NULL))
+                    }
+                }
+                val request = call("agent_request", JSONObject().put("history", history).put("today", LocalDate.now().toString())
+                    .put("connections", connections).put("reactionTargets", targets))
                 val response = transport.send(endpoint ?: error("Not connected"), request.getJSONObject("body"), active)
                 if (active.get()) break
                 val parsed = call("agent_response", JSONObject().put("response", response))
@@ -821,6 +828,17 @@ internal class HabibiSession(
                 val tool = parsed.optJSONObject("tool") ?: break
                 val callId = tool.getString("callId")
                 try {
+                    if (tool.getString("name") == "react_to_message") {
+                        val arguments = tool.getJSONObject("arguments")
+                        val target = arguments.getString("message_id")
+                        check(lines.any { it.id == target && it.role == "You" }) { "User message not found in this conversation." }
+                        if (active.get()) { appendTool(callId, JSONObject().put("reacted", false)); break }
+                        lines = lines.map { if (it.id == target) it.copy(reaction = arguments.getString("emoji")) else it }
+                        appendTool(callId, JSONObject().put("reacted", true))
+                        checkpointConversations()
+                        changed()
+                        break // A reaction is a complete response, not another inference step.
+                    }
                     if (tool.getString("name") == "present_component") {
                         val component = call("validate_component", JSONObject().put("component", tool.getJSONObject("arguments").getJSONObject("component"))).getJSONObject("component")
                         if (active.get()) break
