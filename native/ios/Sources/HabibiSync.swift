@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import CryptoKit
+import UIKit
 
 struct HabibiSyncStatus: Decodable {
     struct Record: Codable, Identifiable, Equatable {
@@ -151,6 +153,96 @@ struct HabibiSynchronizer {
 }
 
 extension HabibiSession {
+    func setDraftSyncActive(_ active: Bool) {
+        draftSyncActive = active
+        draftSyncPoll?.cancel(); draftSyncPoll = nil
+        if !active { draftSyncDebounce?.cancel(); return }
+        draftSyncPoll = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.synchronizeDrafts()
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            }
+        }
+    }
+
+    func requestDraftSync() {
+        draftSyncDebounce?.cancel()
+        if syncConnected { draftSyncMessage = "Draft changes waiting to sync." }
+        guard draftSyncActive else { return }
+        draftSyncDebounce = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(1500)) } catch { return }
+            await self?.synchronizeDrafts()
+        }
+    }
+
+    func finishDraftHandoff() {
+        draftSyncDeparture?.cancel()
+        draftSyncDeparture = Task {
+            let background = UIApplication.shared.beginBackgroundTask(withName: "Encrypted draft handoff") { [weak self] in
+                self?.draftSyncDeparture?.cancel()
+            }
+            defer { if background != .invalid { UIApplication.shared.endBackgroundTask(background) } }
+            // A cancelled foreground poll may still be returning its HTTP reply.
+            while draftSyncRunning {
+                do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+            }
+            await synchronizeDrafts(allowInactive: true)
+        }
+    }
+
+    func synchronizeDrafts(allowInactive: Bool = false) async {
+        guard draftSyncActive || allowInactive, !Task.isCancelled, !draftSyncRunning, snapshot != nil, !busy, !syncing, !chatRunning, review == nil else { return }
+        draftSyncRunning = true
+        defer { draftSyncRunning = false }
+        do {
+            guard try await syncAccount.connected() else {
+                draftSyncMessage = "Draft sync connects through Encrypted sync in Profile."
+                return
+            }
+            let current = try await HabibiSynchronizer(store: store, account: syncAccount).status()
+            let path = "/v1/vaults/\(current.vaultId)/drafts"
+            for _ in 0..<3 {
+                let (data, response) = try await syncAccount.authorized(path, vaultToken: current.token, limit: 1024 * 1024)
+                if response.statusCode == 401 {
+                    try await syncAccount.verifyAccount()
+                    let body = try JSONSerialization.data(withJSONObject: ["id": current.vaultId, "token": current.token])
+                    let (_, registered) = try await syncAccount.authorized("/v1/vaults", method: "POST", body: body, contentType: "application/json")
+                    guard [201, 409].contains(registered.statusCode) else { throw HabibiFailure(message: "Vault registration failed.") }
+                    continue
+                }
+                guard [200, 404].contains(response.statusCode) else { throw HabibiFailure(message: "Draft sync unavailable.") }
+                var condition = ["If-None-Match": "*"]
+                if response.statusCode == 200 {
+                    let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+                    let etag = "\"\(digest)\""
+                    guard response.value(forHTTPHeaderField: "ETag") == etag else { throw HabibiFailure(message: "Invalid encrypted draft response.") }
+                    condition = ["If-Match": etag]
+                }
+                guard draftSyncActive || allowInactive, !Task.isCancelled,
+                      try await HabibiSynchronizer(store: store, account: syncAccount).status().vaultId == current.vaultId else { return }
+                guard let merged = try await mergeDrafts(response.statusCode == 200 ? data.habibiBase64URL : nil) else { return }
+                let uploadedConversations = ((merged["state"] as? [String: Any])?["conversations"] as? [[String: Any]]) ?? []
+                if merged["upload"] as? Bool == true {
+                    guard draftSyncActive || allowInactive, !Task.isCancelled else { return }
+                    let bytes = try Data(habibiBase64URL: merged["envelope"] as? String ?? "")
+                    let (_, uploaded) = try await syncAccount.authorized(path, method: "PUT", body: bytes,
+                        contentType: "application/octet-stream", vaultToken: current.token, headers: condition)
+                    if uploaded.statusCode == 412 { continue } // Rescan and merge; never overwrite an unseen fork.
+                    guard uploaded.statusCode == 204 else { throw HabibiFailure(message: "Draft upload unavailable.") }
+                }
+                let currentDraftsUploaded = conversations.allSatisfy { local in
+                    uploadedConversations.contains { ($0["id"] as? String) == local.id.uuidString.lowercased() && ($0["composer"] as? String) == local.composer }
+                }
+                draftSyncMessage = currentDraftsUploaded ? "Draft versions synced encrypted." : "Draft changes waiting to sync."
+                return
+            }
+            draftSyncMessage = "Draft sync will retry; local versions are saved."
+        } catch {
+            // Network/auth failures do not touch conversation errors or inference.
+            draftSyncMessage = "Draft sync paused / offline. Local versions are kept; retrying while the app is open."
+        }
+    }
+
     func refreshSyncStatus() async {
         do {
             syncConnected = try await syncAccount.connected()
@@ -167,6 +259,7 @@ extension HabibiSession {
             let callback = try await syncBrowser.open(authorization.url)
             try await syncAccount.finish(authorization, callback: callback)
             syncConnected = true
+            requestDraftSync()
         } catch {
             await syncAccount.cancelAuthorization()
             syncError = error.localizedDescription

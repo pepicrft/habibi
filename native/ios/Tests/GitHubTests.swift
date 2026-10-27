@@ -491,7 +491,7 @@ private extension HabibiStore {
         (.init(kitId: "github", clientId: "private-client", account: "PRIVATE-ACCOUNT", expiresAt: Int64(Date().timeIntervalSince1970) + 3600), ["github"]),
         (.init(kitId: "unsupported", clientId: "private-client", account: "PRIVATE-ACCOUNT", expiresAt: nil), [])
     ] {
-        session.snapshot = .init(version: 1, profile: profile, kits: [], conversations: nil, connections: [connection])
+        session.snapshot = .init(version: 1, profile: profile, kits: [], conversations: nil, connections: [connection], drafts: nil)
         #expect(session.agentConnections == expected)
         let prepared = try HabibiCore.execute(["operation": "agent_request", "history": [["role": "user", "content": "Hi"]],
                                                "today": habibiDay(), "connections": session.agentConnections])

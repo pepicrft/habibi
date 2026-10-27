@@ -47,6 +47,31 @@ class ConversationTest {
         session.start(); session.create(profile()); session.configure(InferenceEndpoint("http://10.0.2.2:8083/inference", "test"))
         return session
     }
+    @Test fun conflictPickerSwitchesDraftsWithoutSendingOrDiscardingEitherVersion() {
+        val core = FixtureCore(); val session = inject(core = core)
+        val id = session.conversation.id
+        core.recoveredState = JSONObject(session.state!!.toString()).put("conversations", org.json.JSONArray().put(JSONObject()
+            .put("id", id).put("createdAt", session.conversation.createdAt).put("composer", "Phone version").put("messages", org.json.JSONArray())))
+            .put("drafts", org.json.JSONArray().put(JSONObject().put("id", id).put("versions", org.json.JSONArray()
+                .put(JSONObject().put("text", "Phone version")).put(JSONObject().put("text", "Tablet version")))))
+        session.recover(JSONObject(), "fixture-key")
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val activity = controller.get()
+        activity.open(session); activity.layoutNow()
+        val editor = activity.tagged("conversation_message") as TextInputEditText
+        assertEquals("Phone version", editor.text.toString())
+        activity.tagged("draft_versions").performClick()
+        val picker = ShadowDialog.getLatestDialog() as AlertDialog
+        assertEquals("Tablet version", picker.listView.adapter.getItem(0))
+        picker.listView.performItemClick(picker.listView.getChildAt(0), 0, 0)
+        activity.layoutNow()
+        assertSame(editor, activity.tagged("conversation_message"))
+        assertEquals("Tablet version", editor.text.toString())
+        assertEquals(listOf("Phone version"), session.otherDrafts)
+        assertTrue(session.lines.isEmpty())
+        assertFalse(core.calls.any { it.getString("operation") == "agent_request" })
+        controller.pause().stop().destroy()
+    }
+
     @Test fun reactionsUpdateExistingRowsWithAnAccessibleBadgeWithoutReplacingTheComposer() {
         val transport = FixtureTransport(); val session = inject(transport)
         session.send("That's all for now")

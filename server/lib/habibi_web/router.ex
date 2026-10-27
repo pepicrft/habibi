@@ -48,6 +48,8 @@ defmodule HabibiWeb.Router do
     put "/v1/vaults/:vault_id/records/:id", SyncController, :put
     get "/v1/vaults/:vault_id/records", SyncController, :list
     get "/v1/vaults/:vault_id/records/:id", SyncController, :get
+    get "/v1/vaults/:vault_id/drafts", SyncController, :get_drafts
+    put "/v1/vaults/:vault_id/drafts", SyncController, :put_drafts
     put "/v1/vaults/:vault_id/locks/:id", SyncController, :acquire_lock
     post "/v1/vaults/:vault_id/locks/:id/renew", SyncController, :renew_lock
     delete "/v1/vaults/:vault_id/locks/:id", SyncController, :release_lock

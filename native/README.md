@@ -185,7 +185,7 @@ it. Recover **the same vault** on the second device using its encrypted backup
 and separate recovery key, then use Profile → Encrypted sync on both devices.
 Signing into a Habibi account alone does not transfer the vault key. Offline
 conflicts use the existing explicit full-snapshot choice, including connections;
-there is no silent account/session merge or automatic background sync. Older
+there is no silent account/session merge or automatic full-vault sync. Older
 native clients reject snapshots containing connections instead of stripping
 credentials: update both devices before syncing.
 
@@ -361,10 +361,10 @@ with S256 PKCE. Account credentials are origin-scoped and protected separately
 from vault secrets. Sign-in does not recover a vault: another device needs the
 encrypted recovery backup and its separate recovery key first.
 
-Sync now uploads immutable encrypted snapshots and downloads authenticated
+Manual sync uploads immutable encrypted snapshots and downloads authenticated
 history. The client durably saves an upload before sending it and retries the
 exact ciphertext after interruption. Concurrent edits require an explicit choice
-of local or remote state; there is no automatic field-level merge. Disconnect
+of local or remote state; there is no automatic full-vault field-level merge. Disconnect
 removes account credentials but retains the local vault and sync progress.
 The server sees opaque IDs, sizes, digests, sequence numbers and access metadata,
 not conversations, entries, preferences or content keys. This does not detect
@@ -375,6 +375,51 @@ simulator. On Android, run `adb reverse tcp:4000 tcp:4000` and pass
 `--es sync_url http://localhost:4000` to the debug activity. The origin must match
 OAuth discovery exactly; do not rewrite its issuer to an emulator alias. Native
 sync remains an unaudited prototype, and production rollout is not configured.
+
+### Automatic composer drafts
+
+Recover **the same vault** on both devices using its encrypted backup and separate
+recovery key, then sign in through Profile → Encrypted sync on each device.
+Signing in alone cannot transfer encryption keys. Both native apps automatically
+exchange unsent conversation text after a 1.5-second typing pause and poll every
+5 seconds while active. They make a best-effort final attempt on departure;
+background suspension, force-quitting or offline devices can delay delivery.
+Keep the first device open until its draft status confirms encrypted sync before
+switching devices. Disconnect stops automatic network sync, not local saving.
+
+Drafts are encrypted on-device with the existing vault content key and the HAB1
+format, under the separate context `habibi/drafts/v1\0{vault UUID}`. Only draft
+text, conversation IDs/dates and causal version clocks are inside this channel.
+An unknown conversation arrives as an empty transcript with its draft. Messages,
+Kit definitions/entries, provider context, credentials, consent and approvals are
+not synchronized automatically. Full snapshots and recovery backups still include
+the draft metadata along with the rest of the vault.
+
+Causal edits replace their earlier version. Concurrent device edits retain both
+versions instead of choosing by timestamp or arrival order. **Other draft versions**
+lets you switch without sending or discarding the other branch, including when
+you continue editing the selected version. Sending or clearing a branch leaves
+an encrypted empty marker so stale retries cannot resurrect its previous text;
+other conflict branches remain available. A restored backup and an explicitly
+selected alternative start a fresh local editing identity to avoid reusing old
+revision counters. There is no automatic text merge or conflict deletion UI.
+
+Local persistence succeeds before any merged draft is uploaded. The server
+compares ciphertext digests using conditional HTTP writes; on a conflict, the
+client downloads, decrypts, merges and retries. Invalid ciphertext, failed writes
+or size limits leave saved versions intact; sync pauses rather than truncating.
+Bounds are 128 tracked conversations (including cleared markers), 16 concurrent
+versions per conversation, 32 editing identities per version, 64 KiB UTF-8 per
+version and a 1 MiB encrypted draft blob. The existing 1 MiB local-vault limit
+can be reached first, since draft text and version metadata also live there.
+
+Deploy the `20261028000000_create_vault_drafts` server migration before using
+automatic drafts. Its one bounded ciphertext row per vault is in PostgreSQL,
+not the immutable snapshot bucket. No server decryption is introduced. Upgrade
+both clients before exchanging new backups or full snapshots: older clients
+reject the new draft/clock fields rather than silently stripping them. Server
+freshness and rollback resistance are still not proven, and the prototype is
+not independently audited.
 
 ## Server-owned appearance and Heartling
 

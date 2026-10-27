@@ -4,6 +4,7 @@ mod components;
 mod connections;
 mod conversations;
 mod crypto;
+mod drafts;
 mod kit_pages;
 mod kits;
 mod profile;
@@ -100,6 +101,15 @@ enum Command {
         identity: Identity,
         document: Document,
         conversations: Vec<conversations::Conversation>,
+        #[serde(rename = "deviceId")]
+        device_id: Option<String>,
+    },
+    SyncDrafts {
+        identity: Identity,
+        document: Document,
+        #[serde(rename = "deviceId")]
+        device_id: String,
+        envelope: Option<String>,
     },
     KitTool {
         identity: Identity,
@@ -280,13 +290,41 @@ fn dispatch(command: Command) -> Result<Value> {
             identity,
             document,
             mut conversations,
+            device_id,
         } => {
             conversations::validate(&mut conversations)?;
             let mut state = State::open(&identity, &document)?;
             conversations::preserve_receipts(&state.conversations, &mut conversations)?;
+            if let Some(device) = device_id {
+                drafts::capture(
+                    &mut state.drafts,
+                    &state.conversations,
+                    &conversations,
+                    &device,
+                )?;
+                for conversation in &mut conversations {
+                    conversation.composer_clock = state
+                        .drafts
+                        .iter()
+                        .find(|draft| draft.id == conversation.id)
+                        .and_then(|draft| {
+                            draft
+                                .versions
+                                .iter()
+                                .find(|version| version.text == conversation.composer)
+                        })
+                        .map(|version| version.clock.clone());
+                }
+            }
             state.conversations = conversations;
             state.sealed(&identity, Some(&document))
         }
+        Command::SyncDrafts {
+            identity,
+            document,
+            device_id,
+            envelope,
+        } => drafts::synchronize(&identity, &document, &device_id, envelope.as_deref()),
         Command::KitTool {
             identity,
             document,

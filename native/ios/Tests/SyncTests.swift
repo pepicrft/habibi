@@ -19,6 +19,7 @@ private actor SyncServer: HabibiSyncHTTP {
     let origin = try! HabibiSyncOrigin("https://sync.example")
     var vaultToken: String?
     var records: [(String, Data)] = []
+    var drafts: Data?
     var dropUpload = false
     var dropRefresh = false
     var badDigest = false
@@ -74,6 +75,22 @@ private actor SyncServer: HabibiSyncHTTP {
             return try response(201, ["id": value["id"]!])
         }
         guard let vaultToken, request.value(forHTTPHeaderField: "X-Habibi-Vault-Token") == vaultToken else { return try response(401, [:]) }
+        if url.path.hasSuffix("/drafts") {
+            func etag(_ bytes: Data) -> String { "\"" + SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() + "\"" }
+            if request.httpMethod == "PUT" {
+                let bytes = request.httpBody!
+                if let drafts {
+                    guard request.value(forHTTPHeaderField: "If-Match") == etag(drafts) else { return try response(412, [:]) }
+                } else {
+                    guard request.value(forHTTPHeaderField: "If-None-Match") == "*" else { return try response(412, [:]) }
+                }
+                drafts = bytes
+                return (Data(), HTTPURLResponse(url: url, statusCode: 204, httpVersion: nil, headerFields: nil)!)
+            }
+            guard let drafts else { return try response(404, [:]) }
+            return (drafts, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "application/octet-stream", "ETag": etag(drafts)])!)
+        }
         if url.path.hasSuffix("/records") {
             let after = Int(URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.first!.value!)!
             let indices = Array(records.indices.dropFirst(after).prefix(100))
@@ -102,6 +119,48 @@ private func connect(_ server: SyncServer, secrets: SyncSecrets = SyncSecrets())
     callback.queryItems = [URLQueryItem(name: "state", value: pending.state), URLQueryItem(name: "iss", value: server.origin.value), URLQueryItem(name: "code", value: "fictional-code")]
     try await account.finish(pending, callback: callback.url!)
     return account
+}
+
+@MainActor
+@Test func automaticEncryptedDraftHandoffPreservesOfflineVersionsAndLiveContext() async throws {
+    let server = SyncServer()
+    let a = HabibiSession(store: HabibiStore(persistence: MemoryPersistence()), syncAccount: try await connect(server), draftDeviceID: UUID().uuidString.lowercased())
+    #expect(await a.create(.init(name: "Noor", goals: ["learning"], style: "warm")))
+    a.newConversation(); a.composer = "Start here"
+    let recovery = try await a.exportRecovery()
+    let backup = try JSONSerialization.data(withJSONObject: recovery["backup"]!)
+    let b = HabibiSession(store: HabibiStore(persistence: MemoryPersistence()), syncAccount: try await connect(server), draftDeviceID: UUID().uuidString.lowercased())
+    #expect(await b.recover(backup, key: recovery["recoveryKey"] as! String))
+    let id = try #require(a.activeConversationID)
+    b.openConversation(id)
+    a.draftSyncActive = true; b.draftSyncActive = true
+    a.composer = "Phone draft"; await a.synchronizeDrafts(); await b.synchronizeDrafts()
+    #expect(b.composer == "Phone draft")
+    a.composer = "Phone offline"; b.composer = "Tablet offline"
+    a.cloudConsent = true
+    await a.synchronizeDrafts(); await b.synchronizeDrafts(); await a.synchronizeDrafts()
+    #expect(a.composer == "Phone offline")
+    #expect(b.composer == "Tablet offline")
+    #expect(a.otherDrafts == ["Tablet offline"])
+    #expect(b.otherDrafts == ["Phone offline"])
+    #expect(a.messages.isEmpty && b.messages.isEmpty)
+    #expect(a.cloudConsent)
+    #expect(await server.count() == 0)
+    await a.selectDraftVersion("Tablet offline")
+    a.composer = "Continued tablet draft"
+    await a.synchronizeDrafts(); await b.synchronizeDrafts()
+    #expect(a.otherDrafts == ["Phone offline"])
+    #expect(Set(b.snapshot?.drafts?.first?.versions.map(\.text) ?? []) == Set(["Phone offline", "Continued tablet draft"]))
+    // Recovery starts with an unopened vault, but may reuse this device's old replica ID.
+    let restored = HabibiSession(store: HabibiStore(persistence: MemoryPersistence()), syncAccount: try await connect(server), draftDeviceID: a.draftDeviceID)
+    #expect(await restored.recover(backup, key: recovery["recoveryKey"] as! String))
+    restored.openConversation(id); restored.composer = "Edited restored backup"
+    restored.draftSyncActive = true
+    await restored.synchronizeDrafts(); await b.synchronizeDrafts()
+    #expect(restored.otherDrafts.contains("Continued tablet draft"))
+    #expect(restored.otherDrafts.contains("Phone offline"))
+    #expect(b.otherDrafts.contains("Edited restored backup"))
+    a.setDraftSyncActive(false); b.setDraftSyncActive(false); restored.setDraftSyncActive(false)
 }
 
 @Test func nativeSignInUsesPKCEAndRejectsConfusedOrReplayedCallbacks() async throws {

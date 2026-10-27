@@ -12,6 +12,12 @@ This repository contains an Eleventy website, an Elixir/Phoenix ciphertext-sync 
 
 Native conversations, cards and drafts persist in that encrypted vault and its recovery backups. Restart restores text context without replaying tools, pending approvals or provider consent. Failed saves retain the previous encrypted record and retryable edits; no plaintext conversation database is created.
 
+Unsent native composer drafts also sync automatically between connected devices
+that have recovered the same vault. Offline conflicts keep both encrypted versions
+under **Other draft versions**; choosing a version never sends it. Full-vault sync
+still uses explicit snapshot conflict choices. See [automatic drafts](native/README.md#automatic-composer-drafts)
+for setup, timing and limits.
+
 Kits can present native input cards directly inside a conversation, such as asking for exercise repetitions. Fields come from the installed Kit schema. An explicit Save seals the entry and card receipt together; retries do not duplicate it, and saved cards restore after restart. Editing or saving does not call inference or disclose the entered values to the model. Unsaved inline inputs remain ephemeral. Read-only result tables still use the reviewed bundled Atlas Native Shell renderer.
 
 Simulator/debug launch flags connect to a loopback host inference bridge using authenticated Amp, Claude or Pi. The host CLI returns tool requests as data; the app validates, executes and approves them. Messages and requested definitions reach the selected provider, but tools never send saved entries or keys. Profile → Encrypted sync connects native apps through system-browser OAuth/PKCE and immutable encrypted snapshots, with explicit conflict choices. Account sign-in does not recover encryption keys. See the [build, inference and privacy instructions](native/README.md). Production inference, public sharing and migrations are not connected. The browser workbench below remains a separate reference client with different local key storage.
@@ -184,7 +190,15 @@ The API uses Phoenix/Bandit, Ecto/Postgres, DNSCluster, and Phoenix.PubSub. No v
 
 **Clustering is not the database.** DNSCluster discovers named nodes; PubSub is available for future wakeups, not durable data or ordering. PostgreSQL transactions serialize writes **within one vault**, allocating a committed-prefix sync cursor across replicas. Independent vaults do not share that row lock. The prototype holds this lock while a bounded object upload completes: simple and correct for small records, but hot-vault throughput and storage latency must be measured before optimizing.
 
-Encrypted bytes live in commodity object storage, not Postgres, Redis, or replicated BEAM memory. Postgres stores only vault credentials' hashes, byte counters, record IDs, sequence numbers, digests, sizes, and creation timestamps. Lists are indexed and paginated in batches of 100. Defaults cap each vault at **100 MiB / 10,000 records**, with a 1 MiB per-record request limit; byte quotas are enforced under the same database lock. Object storage can grow independently; Postgres remains a capacity/planning boundary, not magically limitless because the API is clustered. At larger scale, partition metadata by vault and retain one write authority per vault.
+Immutable encrypted records live in commodity object storage, not Postgres, Redis, or replicated BEAM memory. Their Postgres metadata consists of vault credentials' hashes, byte counters, record IDs, sequence numbers, digests, sizes, and creation timestamps. Lists are indexed and paginated in batches of 100. Defaults cap each vault at **100 MiB / 10,000 records**, with a 1 MiB per-record request limit; byte quotas are enforced under the same database lock. Object storage can grow independently; Postgres remains a capacity/planning boundary, not magically limitless because the API is clustered. At larger scale, partition metadata by vault and retain one write authority per vault.
+
+Automatic composer drafts use one separate, replaceable **client-encrypted blob,
+at most 1 MiB per vault**, in PostgreSQL's `vault_drafts` table. Keeping the blob
+and its digest in the same row permits atomic conditional writes without creating
+an immutable record on every typing pause. This storage is separate from the
+immutable-record byte/sequence quotas. The server never receives plaintext,
+version clocks or content keys. Database backups now include this bounded
+ciphertext as well as metadata; capacity planning must account for it.
 
 Storage cost includes requests and egress, not just bytes. Batch small events, avoid listing entire histories, choose a bucket in the API's region, and plan encrypted snapshot/compaction and deletion before lifting prototype quotas. Content-addressed keys make retries reuse an object. A failed database commit after a successful S3 upload can leave an unreferenced object; production needs a grace-period reconciliation job against committed metadata. Never apply a blanket age-based bucket expiry to live encrypted history. No reconciliation/deletion worker is shipped yet.
 

@@ -33,7 +33,7 @@ internal data class SyncOrigin private constructor(val issuer: String) {
     }
 }
 
-internal data class SyncResponse(val code: Int, val body: ByteArray) {
+internal data class SyncResponse(val code: Int, val body: ByteArray, val etag: String? = null) {
     fun json(): JSONObject {
         check(body.size <= 256 * 1024) { "Sync metadata is too large." }
         return try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { error("Invalid sync response.") }
@@ -85,7 +85,7 @@ internal class HttpSyncTransport(private val open: (String) -> HttpURLConnection
                 }
                 output.toByteArray()
             } ?: ByteArray(0)
-            return SyncResponse(code, bytes)
+            return SyncResponse(code, bytes, connection.getHeaderField("ETag"))
         } catch (cause: IllegalStateException) { throw cause }
         catch (_: Exception) { error("Sync is offline or the request timed out. Saved data and pending uploads are retained.") }
         finally { connection.disconnect() }

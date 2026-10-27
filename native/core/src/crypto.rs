@@ -172,6 +172,23 @@ impl Identity {
         open(&key, context.as_bytes(), &decode(&document.envelope)?)
     }
 
+    pub fn seal_drafts(&self, plaintext: &[u8]) -> Result<String> {
+        self.validate()?;
+        let key = decode_key(&self.key)?;
+        let context = format!("habibi/drafts/v1\0{}", self.vault_id);
+        Ok(encode(&seal(&key, context.as_bytes(), plaintext)?))
+    }
+
+    pub fn open_drafts(&self, envelope: &str) -> Result<Zeroizing<Vec<u8>>> {
+        self.validate()?;
+        if envelope.len() > MAX_BYTES.div_ceil(3) * 4 {
+            return Err(Error::invalid("Encrypted drafts exceed the size limit."));
+        }
+        let key = decode_key(&self.key)?;
+        let context = format!("habibi/drafts/v1\0{}", self.vault_id);
+        open(&key, context.as_bytes(), &decode(envelope)?)
+    }
+
     pub fn recovery(&self) -> Result<(RecoveryBundle, String)> {
         self.validate()?;
         let key = Zeroizing::new(random::<32>()?);

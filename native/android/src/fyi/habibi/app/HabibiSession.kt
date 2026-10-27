@@ -40,8 +40,15 @@ class HabibiApplication : Application() {
     private val realThemes by lazy { NativeThemes(this) }
     internal val session: HabibiSession get() = injectedSession ?: realSession
     private val realSession by lazy {
+        val preferences = getSharedPreferences("habibi.draft-replica", Context.MODE_PRIVATE)
+        val deviceId = preferences.getString("id", null) ?: UUID.randomUUID().toString().also {
+            check(preferences.edit().putString("id", it).commit()) { "Could not save the draft replica identity." }
+        }
         HabibiSession(SecureVaultStorage(this), { HabibiCore.execute(it) },
-            oauth = NativeOAuth(SecureVaultStorage(this, "oauth-v1"), HttpSyncTransport()))
+            oauth = NativeOAuth(SecureVaultStorage(this, "oauth-v1"), HttpSyncTransport()), draftDeviceId = deviceId,
+            saveDraftDeviceId = { id ->
+                check(preferences.edit().putString("id", id).commit()) { "Could not save the draft replica identity." }
+            })
     }
 }
 
@@ -107,6 +114,7 @@ internal data class ChatLine(val role: String, val text: String, val id: String 
 internal class Conversation(val id: String = UUID.randomUUID().toString(), val createdAt: String = Instant.now().toString()) {
     @Volatile var lines: List<ChatLine> = emptyList()
     @Volatile var draft = ""
+    @Volatile var composerClock = JSONObject()
     @Volatile var draftRevision = 0L
     @Volatile var definition: JSONObject? = null
     @Volatile var toolResult: String? = null
@@ -133,6 +141,8 @@ internal class HabibiSession(
     private val syncTransport: SyncTransport = HttpSyncTransport(),
     private val githubTransport: GitHubTransport = HttpGitHubTransport(),
     private val github: GitHubDeviceFlow = GitHubDeviceFlow(githubTransport),
+    private var draftDeviceId: String = UUID.randomUUID().toString(),
+    private val saveDraftDeviceId: (String) -> Unit = {},
 ) {
     private var record: JSONObject? = null
     @Volatile var state: JSONObject? = null; private set
@@ -149,6 +159,10 @@ internal class HabibiSession(
     @Volatile var syncConflict = false; private set
     @Volatile var syncPending = false; private set
     @Volatile var syncDecision = ""; private set
+    @Volatile var draftSyncMessage = "Draft sync connects through Encrypted sync in Profile."; private set
+    @Volatile private var draftSyncActive = false
+    @Volatile private var draftSyncDeparture = false
+    private val draftSyncQueued = AtomicBoolean(false)
     private val syncLock = AtomicBoolean(false)
     val syncing get() = syncLock.get()
     val authorizing get() = oauth?.authorizing() == true
@@ -211,6 +225,14 @@ internal class HabibiSession(
     private val entrySubmission = AtomicBoolean(false)
     private val autosaveHandler by lazy { Handler(Looper.getMainLooper()) }
     private val autosave = Runnable { flushConversations() }
+    private val draftSyncDebounce = Runnable { synchronizeDrafts() }
+    private val draftSyncPoll = object : Runnable {
+        override fun run() {
+            if (!draftSyncActive) return
+            synchronizeDrafts()
+            autosaveHandler.postDelayed(this, 5000)
+        }
+    }
     // Onboarding/form UI is ephemeral. Conversation drafts use only the encrypted vault.
     var onboardingName = ""
     var onboardingGoals = linkedSetOf<String>()
@@ -224,6 +246,7 @@ internal class HabibiSession(
                 conversation.draft = value; conversation.draftRevision++; archiveRevision++
             }
             scheduleConversationSave()
+            requestDraftSync()
         }
     val formDrafts = mutableMapOf<String, String>()
 
@@ -286,6 +309,7 @@ internal class HabibiSession(
     private fun archivedConversations(): JSONArray = JSONArray().apply {
         conversations.forEach { chat ->
             put(JSONObject().put("id", chat.id).put("createdAt", chat.createdAt).put("composer", chat.draft)
+                .put("composerClock", chat.composerClock)
                 .put("draft", chat.definition?.let { JSONObject(it.toString()) }).put("messages", JSONArray().apply {
                     chat.lines.forEach { line ->
                         put(JSONObject().put("id", line.id).put("createdAt", line.createdAt).put("text", line.text)
@@ -305,8 +329,15 @@ internal class HabibiSession(
             archiveRevision to archivedConversations()
         }
         try {
-            install(call("save_conversations", authenticated().put("conversations", snapshot)))
-            synchronized(archiveLock) { savedArchiveRevision = revision }
+            install(call("save_conversations", authenticated().put("conversations", snapshot).put("deviceId", draftDeviceId)))
+            synchronized(archiveLock) {
+                savedArchiveRevision = revision
+                val saved = state?.optJSONArray("conversations") ?: JSONArray()
+                for (index in 0 until saved.length()) {
+                    val chat = saved.getJSONObject(index)
+                    conversations.firstOrNull { it.id == chat.getString("id") }?.composerClock = chat.optJSONObject("composerClock") ?: JSONObject()
+                }
+            }
             failedArchiveRevision = null
             if (error == archiveError) error = null
             archiveError = null
@@ -326,6 +357,7 @@ internal class HabibiSession(
             val item = archived.getJSONObject(index)
             Conversation(item.getString("id"), item.getString("createdAt")).apply {
                 draft = item.getString("composer")
+                composerClock = item.optJSONObject("composerClock") ?: JSONObject()
                 definition = item.optJSONObject("draft")?.let { JSONObject(it.toString()) }
                 val messages = item.getJSONArray("messages")
                 lines = (0 until messages.length()).map { messageIndex ->
@@ -343,15 +375,141 @@ internal class HabibiSession(
                     history.put(JSONObject().put("role", if (it.role == "You") "user" else "assistant").put("content", it.text))
                 }
             }
-        }.ifEmpty { listOf(Conversation()) }
+        }
     }
     private fun replaceConversations(restored: List<Conversation>, selected: String? = null) {
         autosaveHandler.removeCallbacks(autosave)
         synchronized(archiveLock) {
-            conversations = restored; conversation = restored.firstOrNull { it.id == selected } ?: restored.first()
+            conversations = restored.ifEmpty { listOf(Conversation()) }
+            conversation = conversations.firstOrNull { it.id == selected } ?: conversations.first()
             archiveRevision++; savedArchiveRevision = archiveRevision
         }
         archiveError = null; failedArchiveRevision = null; inferenceConsent = false
+    }
+
+    val otherDrafts: List<String> get() {
+        val drafts = state?.optJSONArray("drafts") ?: return emptyList()
+        for (index in 0 until drafts.length()) {
+            val draft = drafts.getJSONObject(index)
+            if (draft.getString("id") != conversation.id) continue
+            val versions = draft.getJSONArray("versions")
+            return (0 until versions.length()).map { versions.getJSONObject(it).getString("text") }
+                .filter { it.isNotEmpty() && it != conversationDraft }.distinct().sorted()
+        }
+        return emptyList()
+    }
+    private fun renewDraftReplica() {
+        val id = UUID.randomUUID().toString()
+        saveDraftDeviceId(id)
+        draftDeviceId = id
+    }
+    fun selectDraftVersion(text: String) = work {
+        check(text in otherDrafts) { "The available draft versions changed. Open the picker again." }
+        checkpointConversations(retry = true)
+        check(archiveError == null) { archiveError.orEmpty() }
+        // Editing an alternate branch must not acknowledge the previous branch.
+        renewDraftReplica()
+        conversationDraft = text
+        val drafts = state!!.getJSONArray("drafts")
+        for (index in 0 until drafts.length()) {
+            val draft = drafts.getJSONObject(index)
+            if (draft.getString("id") == conversation.id) {
+                val versions = draft.getJSONArray("versions")
+                conversation.composerClock = (0 until versions.length()).map { versions.getJSONObject(it) }
+                    .first { it.getString("text") == text }.optJSONObject("clock") ?: JSONObject()
+            }
+        }
+    }
+    fun setDraftSyncActive(active: Boolean) {
+        draftSyncActive = active
+        draftSyncDeparture = !active
+        autosaveHandler.removeCallbacks(draftSyncPoll)
+        if (active) autosaveHandler.post(draftSyncPoll)
+        else {
+            autosaveHandler.removeCallbacks(draftSyncDebounce)
+            synchronizeDrafts(finishing = true) // Best effort only; process suspension is not delivery.
+        }
+    }
+    private fun requestDraftSync() {
+        autosaveHandler.removeCallbacks(draftSyncDebounce)
+        if (syncConnected) {
+            draftSyncMessage = "Draft changes waiting to sync."
+            changed()
+        }
+        if (draftSyncActive) autosaveHandler.postDelayed(draftSyncDebounce, 1500)
+    }
+    fun synchronizeDrafts(finishing: Boolean = false) {
+        if ((!draftSyncActive && !finishing) || !loaded || state == null || (busy && !finishing) || chatting || review != null || syncing || kitAuthorizing || authorizing) return
+        if (oauth?.connected(syncOrigin) != true || !draftSyncQueued.compareAndSet(false, true)) return
+        if (finishing) draftSyncDeparture = false
+        work {
+            try {
+                val auth = oauth ?: return@work
+                val status = coordinator().status()
+                val path = "/v1/vaults/${status.getString("vaultId")}/drafts"
+                fun request(method: String, target: String = path, body: ByteArray? = null, condition: Map<String, String> = emptyMap()): SyncResponse {
+                    val headers = condition + mapOf("Authorization" to "Bearer ${auth.access(syncOrigin)}", "X-Habibi-Vault-Token" to status.getString("token")) +
+                        if (body == null) emptyMap() else mapOf("Content-Type" to "application/octet-stream")
+                    return syncTransport.request(syncOrigin, method, target, headers, body)
+                }
+                repeat(3) {
+                    if ((!draftSyncActive && !finishing) || chatting || review != null || syncing || kitAuthorizing || authorizing) return@work
+                    val remote = request("GET")
+                    if (remote.code == 401) {
+                        val token = auth.access(syncOrigin)
+                        check(syncTransport.request(syncOrigin, "GET", "/v1/me", mapOf("Authorization" to "Bearer $token"), null).success().json().optString("sub").isNotBlank())
+                        val body = JSONObject().put("id", status.getString("vaultId")).put("token", status.getString("token")).toString().toByteArray()
+                        val registered = syncTransport.request(syncOrigin, "POST", "/v1/vaults", mapOf("Authorization" to "Bearer $token", "Content-Type" to "application/json"), body)
+                        check(registered.code == 201 || registered.code == 409)
+                        return@repeat
+                    }
+                    check(remote.code == 200 || remote.code == 404)
+                    val condition = if (remote.code == 200) {
+                        check(remote.etag == "\"${digest(remote.body)}\"") { "Invalid encrypted draft response." }
+                        mapOf("If-Match" to remote.etag)
+                    } else mapOf("If-None-Match" to "*")
+                    if (!draftSyncActive && !finishing) return@work
+                    checkpointConversations(retry = true)
+                    if (archiveError != null || synchronized(archiveLock) { archiveRevision != savedArchiveRevision }) return@work
+                    val (revision, before) = synchronized(archiveLock) { archiveRevision to conversations.associate { it.id to it.draftRevision } }
+                    val args = authenticated().put("deviceId", draftDeviceId)
+                    if (remote.code == 200) args.put("envelope", base64url(remote.body))
+                    val candidate = call("sync_drafts", args)
+                    val drafts = restoredConversations(candidate.getJSONObject("state"))
+                    val uploadedComposers = drafts.associate { it.id to it.draft }
+                    if (candidate.optBoolean("changed", true)) install(candidate) // Persist before publication or PUT.
+                    synchronized(archiveLock) {
+                        drafts.forEach { saved ->
+                            val local = conversations.firstOrNull { it.id == saved.id }
+                            if (local == null) conversations = conversations + saved
+                            else if (local.draftRevision == before[local.id]) {
+                                local.draft = saved.draft; local.composerClock = saved.composerClock
+                            }
+                        }
+                        if (archiveRevision == revision) savedArchiveRevision = revision
+                    }
+                    if (synchronized(archiveLock) { archiveRevision != savedArchiveRevision }) scheduleConversationSave()
+                    changed()
+                    if (candidate.getBoolean("upload")) {
+                        if (!draftSyncActive && !finishing) return@work
+                        val uploaded = request("PUT", body = decodeEnvelope(candidate.getString("envelope")), condition = condition)
+                        if (uploaded.code == 412) return@repeat // Fetch the winner and preserve its branches too.
+                        check(uploaded.code == 204)
+                    }
+                    synchronized(archiveLock) {
+                        draftSyncMessage = if (conversations.all { uploadedComposers[it.id] == it.draft || (it.draft.isEmpty() && it.id !in uploadedComposers) })
+                            "Draft versions synced encrypted." else "Draft changes waiting to sync."
+                    }
+                    return@work
+                }
+                draftSyncMessage = "Draft sync will retry; local versions are saved."
+            } catch (_: Exception) {
+                draftSyncMessage = "Draft sync paused / offline. Local versions are kept; retrying while the app is open."
+            } finally {
+                draftSyncQueued.set(false)
+                if (draftSyncDeparture && !draftSyncActive) synchronizeDrafts(finishing = true)
+            }
+        }
     }
 
     fun inspectBundledKits() = work { loadBundledKits() }
@@ -458,6 +616,7 @@ internal class HabibiSession(
             val selected = conversation.id
             val nextState = candidate.optJSONObject("state")
             val restored = nextState?.let(::restoredConversations)
+            if (restored != null && nextState.optJSONArray("drafts")?.toString() != state?.optJSONArray("drafts")?.toString()) renewDraftReplica()
             install(candidate)
             if (restored != null) {
                 // A remote selection resets protocol/tool/consent and form state,
@@ -507,6 +666,7 @@ internal class HabibiSession(
             (oauth ?: error("OAuth is unavailable in this build.")).callback(raw, syncOrigin)
             syncConnected = true
             syncMessage = "Connected · Account sign-in does not recover keys. Tap Sync now to sync this vault."
+            requestDraftSync()
         } catch (cause: Exception) {
             syncConnected = oauth?.connected(syncOrigin) == true
             syncMessage = "Authorization did not finish · Sign in again. Local data is unchanged."
@@ -582,6 +742,8 @@ internal class HabibiSession(
         check(!chatting && review == null) { "Stop the conversation and resolve any kit review before restoring." }
         val candidate = call("recover", JSONObject().put("backup", backup).put("recoveryKey", recoveryKey))
         val chats = restoredConversations(candidate.getJSONObject("state"))
+        // A backup can predate this device's published clock counters.
+        renewDraftReplica()
         install(candidate)
         replaceConversations(chats)
         resetGitHubNotice()

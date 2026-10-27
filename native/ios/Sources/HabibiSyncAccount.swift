@@ -277,9 +277,11 @@ actor HabibiSyncAccount {
     }
 
     func authorized(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil,
-                    vaultToken: String? = nil, limit: Int = 32 * 1024) async throws -> (Data, HTTPURLResponse) {
+                    vaultToken: String? = nil, limit: Int = 32 * 1024,
+                    headers additional: [String: String] = [:]) async throws -> (Data, HTTPURLResponse) {
         let token = try await accessToken()
-        var headers = ["Authorization": "Bearer \(token)"]
+        var headers = additional
+        headers["Authorization"] = "Bearer \(token)"
         if let vaultToken { headers["X-Habibi-Vault-Token"] = vaultToken }
         return try await request(path, method: method, body: body, contentType: contentType, headers: headers, limit: limit)
     }

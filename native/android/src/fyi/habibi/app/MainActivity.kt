@@ -165,10 +165,12 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onResume() {
         super.onResume(); resumed = true; conversationScreen?.resume()
+        session.setDraftSyncActive(true)
         if (route == "kits") render() // Re-evaluate expiry, without replacing search or dismissing the sheet.
     }
     override fun onPause() {
         resumed = false; screen.removeCallbacks(kitsExpiryRefresh)
+        session.setDraftSyncActive(false)
         conversationScreen?.pause(); session.flushConversations(); super.onPause()
     }
     override fun onDestroy() {

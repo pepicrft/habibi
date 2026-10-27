@@ -391,6 +391,80 @@ class SyncSessionTest {
         HabibiSession(store, { input -> val request = JSONObject(input)
             if (request.getString("operation").startsWith("sync_")) JSONObject().put("ok", sync(request)).toString() else fixture.execute(input)
         }, Executor { it.run() }, { it() }, oauth = NativeOAuth(oauthStore, wire), syncTransport = http)
+
+    @Test fun pollingAnEmptyVaultDoesNotCreateConversationsOrClaimPendingEdits() {
+        val session = session(MemoryVault(), FixtureCore(), sync = { request ->
+            if (request.getString("operation") == "sync_status") syncStatus()
+            else JSONObject().put("document", request.getJSONObject("document"))
+                .put("state", request.getJSONObject("document").getJSONObject("state"))
+                .put("changed", false).put("upload", false)
+        }, http = SyncTransport { _, method, _, _, _ ->
+            check(method == "GET"); SyncResponse(404, ByteArray(0))
+        })
+        session.start(); session.create(profile())
+        val initial = session.conversation
+        session.beginSyncAuthorization { session.syncCallback(callback(it)) }
+        session.setDraftSyncActive(true)
+        repeat(3) { session.synchronizeDrafts() }
+        assertEquals(listOf(initial), session.conversations)
+        assertEquals("", session.conversationDraft)
+        assertTrue(session.draftSyncMessage.contains("synced"))
+        session.setDraftSyncActive(false)
+    }
+
+    @Test fun automaticDraftsRetryConcurrentUploadsKeepTypingAndNeverUploadAfterFailedPersistence() {
+        val store = MemoryVault(); val fixture = FixtureCore()
+        var uploads = 0; var reads = 0; var merges = 0
+        lateinit var session: HabibiSession
+        session = session(store, fixture, sync = { request ->
+            if (request.getString("operation") == "sync_status") syncStatus()
+            else {
+                assertEquals("sync_drafts", request.getString("operation")); merges++
+                val next = JSONObject(request.getJSONObject("document").getJSONObject("state").toString())
+                val chat = next.getJSONArray("conversations").getJSONObject(0)
+                next.put("drafts", JSONArray().put(JSONObject().put("id", chat.getString("id"))
+                    .put("versions", JSONArray().put(JSONObject().put("text", chat.getString("composer")))
+                        .put(JSONObject().put("text", "Tablet offline")))))
+                JSONObject().put("document", JSONObject().put("state", next)).put("state", next)
+                    .put("changed", true).put("upload", true).put("envelope", base64url(SNAPSHOT))
+            }
+        }, http = SyncTransport { _, method, path, headers, bytes ->
+            assertTrue(path.endsWith("/drafts"))
+            if (method == "GET") {
+                reads++
+                session.conversationDraft = "Phone typed during download"
+                if (reads == 1) SyncResponse(404, ByteArray(0)) else SyncResponse(200, SNAPSHOT, "\"${digest(SNAPSHOT)}\"")
+            } else {
+                uploads++
+                assertTrue(store.durable!!.contains("Tablet offline")) // Real encryption is covered in Rust.
+                assertArrayEquals(SNAPSHOT, bytes)
+                if (uploads == 1) {
+                    assertEquals("*", headers["If-None-Match"]); SyncResponse(412, ByteArray(0))
+                } else {
+                    session.conversationDraft = "Phone typed while upload finished"
+                    assertEquals("\"${digest(SNAPSHOT)}\"", headers["If-Match"]); SyncResponse(204, ByteArray(0))
+                }
+            }
+        })
+        session.start(); session.create(profile()); session.conversationDraft = "Phone offline"
+        session.flushConversations(); session.inferenceConsent = true
+        val live = session.conversation
+        live.history.put(JSONObject().put("role", "user").put("content", "Keep live context"))
+        session.beginSyncAuthorization { session.syncCallback(callback(it)) }
+        session.setDraftSyncActive(true); session.synchronizeDrafts()
+        assertEquals(2, uploads); assertEquals(2, merges)
+        assertSame(live, session.conversation); assertEquals("Phone typed while upload finished", session.conversationDraft)
+        assertTrue(session.otherDrafts.contains("Tablet offline"))
+        assertTrue(session.inferenceConsent); assertTrue(live.history.toString().contains("Keep live context"))
+        assertFalse(session.syncing); assertTrue(session.draftSyncMessage.contains("waiting to sync"))
+        store.failSave = true
+        session.conversationDraft = "Retry this local edit"; session.synchronizeDrafts()
+        assertEquals(2, uploads)
+        assertTrue(session.conversationDraft.isNotEmpty())
+        session.setDraftSyncActive(false)
+        assertEquals(2, uploads)
+    }
+
     @Test fun failedCredentialRemovalIsHonestRetryableAndDoesNotTouchVaultOrRevokeBeforeDeletion() {
         val vault = MemoryVault(); val credentials = MemoryVault(); val wire = OAuthWire()
         val session = session(vault, FixtureCore(), wire, credentials, sync = { syncStatus() })

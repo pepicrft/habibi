@@ -58,6 +58,8 @@ pub struct State {
     pub conversations: Vec<crate::conversations::Conversation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub connections: Vec<crate::connections::Connection>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drafts: Vec<crate::drafts::Draft>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -253,6 +255,7 @@ impl State {
             kits: vec![],
             conversations: vec![],
             connections: vec![],
+            drafts: vec![],
         })
     }
 
@@ -291,6 +294,7 @@ impl State {
         }
         crate::conversations::validate(&mut self.conversations)?;
         crate::connections::validate(&self.connections)?;
+        crate::drafts::validate(&self.drafts)?;
         Ok(())
     }
 

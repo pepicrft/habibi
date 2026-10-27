@@ -14,7 +14,7 @@ defmodule Habibi.SyncAPITest do
   test "readiness waits for the sync schema while liveness stays independent" do
     assert request(:get, "/ready", nil).status == 200
 
-    for table <- ["records", "waitlist_entries", "waitlist_tokens"] do
+    for table <- ["records", "vault_drafts", "waitlist_entries", "waitlist_tokens"] do
       Ecto.Adapters.SQL.query!(Habibi.Repo, "ALTER TABLE #{table} RENAME TO #{table}_not_ready")
       assert request(:get, "/ready", nil).status == 503
       Ecto.Adapters.SQL.query!(Habibi.Repo, "ALTER TABLE #{table}_not_ready RENAME TO #{table}")
@@ -112,6 +112,45 @@ defmodule Habibi.SyncAPITest do
     assert body(uploaded)["sequence"] == 1
   end
 
+  test "draft compare-and-swap preserves a concurrent writer and does not consume snapshot quota" do
+    vault = new_vault()
+    path = "/v1/vaults/#{vault.id}/drafts"
+    assert request(:get, path, nil, vault.token).status == 404
+    assert request(:put, path, envelope(21), vault.token).status == 428
+    assert request(:put, path, envelope(21), vault.token, [{"if-none-match", "*"}]).status == 204
+    first = request(:get, path, nil, vault.token)
+    assert first.resp_body == envelope(21)
+    assert get_resp_header(first, "cache-control") == ["no-store"]
+    [etag] = get_resp_header(first, "etag")
+
+    assert request(:put, path, envelope(22), vault.token, [{"if-match", etag}]).status == 204
+    assert request(:put, path, envelope(23), vault.token, [{"if-match", etag}]).status == 412
+    assert request(:put, path, envelope(23), vault.token, [{"if-none-match", "*"}]).status == 412
+    assert request(:get, path, nil, vault.token).resp_body == envelope(22)
+    # Retrying a PUT whose acknowledgement was lost is harmless.
+    assert request(:put, path, envelope(22), vault.token, [{"if-match", etag}]).status == 204
+    assert body(request(:get, path(vault), nil, vault.token))["cursor"] == 0
+    assert Habibi.Repo.get!(Habibi.Vault, vault.id).bytes == 0
+
+    other = new_vault()
+
+    for token <- [nil, "invalid", other.token] do
+      assert request(:get, path, nil, token).status == 401
+      assert request(:put, path, envelope(24), token, [{"if-match", etag}]).status == 401
+    end
+
+    assert request(:get, path, nil, vault.token, [{"authorization", "Bearer invalid"}]).status ==
+             401
+
+    assert request(:put, path, "plaintext", vault.token, [{"if-match", etag}]).status == 400
+
+    assert request(:put, path, envelope(25, 1024 * 1024 + 1), vault.token, [{"if-match", etag}]).status ==
+             413
+
+    assert request(:get, path, nil, vault.token).resp_body == envelope(22)
+    assert Habibi.Repo.aggregate(Habibi.VaultDraft, :count) == 1
+  end
+
   defp new_vault do
     vault = %{
       id: Ecto.UUID.generate(),
@@ -123,7 +162,7 @@ defmodule Habibi.SyncAPITest do
     vault
   end
 
-  defp request(method, url, payload, token \\ nil) do
+  defp request(method, url, payload, token \\ nil, headers \\ []) do
     {payload, type} =
       if is_map(payload),
         do: {Jason.encode!(payload), "application/json"},
@@ -132,6 +171,10 @@ defmodule Habibi.SyncAPITest do
     conn = conn(method, url, payload) |> put_req_header("content-type", type)
     conn = put_req_header(conn, "authorization", "Bearer " <> Process.get(:oauth_token))
     conn = if token, do: put_req_header(conn, "x-habibi-vault-token", token), else: conn
+
+    conn =
+      Enum.reduce(headers, conn, fn {name, value}, conn -> put_req_header(conn, name, value) end)
+
     HabibiWeb.Endpoint.call(conn, HabibiWeb.Endpoint.init([]))
   end
 

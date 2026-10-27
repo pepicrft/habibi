@@ -176,6 +176,7 @@ actor HabibiStore {
                 result["state"] = try HabibiCore.execute(["operation": "restore", "identity": identity, "document": candidate])["state"]
             }
             _ = try snapshot(result)
+            if operation == "sync_drafts", result["changed"] as? Bool == false { return result }
             let encoded = try JSONSerialization.data(withJSONObject: candidate)
             if connecting { try Task.checkCancellation() }
             try persistence.saveDocument(encoded)

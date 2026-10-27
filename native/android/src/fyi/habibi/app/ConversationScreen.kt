@@ -91,6 +91,15 @@ internal class ConversationScreen(
     }
     private val stop = context.button("Stop reply", "stop_reply") { session.stop() }
     private val connection = context.label("", 13f, true)
+    private val draftSyncStatus = context.label("", 13f, true).apply { tag = "draft_sync_status" }
+    private val draftVersions = context.button("Other draft versions", "draft_versions") {
+        val versions = session.otherDrafts
+        if (versions.isNotEmpty()) MaterialAlertDialogBuilder(context)
+            .setTitle("Other draft versions · Both stay saved")
+            .setItems(versions.map { it.take(80) }.toTypedArray()) { _, index ->
+                session.selectDraftVersion(versions[index]); render()
+            }.setNegativeButton("Keep writing", null).show()
+    }
     private val status = context.label("", 13f, true).apply {
         tag = "voice_status"; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         setPadding(context.dp(8), context.dp(4), context.dp(8), context.dp(4))
@@ -120,7 +129,7 @@ internal class ConversationScreen(
             addView(prompts); addView(latest)
         })
         addView(stop)
-        addView(context.column(12).apply { addView(composer); addView(status) })
+        addView(context.column(12).apply { addView(draftSyncStatus); addView(draftVersions); addView(composer); addView(status) })
     }
     private val voice: OnDeviceVoiceInput = OnDeviceVoiceInput(
         (activity.application as HabibiApplication).voiceRecognizerFactory?.invoke() ?: AndroidDeviceRecognizer(context),
@@ -294,6 +303,9 @@ internal class ConversationScreen(
     }
     private fun renderControls() {
         val active = voice.active
+        draftSyncStatus.text = session.draftSyncMessage
+        draftVersions.visibility = if (session.otherDrafts.isEmpty()) View.GONE else View.VISIBLE
+        draftVersions.text = "Other draft versions (${session.otherDrafts.size})"
         field.isEnabled = !session.syncing
         submit.visibility = if (active) View.GONE else View.VISIBLE
         discard.visibility = if (active) View.VISIBLE else View.GONE

@@ -77,6 +77,33 @@ defmodule Habibi.Sync do
     end
   end
 
+  def get_drafts(vault), do: Repo.get(Habibi.VaultDraft, vault.id)
+
+  def put_drafts(vault, ciphertext, expected) do
+    with :ok <- validate_envelope(ciphertext) do
+      digest = :crypto.hash(:sha256, ciphertext) |> Base.encode16(case: :lower)
+
+      Repo.transaction(fn ->
+        Repo.one!(from(v in Vault, where: v.id == ^vault.id, lock: "FOR UPDATE"))
+        previous = get_drafts(vault)
+
+        cond do
+          previous && previous.digest == digest ->
+            previous
+
+          (is_nil(previous) && expected == :absent) ||
+              (previous && expected == previous.digest) ->
+            (previous || %Habibi.VaultDraft{vault_id: vault.id})
+            |> Ecto.Changeset.change(ciphertext: ciphertext, digest: digest)
+            |> Repo.insert_or_update!()
+
+          true ->
+            Repo.rollback(:precondition_failed)
+        end
+      end)
+    end
+  end
+
   defp insert_record(vault, id, ciphertext, digest, fence) do
     size = byte_size(ciphertext)
 

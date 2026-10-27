@@ -257,6 +257,17 @@ struct HabibiConversationView: View {
         VStack(alignment: .leading, spacing: 6) {
             HabibiConversationSaveStatus(session: session)
                 .frame(maxWidth: .infinity, alignment: .leading).background(palette.canvas)
+            Text(session.draftSyncMessage).font(.caption).foregroundStyle(.secondary)
+                .accessibilityIdentifier("habibi.drafts.status")
+            if !session.otherDrafts.isEmpty {
+                Menu("Other draft versions (\(session.otherDrafts.count))") {
+                    ForEach(session.otherDrafts, id: \.self) { text in
+                        Button(String(text.prefix(80))) { Task { await session.selectDraftVersion(text) } }
+                    }
+                }
+                .accessibilityHint("Switch drafts without sending. Both versions stay saved.")
+                .accessibilityIdentifier("habibi.drafts.versions")
+            }
             if let error = voice.errorMessage { Text(error).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.voice.error") }
             if session.composer.count > 4000 { Text("Keep your message under 4,000 characters.").font(.caption).foregroundStyle(.red) }
             HabibiComposer(draft: $session.composer, connected: session.inferenceURL != nil, running: session.chatRunning,
@@ -270,6 +281,7 @@ struct HabibiConversationView: View {
             }, stopReply: session.stop)
         }
         .frame(maxWidth: 688).padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10).frame(maxWidth: .infinity)
+        .background(palette.canvas)
     }
 
     private func send() { scrolling.following = true; latestRequest += 1; session.send() }

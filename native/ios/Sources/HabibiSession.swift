@@ -24,6 +24,7 @@ struct HabibiConversation: Identifiable {
     var createdAt = Date()
     var messages: [HabibiMessage] = []
     var composer = ""
+    var composerClock: [String: UInt64] = [:]
     var history: [[String: Any]] = []
     var draft: [String: Any]?
     var title: String { messages.first(where: { $0.kind == "user" })?.text ?? "New conversation" }
@@ -67,7 +68,7 @@ extension HabibiMessage: Codable {
 }
 
 extension HabibiConversation: Codable {
-    private enum CodingKeys: String, CodingKey { case id, createdAt, messages, composer, draft }
+    private enum CodingKeys: String, CodingKey { case id, createdAt, messages, composer, composerClock, draft }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -75,6 +76,7 @@ extension HabibiConversation: Codable {
         createdAt = try conversationDate(values.decode(String.self, forKey: .createdAt))
         messages = try values.decode([HabibiMessage].self, forKey: .messages)
         composer = try values.decode(String.self, forKey: .composer)
+        composerClock = try values.decodeIfPresent([String: UInt64].self, forKey: .composerClock) ?? [:]
         if let definition = try values.decodeIfPresent(HabibiDefinition.self, forKey: .draft) {
             draft = try JSONSerialization.jsonObject(with: JSONEncoder().encode(definition)) as? [String: Any]
         }
@@ -89,6 +91,7 @@ extension HabibiConversation: Codable {
         try values.encode(createdAt.ISO8601Format(.iso8601.year().month().day().time(includingFractionalSeconds: true).timeZone(separator: .omitted)), forKey: .createdAt)
         try values.encode(messages, forKey: .messages)
         try values.encode(composer, forKey: .composer)
+        try values.encodeIfPresent(composerClock, forKey: .composerClock)
         if let draft {
             let definition = try JSONDecoder().decode(HabibiDefinition.self, from: JSONSerialization.data(withJSONObject: draft))
             try values.encode(definition, forKey: .draft)
@@ -110,6 +113,14 @@ final class HabibiSession: ObservableObject {
     @Published var syncStatus: HabibiSyncStatus?
     @Published var syncError: String?
     @Published var lastSynced: Date?
+    @Published var draftSyncMessage = "Draft sync connects through Encrypted sync in Profile."
+    private(set) var draftDeviceID: String
+    var draftSyncActive = false
+    var draftSyncRunning = false
+    var draftSyncPoll: Task<Void, Never>?
+    var draftSyncDebounce: Task<Void, Never>?
+    var draftSyncDeparture: Task<Void, Never>?
+    private var applyingDrafts = false
     @Published private(set) var conversations: [HabibiConversation] = []
     @Published private(set) var conversationsSaved = true
     @Published private(set) var conversationSaveError: String?
@@ -154,9 +165,14 @@ final class HabibiSession: ObservableObject {
 
     init(store: HabibiStore = HabibiStore(), syncAccount: HabibiSyncAccount = HabibiSyncAccount(),
          github: HabibiGitHub? = nil, bundledKits: @escaping () throws -> [HabibiBundledKit] = HabibiBundledKit.catalog,
-         inferenceURL: URL? = nil, inferenceHTTP: (any HabibiSyncHTTP)? = nil) {
+         inferenceURL: URL? = nil, inferenceHTTP: (any HabibiSyncHTTP)? = nil,
+         draftDeviceID: String? = nil) {
         self.store = store
         self.syncAccount = syncAccount
+        // This random replica identifier is not a credential or user content.
+        let localID = UserDefaults.standard.string(forKey: "habibi.draftDeviceID") ?? UUID().uuidString.lowercased()
+        UserDefaults.standard.set(localID, forKey: "habibi.draftDeviceID")
+        self.draftDeviceID = draftDeviceID ?? localID
         self.github = github ?? HabibiGitHub()
         self.bundledKitCatalog = bundledKits
         self.inferenceHTTP = inferenceHTTP
@@ -219,6 +235,7 @@ final class HabibiSession: ObservableObject {
         defer { busy = false }
         do {
             snapshot = try await store.recover(backup: backup, key: key)
+            renewDraftReplica()
             saveDebounce?.cancel()
             conversations = snapshot?.conversations ?? []
             activeConversationID = nil
@@ -355,6 +372,7 @@ final class HabibiSession: ObservableObject {
         conversationRevision += 1
         conversationsSaved = false
         scheduleConversationSave()
+        requestDraftSync()
     }
 
     private func scheduleConversationSave() {
@@ -368,7 +386,7 @@ final class HabibiSession: ObservableObject {
     }
 
     func flushConversations() async {
-        guard snapshot != nil, !preparingTool, !connectionMutationsLocked, review == nil else { return }
+        guard snapshot != nil, !preparingTool, !applyingDrafts, !connectionMutationsLocked, review == nil else { return }
         if let saveWriter { await saveWriter.value; return }
         guard conversationRevision != savedConversationRevision else { return }
         // Never cancel a durable write when a newer keystroke cancels debounce.
@@ -379,7 +397,12 @@ final class HabibiSession: ObservableObject {
                 let revision = conversationRevision
                 do {
                     let archived = try JSONSerialization.jsonObject(with: JSONEncoder().encode(conversations))
-                    _ = try await persist("save_conversations", arguments: ["conversations": archived])
+                    _ = try await persist("save_conversations", arguments: ["conversations": archived, "deviceId": draftDeviceID])
+                    for saved in snapshot?.conversations ?? [] {
+                        if let index = conversations.firstIndex(where: { $0.id == saved.id }) {
+                            conversations[index].composerClock = saved.composerClock
+                        }
+                    }
                     savedConversationRevision = revision
                     conversationsSaved = conversationRevision == revision
                 } catch {
@@ -390,6 +413,56 @@ final class HabibiSession: ObservableObject {
         }
         saveWriter = writer
         await writer.value
+    }
+
+    var otherDrafts: [String] {
+        Array(Set(snapshot?.drafts?.first(where: { $0.id == activeConversationID })?.versions
+            .map(\.text).filter { !$0.isEmpty && $0 != composer } ?? [])).sorted()
+    }
+
+    private func renewDraftReplica() {
+        draftDeviceID = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(draftDeviceID, forKey: "habibi.draftDeviceID")
+    }
+
+    func selectDraftVersion(_ text: String) async {
+        guard !busy, !syncing, !chatRunning, review == nil else { return }
+        await flushConversations()
+        guard conversationsSaved, !busy, !syncing, !chatRunning, review == nil, otherDrafts.contains(text),
+              let index = conversations.firstIndex(where: { $0.id == activeConversationID }),
+              let version = snapshot?.drafts?.first(where: { $0.id == activeConversationID })?.versions.first(where: { $0.text == text }) else { return }
+        // A new editing branch cannot supersede the branch we just left.
+        renewDraftReplica()
+        conversations[index].composer = text
+        conversations[index].composerClock = version.clock
+        conversationChanged()
+    }
+
+    // Only the composer is synchronized. Keep live histories, consent, forms,
+    // messages and any keystrokes typed while the atomic disk commit ran.
+    func mergeDrafts(_ envelope: String?) async throws -> [String: Any]? {
+        guard !busy, !syncing, !chatRunning, review == nil, !preparingTool, !connectionMutationsLocked else { return nil }
+        await flushConversations()
+        guard conversationsSaved, !busy, !syncing, !chatRunning, review == nil else { return nil }
+        let before = conversations
+        let revision = conversationRevision
+        busy = true; applyingDrafts = true
+        defer { applyingDrafts = false; busy = false; scheduleConversationSave() }
+        var args: [String: Any] = ["deviceId": draftDeviceID]
+        if let envelope { args["envelope"] = envelope }
+        let result = try await store.call("sync_drafts", arguments: args, persist: true)
+        let saved = try await store.snapshot(result)
+        snapshot = saved
+        for remote in saved.conversations ?? [] {
+            if let index = conversations.firstIndex(where: { $0.id == remote.id }) {
+                if conversations[index].composer == before.first(where: { $0.id == remote.id })?.composer {
+                    conversations[index].composer = remote.composer
+                    conversations[index].composerClock = remote.composerClock
+                }
+            } else { conversations.append(remote) }
+        }
+        if conversationRevision == revision { savedConversationRevision = revision; conversationsSaved = true }
+        return result
     }
 
     func exportRecovery() async throws -> [String: Any] {
@@ -404,6 +477,7 @@ final class HabibiSession: ObservableObject {
 
     func reloadSyncedVault() async throws {
         let restored = try await store.restore()
+        if restored?.drafts != snapshot?.drafts { renewDraftReplica() }
         saveDebounce?.cancel()
         snapshot = restored
         conversations = restored?.conversations ?? []

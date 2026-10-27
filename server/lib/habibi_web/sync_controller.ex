@@ -7,16 +7,36 @@ defmodule HabibiWeb.SyncController do
   alias Habibi.Sync
 
   plug :authenticate_account
-       when action in [:create, :put, :list, :get, :acquire_lock, :renew_lock, :release_lock]
+       when action in [
+              :create,
+              :put,
+              :list,
+              :get,
+              :get_drafts,
+              :put_drafts,
+              :acquire_lock,
+              :renew_lock,
+              :release_lock
+            ]
 
-  plug :authorize when action in [:put, :list, :get, :acquire_lock, :renew_lock, :release_lock]
+  plug :authorize
+       when action in [
+              :put,
+              :list,
+              :get,
+              :get_drafts,
+              :put_drafts,
+              :acquire_lock,
+              :renew_lock,
+              :release_lock
+            ]
 
   def health(conn, _params), do: json(conn, %{status: "ok"})
 
   def ready(conn, _params) do
     case Ecto.Adapters.SQL.query(
            Habibi.Repo,
-           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.vault_locks') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL AND to_regclass('public.waitlist_entries') IS NOT NULL AND to_regclass('public.waitlist_tokens') IS NOT NULL",
+           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.vault_drafts') IS NOT NULL AND to_regclass('public.vault_locks') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL AND to_regclass('public.waitlist_entries') IS NOT NULL AND to_regclass('public.waitlist_tokens') IS NOT NULL",
            [],
            timeout: 2_000
          ) do
@@ -88,6 +108,60 @@ defmodule HabibiWeb.SyncController do
 
       {:error, reason} ->
         error(conn, reason)
+    end
+  end
+
+  def get_drafts(conn, _params) do
+    case Sync.get_drafts(conn.assigns.vault) do
+      nil ->
+        error(conn, :not_found)
+
+      draft ->
+        conn
+        |> put_resp_header("etag", ~s("#{draft.digest}"))
+        |> put_resp_content_type("application/octet-stream")
+        |> send_resp(200, draft.ciphertext)
+    end
+  end
+
+  def put_drafts(conn, _params) do
+    expected =
+      case {get_req_header(conn, "if-match"), get_req_header(conn, "if-none-match")} do
+        {[], ["*"]} -> :absent
+        {[<<"\"", digest::binary-size(64), "\"">>], []} -> digest
+        _ -> nil
+      end
+
+    cond do
+      get_req_header(conn, "content-type") != ["application/octet-stream"] ->
+        conn |> put_status(415) |> json(%{error: "expected_octet_stream"})
+
+      is_nil(expected) ->
+        conn |> put_status(428) |> json(%{error: "precondition_required"})
+
+      true ->
+        case read_body(conn,
+               length: Sync.max_record_bytes() + 1,
+               read_length: Sync.max_record_bytes() + 1
+             ) do
+          {:ok, body, conn} when byte_size(body) <= 1024 * 1024 ->
+            case Sync.put_drafts(conn.assigns.vault, body, expected) do
+              {:ok, draft} ->
+                conn |> put_resp_header("etag", ~s("#{draft.digest}")) |> send_resp(204, "")
+
+              {:error, reason} ->
+                error(conn, reason)
+            end
+
+          {:more, _, conn} ->
+            conn |> put_status(413) |> json(%{error: "record_too_large"})
+
+          {:ok, _, conn} ->
+            conn |> put_status(413) |> json(%{error: "record_too_large"})
+
+          {:error, _} ->
+            error(conn, :invalid_envelope)
+        end
     end
   end
 
@@ -170,6 +244,7 @@ defmodule HabibiWeb.SyncController do
     status =
       case reason do
         :conflict -> 409
+        :precondition_failed -> 412
         :stale_lock -> 409
         :lock_exhausted -> 409
         :quota_exceeded -> 413

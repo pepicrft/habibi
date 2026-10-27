@@ -27,6 +27,16 @@ struct HabibiSnapshot: Decodable {
     let kits: [HabibiKit]
     let conversations: [HabibiConversation]?
     let connections: [HabibiConnectionSummary]?
+    let drafts: [HabibiSyncedDraft]?
+}
+
+struct HabibiSyncedDraft: Decodable, Equatable {
+    struct Version: Decodable, Equatable {
+        let text: String
+        let clock: [String: UInt64]
+    }
+    let id: UUID
+    let versions: [Version]
 }
 
 // Display-only projection. Credentials are deliberately not decoded into the

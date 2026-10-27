@@ -28,10 +28,12 @@ pub enum Reaction {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Conversation {
-    id: String,
-    created_at: String,
+    pub id: String,
+    pub created_at: String,
     messages: Vec<Message>,
-    composer: String,
+    pub composer: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composer_clock: Option<std::collections::BTreeMap<String, u64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     draft: Option<Definition>,
 }
@@ -65,6 +67,12 @@ pub fn validate(conversations: &mut [Conversation]) -> Result<()> {
             || !ids.insert(&conversation.id)
             || !valid_date(&conversation.created_at)
             || conversation.composer.len() > 64 * 1024
+            || conversation.composer_clock.as_ref().is_some_and(|clock| {
+                clock.len() > 32
+                    || clock.iter().any(|(id, count)| {
+                        !crypto::valid_id(id) || *count == 0 || *count > 9_007_199_254_740_991
+                    })
+            })
         {
             return Err(Error::invalid("Invalid saved conversation."));
         }
