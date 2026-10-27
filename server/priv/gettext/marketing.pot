@@ -4,8 +4,20 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: site/index.njk:27
-msgid "A conversation, with context."
+#: site/index.njk:64
+msgid "01 / A moment worth keeping"
+msgstr ""
+
+#: site/index.njk:68
+msgid "02 / The thread, picked up"
+msgstr ""
+
+#: site/index.njk:94
+msgid "03 / A little more understood"
+msgstr ""
+
+#: site/index.njk:56
+msgid "A little invitation to Habibi"
 msgstr ""
 
 #: site/404.njk:14
@@ -16,20 +28,35 @@ msgstr ""
 msgid "A little off the path — Habibi"
 msgstr ""
 
-#: site/index.njk:45
+#: site/index.njk:87
 msgid "A note, not a guess."
+msgstr ""
+
+#: site/index.njk:15
+msgid "A personal agent. A more personal beginning."
 msgstr ""
 
 #: site/changelog.njk:58
 msgid "A small beginning."
 msgstr ""
 
-#: site/_includes/layout.njk:58
-#: site/index.njk:52
+#: site/index.njk:119
+msgid "A small circle. A shared beginning."
+msgstr ""
+
+#: site/index.njk:20
+msgid "A small story"
+msgstr ""
+
+#: site/_includes/layout.njk:62
 msgid "About"
 msgstr ""
 
-#: site/index.njk:41
+#: site/index.njk:50
+msgid "Access requests are temporarily unavailable. Please try again later."
+msgstr ""
+
+#: site/index.njk:83
 msgid "After our walk"
 msgstr ""
 
@@ -37,7 +64,6 @@ msgstr ""
 msgid "All releases on GitHub"
 msgstr ""
 
-#: site/index.njk:15
 #: site/social.njk:15
 msgid "An agent of your own."
 msgstr ""
@@ -46,24 +72,22 @@ msgstr ""
 msgid "An open-source personal agent in development."
 msgstr ""
 
-#: site/index.njk:1
-msgid ""
-"An open-source personal agent in the making. Explore the interface "
-"direction, local-first memory, and the boundaries of encrypted sync."
-msgstr ""
-
 #: site/404.njk:17
 msgid "Back to Habibi"
+msgstr ""
+
+#: site/index.njk:26
+msgid "Be here at the beginning."
 msgstr ""
 
 #: site/changelog.njk:43
 msgid "Bug fixes"
 msgstr ""
 
-#: site/_includes/layout.njk:49
-#: site/_includes/layout.njk:59
+#: site/_includes/layout.njk:53
+#: site/_includes/layout.njk:63
 #: site/changelog.njk:28
-#: site/index.njk:74
+#: site/index.njk:116
 msgid "Changelog"
 msgstr ""
 
@@ -71,7 +95,26 @@ msgstr ""
 msgid "Changelog — Habibi"
 msgstr ""
 
-#: site/index.njk:66
+#: site/index.njk:48
+msgid ""
+"Check your inbox. Confirm your email to save your place and get your "
+"invitation link. If you requested a link recently, use that email or try "
+"again in a minute. Links expire after 24 hours."
+msgstr ""
+
+#: site/index.njk:51
+msgid "Confirming your place…"
+msgstr ""
+
+#: site/index.njk:39
+msgid "Copy invitation"
+msgstr ""
+
+#: site/index.njk:25
+msgid "Early access, by invitation"
+msgstr ""
+
+#: site/index.njk:108
 msgid ""
 "Experimental and unaudited. These boundaries are not a security guarantee."
 msgstr ""
@@ -80,20 +123,22 @@ msgstr ""
 msgid "Features"
 msgstr ""
 
-#: site/index.njk:19
-msgid "Follow the build"
-msgstr ""
-
-#: site/_includes/layout.njk:57
+#: site/_includes/layout.njk:61
 msgid "Footer navigation"
 msgstr ""
 
-#: site/index.njk:38
+#: site/index.njk:80
 msgid "For lunch with Maya"
 msgstr ""
 
-#: site/index.njk:40
+#: site/index.njk:82
 msgid "From your own notes"
+msgstr ""
+
+#: site/index.njk:44
+msgid ""
+"Good things find their people. Every friend who joins through your link and "
+"confirms their email raises your priority."
 msgstr ""
 
 #: site/changelog.njk:57
@@ -102,12 +147,6 @@ msgstr ""
 
 #: site/changelog.njk:41
 msgid "Habibi 0.1.1"
-msgstr ""
-
-#: site/index.njk:18
-msgid ""
-"Habibi is a personal agent in the making. A place for notes, plans, and "
-"conversations, designed around your life rather than a blank chat box."
 msgstr ""
 
 #: site/changelog.njk:30
@@ -126,41 +165,90 @@ msgid ""
 "Habibi. An agent of your own. An open-source personal agent in development."
 msgstr ""
 
-#: site/index.njk:71
+#: site/index.njk:57
+msgid ""
+"I thought you might like Habibi, a personal agent in the making. Join me in "
+"the early-access circle:"
+msgstr ""
+
+#: site/index.njk:113
 msgid "In development"
 msgstr ""
 
-#: site/index.njk:48
+#: site/index.njk:90
 msgid "Interface concept, not a released app."
 msgstr ""
 
-#: site/index.njk:32
+#: site/index.njk:74
 msgid "Interface study"
+msgstr ""
+
+#: site/index.njk:54
+msgid "Invitation copied. Send it to someone who would feel at home here."
+msgstr ""
+
+#: site/index.njk:39
+msgid "Invite a friend"
+msgstr ""
+
+#: site/index.njk:64
+msgid "It starts with a walk. And a passing thought."
+msgstr ""
+
+#: site/index.njk:27
+msgid "Join the first circle. Help shape something a little more personal."
+msgstr ""
+
+#: site/index.njk:119
+msgid "Join with your email. Confirm your place. Bring someone who gets it."
+msgstr ""
+
+#: site/index.njk:41
+msgid "Keep my place"
+msgstr ""
+
+#: site/index.njk:40
+msgid "Leave the list and delete my email"
+msgstr ""
+
+#: site/index.njk:41
+msgid ""
+"Leaving deletes your email and place in the list. This cannot be undone."
 msgstr ""
 
 #: site/404.njk:16
 msgid "Let’s get you back to the beginning."
 msgstr ""
 
-#: site/_includes/layout.njk:47
+#: site/_includes/layout.njk:51
 msgid "Main navigation"
 msgstr ""
 
-#: site/index.njk:41
+#: site/index.njk:83
 msgid ""
 "Maya mentioned Olive & Fig for lunch next time. Somewhere with a little "
 "courtyard."
 msgstr ""
 
-#: site/index.njk:55
+#: site/index.njk:64
 msgid ""
-"Memory and search are intended to live on your devices. Longer-running work "
-"can go to a computer you pair, with access you explicitly grant. These are "
-"design goals; the mobile app isn’t built yet."
+"Maya mentions a café. You make a note. A week passes, then two. The name "
+"slips away. The feeling doesn’t have to."
 msgstr ""
 
-#: site/index.njk:52
-msgid "More than a transcript."
+#: site/index.njk:19
+msgid "Meet Habibi. An agent of your own, being built to hold the thread."
+msgstr ""
+
+#: site/index.njk:115
+msgid ""
+"Native development apps and encrypted sync are taking shape in the open. "
+"This is an invitation to follow the beginning, not a promise of a finished "
+"product. We’ll email when access is ready."
+msgstr ""
+
+#: site/index.njk:69
+msgid "Not just the name. The memory behind it."
 msgstr ""
 
 #: site/404.njk:15
@@ -172,28 +260,35 @@ msgstr ""
 msgid "October 25, 2026"
 msgstr ""
 
-#: site/index.njk:38
+#: site/index.njk:80
 msgid "Olive & Fig"
 msgstr ""
 
-#: site/index.njk:36
+#: site/index.njk:78
 msgid "Olive & Fig. You saved it after your walk together."
 msgstr ""
 
-#: site/_includes/layout.njk:56
+#: site/_includes/layout.njk:60
 msgid "Open source. In development. No analytics."
 msgstr ""
 
-#: site/index.njk:29
+#: site/index.njk:71
 msgid "Open the source below the answer."
 msgstr ""
 
-#: site/index.njk:14
-msgid "Open-source personal agent · In development"
+#: site/index.njk:45
+msgid "Please enable JavaScript to request access and manage your invitation."
 msgstr ""
 
-#: site/_includes/layout.njk:48
-#: site/index.njk:60
+#: site/index.njk:119
+msgid ""
+"Priority is ordered by confirmed referrals, then by when you confirmed. "
+"Sharing alone doesn’t change your place. Positions can move as others invite "
+"friends; priority isn’t guaranteed access."
+msgstr ""
+
+#: site/_includes/layout.njk:52
+#: site/index.njk:102
 msgid "Privacy"
 msgstr ""
 
@@ -208,15 +303,38 @@ msgid ""
 "what’s changed, and when."
 msgstr ""
 
-#: site/index.njk:74
+#: site/index.njk:116
 msgid "Read the source"
 msgstr ""
 
-#: site/index.njk:48
+#: site/index.njk:90
 msgid "Remembering a place"
 msgstr ""
 
-#: site/_includes/layout.njk:44
+#: site/index.njk:60
+msgid ""
+"Request a new email link to return to your place. Your invitation link and "
+"priority stay the same."
+msgstr ""
+
+#: site/_includes/layout.njk:54
+#: site/index.njk:32
+msgid "Request access"
+msgstr ""
+
+#: site/index.njk:119
+msgid "Request your invitation"
+msgstr ""
+
+#: site/index.njk:55
+msgid "Select and copy your invitation link above."
+msgstr ""
+
+#: site/index.njk:47
+msgid "Sending your confirmation…"
+msgstr ""
+
+#: site/_includes/layout.njk:48
 msgid "Skip to content"
 msgstr ""
 
@@ -230,14 +348,14 @@ msgid ""
 "an open-source personal AI companion in development."
 msgstr ""
 
-#: site/index.njk:28
-msgid ""
-"Something you saved becomes something you can use. The answer keeps a path "
-"back to the original note."
+#: site/index.njk:16
+msgid "Some things deserve to be remembered."
 msgstr ""
 
-#: site/_includes/layout.njk:50
-msgid "Source"
+#: site/index.njk:1
+msgid ""
+"Some things deserve to be remembered. Meet Habibi, a personal agent in the "
+"making, and request an invitation to early access."
 msgstr ""
 
 #: site/changelog.njk:42
@@ -252,44 +370,51 @@ msgstr ""
 msgid "That page may have moved, or never quite existed."
 msgstr ""
 
-#: site/index.njk:63
+#: site/index.njk:70
+msgid ""
+"That’s the kind of companion we’re building. One that helps you return to "
+"what matters, with a path back to your own words."
+msgstr ""
+
+#: site/index.njk:105
 msgid ""
 "The app is being designed to contact your chosen provider directly. That "
 "provider can read the prompts and context you send. Its retention policies "
 "apply; encrypted sync does not hide prompts from it."
 msgstr ""
 
-#: site/index.njk:54
+#: site/index.njk:96
 msgid ""
 "The app we’re working toward can turn a conversation into a plan, a list you "
 "can change, or a useful reminder. Answers should have sources. Actions "
 "should be reviewable."
 msgstr ""
 
-#: site/index.njk:73
-msgid ""
-"The first piece is a ciphertext-only sync prototype, built with Elixir, "
-"Postgres, and S3-compatible storage. There’s no mobile app to download and "
-"no launch date yet."
-msgstr ""
-
-#: site/index.njk:26
-msgid "The idea"
-msgstr ""
-
-#: site/index.njk:60
+#: site/index.njk:102
 msgid "The intended boundaries, without the fine print."
 msgstr ""
 
-#: site/index.njk:64
+#: site/index.njk:18
+msgid ""
+"The little place a friend mentioned. The thought you almost lost. The plans "
+"that make a life yours."
+msgstr ""
+
+#: site/index.njk:106
 msgid ""
 "The prototype stores ciphertext, not your content keys or provider "
 "credentials. It still sees account and sync metadata, including object sizes "
 "and request timing. This is not anonymity."
 msgstr ""
 
-#: site/index.njk:64
+#: site/index.njk:106
 msgid "The sync service"
+msgstr ""
+
+#: site/index.njk:52
+msgid ""
+"This link has expired or has already been used. Request a new email link "
+"below to return to your place."
 msgstr ""
 
 #: site/404.njk:1
@@ -303,52 +428,107 @@ msgstr ""
 msgid "View release on GitHub"
 msgstr ""
 
-#: site/index.njk:65
+#: site/index.njk:59
+msgid "We couldn’t delete your place. Please try again."
+msgstr ""
+
+#: site/index.njk:49
+msgid ""
+"We couldn’t send your link. Please try again shortly. Your place is only "
+"confirmed after you follow the email link."
+msgstr ""
+
+#: site/index.njk:43
+msgid ""
+"We’ll email a confirmation link and, later, your invitation. No newsletter. "
+"Your email is stored separately from app data."
+msgstr ""
+
+#: site/index.njk:97
+msgid ""
+"We’re starting with a small early-access circle, listening closely before "
+"opening the door wider. Habibi is open source and in development. There’s no "
+"public app release or launch date yet."
+msgstr ""
+
+#: site/index.njk:107
 msgid "What if I lose my devices?"
 msgstr ""
 
-#: site/index.njk:33
+#: site/index.njk:75
 msgid "What was that little place Maya wanted to try?"
 msgstr ""
 
-#: site/index.njk:71
+#: site/index.njk:113
 msgid "Where things stand."
 msgstr ""
 
-#: site/index.njk:60
+#: site/index.njk:102
 msgid "Who can read what."
 msgstr ""
 
-#: site/index.njk:65
-msgid ""
-"You need both a separately kept recovery key and an exported encrypted "
-"recovery bundle. The reference client can export the bundle; the mobile "
-"recovery interface isn’t built. Without a remaining device or both parts of "
-"the recovery kit, the operator cannot recover your content."
+#: site/index.njk:41
+msgid "Yes, leave the list"
 msgstr ""
 
-#: site/index.njk:33
+#: site/index.njk:107
+msgid ""
+"You need both a separately kept recovery key and an exported encrypted "
+"recovery bundle. The native development apps support manual recovery. "
+"Without a remaining device or both parts of the recovery kit, the operator "
+"cannot recover your content. Your waitlist email cannot recover app data."
+msgstr ""
+
+#: site/index.njk:75
 msgid "You:"
 msgstr ""
 
-#: site/index.njk:63
+#: site/index.njk:105
 msgid "Your AI provider"
 msgstr ""
 
-#: site/index.njk:62
+#: site/index.njk:104
 msgid "Your devices"
 msgstr ""
 
-#: site/index.njk:62
+#: site/index.njk:104
 msgid ""
-"Your devices hold the vault key and encrypt content before sync. Local "
-"memory and search are planned for the app; the reference client already "
-"encrypts synced objects."
+"Your devices hold the vault key and encrypt content before sync. Memory and "
+"search are intended to stay on your devices. Longer-running work is planned "
+"for a computer you pair, with access you explicitly grant."
 msgstr ""
 
-#: site/_includes/layout.njk:46
-#: site/_includes/layout.njk:55
+#: site/index.njk:29
+msgid "Your email"
+msgstr ""
+
+#: site/index.njk:37
+msgid "Your invitation link"
+msgstr ""
+
+#: site/index.njk:94
+msgid "Your life isn’t a blank chat box."
+msgstr ""
+
+#: site/index.njk:53
+msgid "You’re on the list. A little closer to something personal."
+msgstr ""
+
+#: site/index.njk:58
+msgid "You’ve left the list. Your email and invitation have been deleted."
+msgstr ""
+
+#: site/index.njk:36
+msgid "confirmed friends"
+msgstr ""
+
+#: site/_includes/layout.njk:50
+#: site/_includes/layout.njk:59
 msgid "habibi home"
+msgstr ""
+
+#: site/index.njk:36
+msgid "in the confirmed list"
 msgstr ""
 
 #: site/changelog.njk:61

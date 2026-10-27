@@ -6,6 +6,9 @@ image:
   digest: ""
 host: habibi.example.com
 allowRegistration: false
+# Optional pre-created Secret with WAITLIST_EMAIL_API_KEY and WAITLIST_EMAIL_FROM.
+# No mail credentials are generated or stored in chart values.
+waitlistEmailSecret: ""
 poolSize: 5
 platform:
   # Existing Flux deployment provisions storage and secrets with operators.

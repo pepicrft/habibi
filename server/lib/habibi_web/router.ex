@@ -33,6 +33,14 @@ defmodule HabibiWeb.Router do
     post "/auth/logout", OAuthController, :logout
   end
 
+  scope "/waitlist", HabibiWeb do
+    pipe_through :auth_browser
+    get "/status", WaitlistController, :status
+    post "/join", WaitlistController, :join
+    post "/confirm", WaitlistController, :confirm
+    delete "/membership", WaitlistController, :leave
+  end
+
   scope "/", HabibiWeb do
     get "/health", SyncController, :health
     get "/ready", SyncController, :ready

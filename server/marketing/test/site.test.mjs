@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 import { readNativeThemes } from "../theme.mjs";
 
 test("the public marketing build localizes routes and metadata, escapes translations and detects stale extraction", () => {
@@ -263,5 +264,53 @@ test("the public marketing build localizes routes and metadata, escapes translat
     assert.ok(!existsSync(join(output, "ar/index.html")));
   } finally {
     rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("email confirmation works on a fresh visit or in the existing tab, with only the public invitation shared", async () => {
+  const source = readFileSync(new URL("../site/assets/access.js", import.meta.url), "utf8");
+  for (const existingTab of [false, true]) {
+    const location = new URL("https://habibi.fyi/es/");
+    if (!existingTab) location.hash = "access=private-confirmation";
+    const elements = new Map();
+    const handlers = new Map();
+    const element = (selector) => {
+      if (!elements.has(selector)) elements.set(selector, {
+        hidden: true, dataset: { welcome: "Confirmed" },
+        addEventListener() {}, focus() {}, scrollIntoView() {},
+      });
+      return elements.get(selector);
+    };
+    element("#access-form").hidden = false;
+    vm.runInNewContext(source, {
+      URL, URLSearchParams, location,
+      history: { replaceState(_state, _title, url) { location.href = new URL(url, location).href; } },
+      window: { addEventListener(event, handler) { handlers.set(event, handler); } },
+      document: { querySelector: element, addEventListener() {} },
+      async fetch(path, options) {
+        if (path === "/waitlist/confirm") {
+          assert.equal(options.method, "POST");
+          assert.equal(options.headers["x-csrf-token"], "csrf");
+          assert.equal(JSON.parse(options.body).token, "private-confirmation");
+          assert.equal(location.hash, "#access", "Remove the secret before any network request");
+        }
+        return { ok: true, async json() { return {
+          csrf: "csrf", origin: "https://habibi.fyi",
+          entry: path === "/waitlist/confirm" ? { rank: 7, referrals: 2, code: "public-invitation" } : null,
+        }; } };
+      },
+    });
+    await new Promise(setImmediate);
+    if (existingTab) {
+      location.hash = "access=private-confirmation";
+      handlers.get("hashchange")?.();
+      await new Promise(setImmediate);
+    }
+    assert.equal(element("#access-form").hidden, true);
+    assert.equal(element("#access-member").hidden, false);
+    assert.equal(element("#access-rank").textContent, "#7");
+    assert.equal(element("#access-referrals").textContent, "2");
+    assert.equal(element("#access-link").value, "https://habibi.fyi/es/?ref=public-invitation");
+    assert.equal(element("#access-message").textContent, "Confirmed");
   }
 });

@@ -13,8 +13,13 @@ defmodule Habibi.SyncAPITest do
 
   test "readiness waits for the sync schema while liveness stays independent" do
     assert request(:get, "/ready", nil).status == 200
-    Ecto.Adapters.SQL.query!(Habibi.Repo, "ALTER TABLE records RENAME TO records_not_ready")
-    assert request(:get, "/ready", nil).status == 503
+
+    for table <- ["records", "waitlist_entries", "waitlist_tokens"] do
+      Ecto.Adapters.SQL.query!(Habibi.Repo, "ALTER TABLE #{table} RENAME TO #{table}_not_ready")
+      assert request(:get, "/ready", nil).status == 503
+      Ecto.Adapters.SQL.query!(Habibi.Repo, "ALTER TABLE #{table}_not_ready RENAME TO #{table}")
+    end
+
     assert request(:get, "/health", nil).status == 200
   end
 

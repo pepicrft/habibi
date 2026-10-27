@@ -36,6 +36,10 @@
     <link rel="stylesheet" href="/assets/theme.css">
     <link rel="stylesheet" href="/assets/mascot/heartling.css">
     <link rel="stylesheet" href="/assets/styles.css">
+{% if accessPage %}
+    <link rel="stylesheet" href="/assets/access.css">
+    <script src="/assets/access.js" defer></script>
+{% endif %}
 {% if changelogPage %}
     <link rel="stylesheet" href="/assets/changelog.css">
 {% endif %}
@@ -47,7 +51,7 @@
       <nav aria-label="{{ dgettext('marketing', 'Main navigation') }}">
         <a href="{{ locale | homePath }}#privacy">{{ dgettext("marketing", "Privacy") }}</a>
         <a href="{{ locale | homePath }}changelog/"{% if changelogPage %} aria-current="page"{% endif %}>{{ dgettext("marketing", "Changelog") }}</a>
-        <a href="https://github.com/pepicrft/habibi" rel="noopener noreferrer">{{ dgettext("marketing", "Source") }} <span aria-hidden="true">↗</span></a>
+        <a href="{{ locale | homePath }}#access">{{ dgettext("marketing", "Request access") }} <span aria-hidden="true">↗</span></a>
       </nav>
     </header>
     {{ content | safe }}

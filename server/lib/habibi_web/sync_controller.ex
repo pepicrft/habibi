@@ -16,7 +16,7 @@ defmodule HabibiWeb.SyncController do
   def ready(conn, _params) do
     case Ecto.Adapters.SQL.query(
            Habibi.Repo,
-           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.vault_locks') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL",
+           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.vault_locks') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL AND to_regclass('public.waitlist_entries') IS NOT NULL AND to_regclass('public.waitlist_tokens') IS NOT NULL",
            [],
            timeout: 2_000
          ) do

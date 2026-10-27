@@ -24,6 +24,11 @@ config :habibi,
   bucket: System.get_env("S3_BUCKET", "habibi"),
   allow_registration: config_env() == :test or System.get_env("ALLOW_REGISTRATION") == "true"
 
+config :habibi, Habibi.WaitlistEmail,
+  api_key: System.get_env("WAITLIST_EMAIL_API_KEY"),
+  from: System.get_env("WAITLIST_EMAIL_FROM"),
+  mailbox: if(config_env() != :prod, do: System.get_env("WAITLIST_EMAIL_DIR"))
+
 {:ok, bind_ip} =
   System.get_env("BIND_IP", if(config_env() == :prod, do: "0.0.0.0", else: "127.0.0.1"))
   |> String.to_charlist()

@@ -37,10 +37,16 @@ spec:
         - name: web
           image: {{ include "habibi.image" . | quote }}
           imagePullPolicy: IfNotPresent
-          {{- if not .Values.platform.enabled }}
+          {{- if or (not .Values.platform.enabled) .Values.waitlistEmailSecret }}
           envFrom:
+            {{- if not .Values.platform.enabled }}
             - secretRef:
                 name: {{ required "external.existingSecret is required when platform.enabled=false" .Values.external.existingSecret }}
+            {{- end }}
+            {{- if .Values.waitlistEmailSecret }}
+            - secretRef:
+                name: {{ .Values.waitlistEmailSecret | quote }}
+            {{- end }}
           {{- end }}
           ports:
             - name: http

@@ -1,7 +1,8 @@
 ---
 layout: layout.njk
 title: "Habibi — An agent of your own."
-description: "An open-source personal agent in the making. Explore the interface direction, local-first memory, and the boundaries of encrypted sync."
+description: "Some things deserve to be remembered. Meet Habibi, a personal agent in the making, and request an invitation to early access."
+accessPage: true
 pagination:
   data: locales
   size: 1
@@ -11,21 +12,62 @@ permalink: "{{ locale | homePath }}"
 <main id="main" class="wrap">
   <section class="hero" aria-labelledby="hero-heading">
     <div>
-      <p class="eyebrow">{{ dgettext("marketing", "Open-source personal agent · In development") }}</p>
-      <h1 id="hero-heading">{{ dgettext("marketing", "An agent of your own.") }}</h1>
+      <p class="eyebrow invitation-eyebrow"><span aria-hidden="true"></span>{{ dgettext("marketing", "A personal agent. A more personal beginning.") }}</p>
+      <h1 id="hero-heading">{{ dgettext("marketing", "Some things deserve to be remembered.") }}</h1>
+      <div class="hero-intro">
+        <p>{{ dgettext("marketing", "The little place a friend mentioned. The thought you almost lost. The plans that make a life yours.") }}</p>
+        <p>{{ dgettext("marketing", "Meet Habibi. An agent of your own, being built to hold the thread.") }}</p>
+        <a class="text-link" href="#story">{{ dgettext("marketing", "A small story") }} <span aria-hidden="true">↓</span></a>
+      </div>
     </div>
-    <div class="hero-intro">
-      <p>{{ dgettext("marketing", "Habibi is a personal agent in the making. A place for notes, plans, and conversations, designed around your life rather than a blank chat box.") }}</p>
-      <a class="text-link" href="https://github.com/pepicrft/habibi" rel="noopener noreferrer">{{ dgettext("marketing", "Follow the build") }} <span aria-hidden="true">↗</span></a>
-    </div>
+    <aside class="invitation" id="access" aria-labelledby="access-heading">
+      <span class="heartling invitation-heart" aria-hidden="true"></span>
+      <p class="eyebrow">{{ dgettext("marketing", "Early access, by invitation") }}</p>
+      <h2 id="access-heading">{{ dgettext("marketing", "Be here at the beginning.") }}</h2>
+      <p class="invitation-copy">{{ dgettext("marketing", "Join the first circle. Help shape something a little more personal.") }}</p>
+      <form id="access-form" method="post" action="/waitlist/join" aria-describedby="access-privacy">
+        <label for="access-email">{{ dgettext("marketing", "Your email") }}</label>
+        <input id="access-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" maxlength="254" required>
+        <div class="visually-hidden" aria-hidden="true"><label for="access-website">Website</label><input id="access-website" name="website" tabindex="-1" autocomplete="off"></div>
+        <button class="button button-primary" type="submit">{{ dgettext("marketing", "Request access") }} <span aria-hidden="true">↗</span></button>
+      </form>
+      <p id="access-message" class="access-message" role="status" tabindex="-1" hidden></p>
+      <div id="access-member" hidden>
+        <div class="access-stats"><div><span class="access-number" id="access-rank"></span><span>{{ dgettext("marketing", "in the confirmed list") }}</span></div><div><span class="access-number" id="access-referrals"></span><span>{{ dgettext("marketing", "confirmed friends") }}</span></div></div>
+        <label for="access-link">{{ dgettext("marketing", "Your invitation link") }}</label>
+        <input id="access-link" type="text" readonly>
+        <div class="share-actions"><button class="button button-primary" id="access-copy" type="button">{{ dgettext("marketing", "Copy invitation") }}</button><a class="text-link" id="access-share" href="mailto:">{{ dgettext("marketing", "Invite a friend") }} <span aria-hidden="true">↗</span></a></div>
+        <button class="text-link access-remove" id="access-remove" type="button">{{ dgettext("marketing", "Leave the list and delete my email") }}</button>
+        <div id="access-removal" hidden><p>{{ dgettext("marketing", "Leaving deletes your email and place in the list. This cannot be undone.") }}</p><button class="text-link" id="access-remove-confirm" type="button">{{ dgettext("marketing", "Yes, leave the list") }}</button> <button class="text-link" id="access-remove-cancel" type="button">{{ dgettext("marketing", "Keep my place") }}</button></div>
+      </div>
+      <p id="access-privacy" class="access-fine-print">{{ dgettext("marketing", "We’ll email a confirmation link and, later, your invitation. No newsletter. Your email is stored separately from app data.") }}</p>
+      <div class="invitation-footnote"><span aria-hidden="true">↗</span><p>{{ dgettext("marketing", "Good things find their people. Every friend who joins through your link and confirms their email raises your priority.") }}</p></div>
+      <noscript><p>{{ dgettext("marketing", "Please enable JavaScript to request access and manage your invitation.") }}</p></noscript>
+      <div id="access-strings" hidden
+        data-sending="{{ dgettext('marketing', 'Sending your confirmation…') }}"
+        data-sent="{{ dgettext('marketing', 'Check your inbox. Confirm your email to save your place and get your invitation link. If you requested a link recently, use that email or try again in a minute. Links expire after 24 hours.') }}"
+        data-error="{{ dgettext('marketing', 'We couldn’t send your link. Please try again shortly. Your place is only confirmed after you follow the email link.') }}"
+        data-unavailable="{{ dgettext('marketing', 'Access requests are temporarily unavailable. Please try again later.') }}"
+        data-confirming="{{ dgettext('marketing', 'Confirming your place…') }}"
+        data-expired="{{ dgettext('marketing', 'This link has expired or has already been used. Request a new email link below to return to your place.') }}"
+        data-welcome="{{ dgettext('marketing', 'You’re on the list. A little closer to something personal.') }}"
+        data-copied="{{ dgettext('marketing', 'Invitation copied. Send it to someone who would feel at home here.') }}"
+        data-copy-failed="{{ dgettext('marketing', 'Select and copy your invitation link above.') }}"
+        data-share-subject="{{ dgettext('marketing', 'A little invitation to Habibi') }}"
+        data-share-body="{{ dgettext('marketing', 'I thought you might like Habibi, a personal agent in the making. Join me in the early-access circle:') }}"
+        data-removed="{{ dgettext('marketing', 'You’ve left the list. Your email and invitation have been deleted.') }}"
+        data-remove-error="{{ dgettext('marketing', 'We couldn’t delete your place. Please try again.') }}"
+        data-session-expired="{{ dgettext('marketing', 'Request a new email link to return to your place. Your invitation link and priority stay the same.') }}"></div>
+    </aside>
   </section>
 
+  <section class="story-opening" id="story" aria-labelledby="story-heading"><p class="eyebrow">{{ dgettext("marketing", "01 / A moment worth keeping") }}</p><h2 id="story-heading">{{ dgettext("marketing", "It starts with a walk. And a passing thought.") }}</h2><p>{{ dgettext("marketing", "Maya mentions a café. You make a note. A week passes, then two. The name slips away. The feeling doesn’t have to.") }}</p></section>
   <figure class="interface-study" aria-labelledby="study-caption">
     <div class="study-stage">
       <div class="study-note">
-        <p class="eyebrow">{{ dgettext("marketing", "The idea") }}</p>
-        <h2>{{ dgettext("marketing", "A conversation, with context.") }}</h2>
-        <p>{{ dgettext("marketing", "Something you saved becomes something you can use. The answer keeps a path back to the original note.") }}</p>
+        <p class="eyebrow">{{ dgettext("marketing", "02 / The thread, picked up") }}</p>
+        <h2>{{ dgettext("marketing", "Not just the name. The memory behind it.") }}</h2>
+        <p>{{ dgettext("marketing", "That’s the kind of companion we’re building. One that helps you return to what matters, with a path back to your own words.") }}</p>
         <p class="study-instruction">{{ dgettext("marketing", "Open the source below the answer.") }} <span aria-hidden="true">↘</span></p>
       </div>
       <div class="conversation">
@@ -49,20 +91,20 @@ permalink: "{{ locale | homePath }}"
   </figure>
 
   <section class="editorial-section" id="about" aria-labelledby="about-heading">
-    <div><p class="eyebrow">{{ dgettext("marketing", "About") }}</p><h2 id="about-heading">{{ dgettext("marketing", "More than a transcript.") }}</h2></div>
+    <div><p class="eyebrow">{{ dgettext("marketing", "03 / A little more understood") }}</p><h2 id="about-heading">{{ dgettext("marketing", "Your life isn’t a blank chat box.") }}</h2></div>
     <div class="section-copy">
       <p>{{ dgettext("marketing", "The app we’re working toward can turn a conversation into a plan, a list you can change, or a useful reminder. Answers should have sources. Actions should be reviewable.") }}</p>
-      <p>{{ dgettext("marketing", "Memory and search are intended to live on your devices. Longer-running work can go to a computer you pair, with access you explicitly grant. These are design goals; the mobile app isn’t built yet.") }}</p>
+      <p>{{ dgettext("marketing", "We’re starting with a small early-access circle, listening closely before opening the door wider. Habibi is open source and in development. There’s no public app release or launch date yet.") }}</p>
     </div>
   </section>
 
   <section class="editorial-section" id="privacy" aria-labelledby="privacy-heading">
     <div><p class="eyebrow">{{ dgettext("marketing", "Privacy") }}</p><h2 id="privacy-heading">{{ dgettext("marketing", "Who can read what.") }}</h2><p class="section-aside">{{ dgettext("marketing", "The intended boundaries, without the fine print.") }}</p></div>
     <div class="privacy-notes">
-      <article><h3>{{ dgettext("marketing", "Your devices") }}</h3><p>{{ dgettext("marketing", "Your devices hold the vault key and encrypt content before sync. Local memory and search are planned for the app; the reference client already encrypts synced objects.") }}</p></article>
+      <article><h3>{{ dgettext("marketing", "Your devices") }}</h3><p>{{ dgettext("marketing", "Your devices hold the vault key and encrypt content before sync. Memory and search are intended to stay on your devices. Longer-running work is planned for a computer you pair, with access you explicitly grant.") }}</p></article>
       <article><h3>{{ dgettext("marketing", "Your AI provider") }}</h3><p>{{ dgettext("marketing", "The app is being designed to contact your chosen provider directly. That provider can read the prompts and context you send. Its retention policies apply; encrypted sync does not hide prompts from it.") }}</p></article>
       <article><h3>{{ dgettext("marketing", "The sync service") }}</h3><p>{{ dgettext("marketing", "The prototype stores ciphertext, not your content keys or provider credentials. It still sees account and sync metadata, including object sizes and request timing. This is not anonymity.") }}</p></article>
-      <details class="recovery-note"><summary>{{ dgettext("marketing", "What if I lose my devices?") }}<span class="details-icon" aria-hidden="true"></span></summary><div class="details-content"><p>{{ dgettext("marketing", "You need both a separately kept recovery key and an exported encrypted recovery bundle. The reference client can export the bundle; the mobile recovery interface isn’t built. Without a remaining device or both parts of the recovery kit, the operator cannot recover your content.") }}</p></div></details>
+      <details class="recovery-note"><summary>{{ dgettext("marketing", "What if I lose my devices?") }}<span class="details-icon" aria-hidden="true"></span></summary><div class="details-content"><p>{{ dgettext("marketing", "You need both a separately kept recovery key and an exported encrypted recovery bundle. The native development apps support manual recovery. Without a remaining device or both parts of the recovery kit, the operator cannot recover your content. Your waitlist email cannot recover app data.") }}</p></div></details>
       <p class="privacy-caveat">{{ dgettext("marketing", "Experimental and unaudited. These boundaries are not a security guarantee.") }}</p>
     </div>
   </section>
@@ -70,8 +112,9 @@ permalink: "{{ locale | homePath }}"
   <section class="editorial-section building-section" id="building" aria-labelledby="building-heading">
     <div><p class="eyebrow">{{ dgettext("marketing", "In development") }}</p><h2 id="building-heading">{{ dgettext("marketing", "Where things stand.") }}</h2></div>
     <div class="section-copy">
-      <p>{{ dgettext("marketing", "The first piece is a ciphertext-only sync prototype, built with Elixir, Postgres, and S3-compatible storage. There’s no mobile app to download and no launch date yet.") }}</p>
+      <p>{{ dgettext("marketing", "Native development apps and encrypted sync are taking shape in the open. This is an invitation to follow the beginning, not a promise of a finished product. We’ll email when access is ready.") }}</p>
       <div class="project-links"><a class="text-link" href="https://github.com/pepicrft/habibi" rel="noopener noreferrer">{{ dgettext("marketing", "Read the source") }} <span aria-hidden="true">↗</span></a><a class="text-link" href="{{ locale | homePath }}changelog/">{{ dgettext("marketing", "Changelog") }} <span aria-hidden="true">↗</span></a></div>
     </div>
   </section>
+  <section class="closing-invitation"><span class="heartling" aria-hidden="true"></span><h2>{{ dgettext("marketing", "A small circle. A shared beginning.") }}</h2><p>{{ dgettext("marketing", "Join with your email. Confirm your place. Bring someone who gets it.") }}</p><a class="button button-primary" href="#access">{{ dgettext("marketing", "Request your invitation") }} <span aria-hidden="true">↗</span></a><p class="access-fine-print">{{ dgettext("marketing", "Priority is ordered by confirmed referrals, then by when you confirmed. Sharing alone doesn’t change your place. Positions can move as others invite friends; priority isn’t guaranteed access.") }}</p></section>
 </main>

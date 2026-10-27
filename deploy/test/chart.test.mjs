@@ -140,6 +140,18 @@ test("production routes only Habibi, pins web and migrations together, and keeps
   );
   assert.equal(web.envFrom, undefined);
 
+  const withMail = render("--set", "waitlistEmailSecret=habibi-mail");
+  assert.deepEqual(
+    withMail.find((resource) => resource.kind === "Deployment").spec.template
+      .spec.containers[0].envFrom,
+    [{ secretRef: { name: "habibi-mail" } }],
+  );
+  assert.equal(
+    withMail.find((resource) => resource.kind === "Job").spec.template.spec
+      .containers[0].envFrom,
+    undefined,
+  );
+
   const isolated = render(
     "--set",
     "analytics.enabled=false,imagePullSecret.enabled=false,ingress.enabled=false,replicaCount=1",
