@@ -2,47 +2,211 @@ import SwiftUI
 
 struct HabibiKitsView: View {
     @ObservedObject var session: HabibiSession
+    @Environment(\.habibiPalette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var bundled: [HabibiBundledKit]?
+    @State private var bundledError = false
+    @State private var search = ""
+    @State private var filter = "All"
+    @State private var selectedKit: HabibiBundledKit?
+    @State private var now = Date()
+    @FocusState private var searching: Bool
+
+    private var deadlines: [Int64] { (session.snapshot?.connections ?? []).compactMap(\.expiresAt).sorted() }
+
+    private func connectedIDs(at date: Date) -> Set<String> {
+        Set((session.snapshot?.connections ?? []).filter { !$0.expired(at: date) }.map(\.kitId))
+    }
+    private func connections(at date: Date) -> [HabibiBundledKit] {
+        (bundled ?? []).filter {
+            filter != "Personal" && (filter != "Connected" || connectedIDs(at: date).contains($0.id)) && matches($0.name, $0.description)
+        }
+    }
+    private var personal: [HabibiKit] {
+        (session.snapshot?.kits ?? []).filter {
+            (filter == "All" || filter == "Personal") && matches($0.definition.name, $0.definition.description)
+        }
+    }
+
+    private func matches(_ name: String, _ description: String) -> Bool {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty || "\(name) \(description)".localizedStandardContains(query)
+    }
 
     var body: some View {
-        List {
-            Section {
-                Text("Little tools, made for your life.").font(.headline)
-                Text("Ask Habibi to build a workout log, calorie journal or something entirely your own. Each Kit has a name, a description and its own entries.")
-                    .foregroundStyle(.secondary)
-                Button("Make a Kit", systemImage: "sparkles") {
-                    session.newConversation(prompt: "Help me make my own Kit.")
-                }.disabled(session.chatRunning || session.review != nil)
-                    .accessibilityIdentifier("habibi.kits.create")
+        // Wake only at token deadlines so an open catalog never counts an
+        // expired connection as connected. No polling or network requests.
+        catalog(at: now).task(id: deadlines) {
+            now = Date()
+            for expiry in deadlines where Double(expiry) > now.timeIntervalSince1970 {
+                do { try await Task.sleep(for: .seconds(max(0, Double(expiry) - Date().timeIntervalSince1970))) }
+                catch { return }
+                guard !Task.isCancelled else { return }
+                now = max(Date(), Date(timeIntervalSince1970: Double(expiry)))
             }
-            Section("Your Kits") {
-                if let kits = session.snapshot?.kits, !kits.isEmpty {
-                    ForEach(kits) { kit in
+        }
+    }
+
+    private func catalog(at date: Date) -> some View {
+        let connections = connections(at: date)
+        let connectedCount = (bundled ?? []).filter { connectedIDs(at: date).contains($0.id) }.count
+        return List {
+            Section {
+                Group {
+                    if typeSize.isAccessibilitySize { scopes.pickerStyle(.menu) }
+                    else { scopes.pickerStyle(.segmented) }
+                }
+                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+            } header: {
+                Text("Connect your apps. Make something your own.")
+                    .font(.subheadline).textCase(nil).padding(.bottom, 12)
+            }
+            if filter != "Personal" {
+                Section(filter == "Connected" ? "Connected services" : "Connections") {
+                    if bundledError {
+                        Text("Bundled connections are unavailable. Reopen Kits to try again.").foregroundStyle(.secondary)
+                    } else if bundled == nil { ProgressView("Loading bundled Kits…") }
+                    ForEach(connections) { kit in
+                        let connection = session.snapshot?.connections?.first { $0.kitId == kit.id }
+                        Button { searching = false; selectedKit = kit } label: {
+                            HStack(spacing: 12) {
+                                HabibiKitIcon(github: true)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(kit.name).font(.headline).foregroundStyle(palette.ink)
+                                    Text(kit.description).font(.subheadline).foregroundStyle(palette.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let connection {
+                                        Text(connection.expired(at: date) ? "Reconnect needed" : "Connected").font(.caption).foregroundStyle(palette.muted)
+                                    }
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.muted)
+                            }
+                            .padding(.vertical, 8).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("habibi.kits.bundled.github")
+                    }
+                }.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+            }
+            if !personal.isEmpty {
+                Section("Personal") {
+                    ForEach(personal) { kit in
                         NavigationLink { HabibiKitView(session: session, kitID: kit.id) } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(kit.definition.name).font(.headline)
-                                Text(kit.definition.description).font(.subheadline).foregroundStyle(.secondary)
-                                Text("\(kit.entries.count) entries · Private on this device").font(.caption).foregroundStyle(.secondary)
-                            }.padding(.vertical, 4)
+                            HStack(spacing: 12) {
+                                HabibiKitIcon()
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(kit.definition.name).font(.headline).foregroundStyle(palette.ink)
+                                    Text(kit.definition.description).font(.subheadline).foregroundStyle(palette.muted)
+                                    Text("\(kit.entries.count) entries · Personal Kit").font(.caption).foregroundStyle(palette.muted)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                            }.padding(.vertical, 8)
                         }
                     }
-                } else {
-                    ContentUnavailableView("Your first Kit starts with an idea", systemImage: "square.stack.3d.up",
-                                           description: Text("Describe it in Conversations. You’ll review it before anything is saved."))
-                }
+                }.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+            }
+            if connections.isEmpty && personal.isEmpty && (bundled != nil || filter == "Personal") {
+                Section {
+                    ContentUnavailableView(
+                        !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No Kits found" : filter == "Connected" ? "No connected Kits" : "Your first Kit starts with an idea",
+                        systemImage: search.isEmpty ? "square.stack.3d.up" : "magnifyingglass",
+                        description: Text(search.isEmpty ? "Explore connections or make a personal Kit with Habibi." : "Try another name or description."))
+                        .accessibilityIdentifier("habibi.kits.empty")
+                }.listRowBackground(Color.clear)
             }
             if let draft = session.draft, let definition = try? decodeDefinition(draft) {
-                Section("Unsaved draft") {
+                Section {
                     NavigationLink { HabibiDefinitionView(definition: definition) } label: {
                         Label(definition.name, systemImage: "doc")
                     }
-                    Text("Only in memory. Ask Habibi to evaluate and save it.").font(.footnote).foregroundStyle(.secondary)
-                }
+                } header: { Text("Unsaved draft") }
+                footer: { Text("Only in memory. Ask Habibi to evaluate and save it.") }
+                .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
             }
             Section {
-                Text("Kits run locally in an isolated Wasm interpreter. They cannot access the network, your keys or other Kits. Only the host app saves entries. Public sharing is not available yet.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Make a Kit", systemImage: "plus") {
+                    searching = false
+                    session.newConversation(prompt: "Help me make my own Kit.")
+                }
+                .frame(minHeight: 44)
+                .disabled(session.chatRunning || session.review != nil).accessibilityIdentifier("habibi.kits.create")
+            } header: { Text("Made for your everyday") }
+            footer: {
+                Text("A workout log, a reading journal, an idea of your own. Describe it to Habibi and review your Kit before saving.")
+            }.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+            Section {
+                Text("Personal Kits run privately on your device, without network or credential access. Connections let Habibi use authorized tools when you ask; requested results reach your inference provider, never credentials.")
+                    .font(.footnote).foregroundStyle(palette.muted)
+            }.listRowBackground(Color.clear)
+        }
+        .listStyle(.insetGrouped).scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively).background(palette.canvas).navigationTitle("Kits")
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { filter = "Connected" } label: { Text("\(connectedCount) connected").font(.subheadline) }
+                    .accessibilityIdentifier("habibi.kits.connected")
+                    .accessibilityAddTraits(filter == "Connected" ? [.isSelected] : [])
             }
-        }.navigationTitle("Kits")
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass").foregroundStyle(palette.muted)
+                TextField("Search Kits", text: $search, prompt: Text("Search Kits").foregroundStyle(palette.muted)).focused($searching)
+                    .autocorrectionDisabled().textInputAutocapitalization(.never).submitLabel(.search)
+                    .onSubmit { searching = false }.accessibilityIdentifier("habibi.kits.search")
+                    .frame(minHeight: 44)
+                if !search.isEmpty {
+                    Button { search = "" } label: {
+                        Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .foregroundStyle(palette.muted).accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 18).padding(.vertical, 7).background { HabibiGlassSurface() }
+            .frame(maxWidth: 688).padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10)
+            .frame(maxWidth: .infinity)
+        }
+        .sheet(item: $selectedKit) { kit in
+            NavigationStack { HabibiGitHubView(session: session, kit: kit) }
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+        }
+        .task {
+            do {
+                let kits = try session.bundledKits()
+                // Only offer the native implementation shipped in this app.
+                bundled = kits.filter { $0.id == "github" && $0.permissions == ["read:user"] && $0.authentication == "device_code" }
+                bundledError = false
+            } catch { bundled = nil; bundledError = true }
+        }
+    }
+
+    private var scopes: some View {
+        Picker("Show Kits", selection: $filter) {
+            ForEach(["All", "Connections", "Personal", "Connected"], id: \.self) { value in
+                Text(value).tag(value).accessibilityIdentifier("habibi.kits.filter.\(value.lowercased())")
+            }
+        }
+    }
+}
+
+struct HabibiKitIcon: View {
+    var github = false
+    var size: CGFloat = 48
+    @Environment(\.habibiPalette) private var palette
+    // Loose resources are bundled by Once, rather than an Xcode asset catalog.
+    private static let githubMark = UIImage(contentsOfFile: Bundle.main.url(forResource: "github", withExtension: "png")!.path)!
+
+    var body: some View {
+        Group {
+            if github {
+                // Official mark: github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+                Image(uiImage: Self.githubMark).renderingMode(.template).resizable().scaledToFit().padding(size * 0.18)
+            } else {
+                Image(systemName: "square.stack.3d.up").font(.system(size: size * 0.45))
+            }
+        }
+        .foregroundStyle(palette.ink).frame(width: size, height: size)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: size * 0.25))
+        .overlay { RoundedRectangle(cornerRadius: size * 0.25).stroke(palette.border) }
+        .accessibilityHidden(true)
     }
 }
 

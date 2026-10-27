@@ -159,10 +159,10 @@ struct HabibiConversationView: View {
         .sheet(isPresented: $details) {
             NavigationStack {
                 List {
-                    Label("Only you and Habibi", systemImage: "lock")
-                    Text("Messages, requested Kit definitions and synthetic tests go to the selected provider only after approval. Saved entries and vault keys are not included.")
+                    Label("What the inference provider receives", systemImage: "lock")
+                    Text("Messages, requested Kit definitions and synthetic tests go to the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with that provider. Saved Kit entries, vault keys and connection credentials are never included by tools.")
                     Text("Dictation runs on this device. Audio is never uploaded, and transcription never sends a message automatically.")
-                    Text("Messages, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation shares its text context with the provider after approval; tools and pending approvals are never replayed.")
+                    Text("Messages, tool results, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation shares its text context with the provider after approval; tools and pending approvals are never replayed.")
                     LabeledContent("Inference", value: session.inferenceURL == nil ? "Not connected" : "Development host proxy")
                 }
                 .navigationTitle("Conversation details").navigationBarTitleDisplayMode(.inline)
@@ -185,7 +185,7 @@ struct HabibiConversationView: View {
             Button("Allow for this session") { session.cloudConsent = true; send() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The development proxy uses the host’s configured harness and model provider. Messages, requested Kit definitions and synthetic tests are sent. Saved entries and vault keys stay here. Host/provider retention, terms and charges apply.")
+            Text("The development proxy uses the host’s configured harness and inference provider. Messages, requested Kit definitions and synthetic tests are sent. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are shared with that provider and saved in encrypted conversation history. Saved Kit entries, vault keys and connection credentials are never included by tools. Host/provider retention, terms and charges apply.")
         }
         .onDisappear { cancelVoice(); Task { await session.flushConversations() } }
         .onChange(of: scenePhase) { _, phase in

@@ -54,6 +54,15 @@ class MainActivity : AppCompatActivity() {
     private var destroying = false
     private var previousState: JSONObject? = null
     private var conversationScreen: ConversationScreen? = null
+    private var kitsScreen: KitsCatalogScreen? = null
+    // Search can contain personal Kit names. Keep it in memory, not Android saved state.
+    private var kitsQuery = ""
+    private var kitsFilter = "all"
+    private var githubDetailOpen = false
+    private var githubStartPending = false
+    private var githubSheet: GitHubDetailSheet? = null
+    private var resumed = false
+    private val kitsExpiryRefresh = Runnable { render() }
     private var voicePermissionResult: ((Boolean) -> Unit)? = null
     // Encrypted file payloads only, memory-only; a rotated/interrupted picker
     // never restores a recovery key or silently imports a different backup.
@@ -86,6 +95,9 @@ class MainActivity : AppCompatActivity() {
         route = savedInstanceState?.getString("route") ?: "welcome"
         tab = savedInstanceState?.getInt("tab") ?: R.id.home
         kitId = savedInstanceState?.getString("kit")
+        githubDetailOpen = savedInstanceState?.getBoolean("github_detail") == true || route == "github"
+        githubStartPending = savedInstanceState?.getBoolean("github_start_pending") == true
+        if (route == "github") route = "kits" // Migrate the old full-page route.
         previousState = session.state
         WindowCompat.setDecorFitsSystemWindows(window, false)
         root = column(0)
@@ -131,6 +143,7 @@ class MainActivity : AppCompatActivity() {
         session.start()
         consumeSyncIntent(intent)
         if (route == "sync") session.inspectSync()
+        if (route == "kits") session.inspectBundledKits()
         render()
     }
     override fun onNewIntent(intent: Intent) {
@@ -150,16 +163,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    override fun onResume() { super.onResume(); conversationScreen?.resume() }
-    override fun onPause() { conversationScreen?.pause(); session.flushConversations(); super.onPause() }
+    override fun onResume() {
+        super.onResume(); resumed = true; conversationScreen?.resume()
+        if (route == "kits") render() // Re-evaluate expiry, without replacing search or dismissing the sheet.
+    }
+    override fun onPause() {
+        resumed = false; screen.removeCallbacks(kitsExpiryRefresh)
+        conversationScreen?.pause(); session.flushConversations(); super.onPause()
+    }
     override fun onDestroy() {
         destroying = true; conversationScreen?.close(); voicePermissionResult = null
+        screen.removeCallbacks(kitsExpiryRefresh)
         pendingBackupExport = null; selectedBackupImport = null
+        githubSheet?.dispose(); githubSheet = null; kitsScreen = null
         reviewDialog?.dismiss(); session.unobserve(observer); themes.unobserve(observer)
         super.onDestroy()
     }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("route", route); outState.putInt("tab", tab); outState.putString("kit", kitId)
+        outState.putBoolean("github_detail", githubDetailOpen) // No code, account or credentials.
+        outState.putBoolean("github_start_pending", githubSheet?.startingAuthorization ?: githubStartPending)
         super.onSaveInstanceState(outState)
     }
     private fun go(next: String) {
@@ -167,10 +190,13 @@ class MainActivity : AppCompatActivity() {
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(screen.windowToken, 0)
         if (route == "conversation" && next != route) session.flushConversations()
         if (route == "restore" && next != route) selectedBackupImport = null
+        if (next != "kits") githubSheet?.dismiss()
         route = next; render()
         if (next == "sync") session.inspectSync()
+        if (next == "kits") session.inspectBundledKits()
     }
     private fun back(): Boolean {
+        if (githubDetailOpen) { githubSheet?.dismiss(); return true }
         if (session.syncing) return true
         val parent = when (route) {
             "conversation" -> "conversations"
@@ -194,10 +220,11 @@ class MainActivity : AppCompatActivity() {
         isEnabled = !session.busy && session.loaded
     }
     private fun updateNavigationVisibility() {
-        navigation.visibility = if (session.state != null && !keyboard && route != "conversation") View.VISIBLE else View.GONE
+        navigation.visibility = if (session.state != null && !keyboard && route !in setOf("conversation", "kits")) View.VISIBLE else View.GONE
     }
     private fun render() {
         if (isDestroyed || destroying) return
+        screen.removeCallbacks(kitsExpiryRefresh)
         themes.useOrigin(session.syncOrigin)
         val profile = session.state?.optJSONObject("profile")
         val nightMode = appearanceNightMode()
@@ -207,10 +234,16 @@ class MainActivity : AppCompatActivity() {
             // Rebuild only for a changed palette, keeping the app-owned conversation,
             // encrypted draft, selection and history. No provider request is started.
             conversationScreen?.close(); conversationScreen = null
+            kitsScreen = null
+            githubStartPending = githubSheet?.startingAuthorization ?: githubStartPending
+            githubSheet?.dispose(); githubSheet = null
             appliedPalette = palette
         }
         if (session.state != null && (route in setOf("welcome", "name", "goals", "privacy") || (route == "restore" && previousState !== session.state))) { route = "home"; tab = R.id.home }
         if (session.state == null && session.loaded && route !in setOf("welcome", "name", "goals", "privacy", "restore")) route = "welcome"
+        if (route != "kits" && githubDetailOpen) {
+            githubDetailOpen = false; githubSheet?.dismiss(); githubSheet = null
+        }
         previousState = session.state
         if (route != "conversation" || conversationScreen?.represents(session.conversation) != true) {
             conversationScreen?.close(); conversationScreen = null
@@ -218,8 +251,8 @@ class MainActivity : AppCompatActivity() {
         val focus = currentFocus?.tag as? String
         val oldScroll = (screen.getChildAt(0) as? ScrollView)?.scrollY ?: 0
         progress.visibility = if (session.busy || !session.loaded) View.VISIBLE else View.GONE
-        notice.text = session.error
-        notice.visibility = if (session.error == null) View.GONE else View.VISIBLE
+        notice.text = session.error ?: if (session.kitAuthorizing && !githubDetailOpen) "GitHub authorization is active. Return to Profile → Kits → GitHub to finish or cancel." else null
+        notice.visibility = if (notice.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         toolbar.visibility = if (route == "welcome") View.GONE else View.VISIBLE
         toolbar.title = when (route) {
             "name", "goals", "privacy" -> "Make it yours"
@@ -231,8 +264,15 @@ class MainActivity : AppCompatActivity() {
         applyChrome()
         binding = true; navigation.selectedItemId = tab; binding = false
         updateNavigationVisibility()
-        if (route in setOf("restore", "recovery")) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (route in setOf("restore", "recovery") || githubDetailOpen) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (route == "kits") {
+            val catalog = kitsScreen ?: KitsCatalogScreen(this, session, kitsQuery, kitsFilter,
+                { query, filter -> kitsQuery = query; kitsFilter = filter }, ::openGitHubDetail,
+                { id -> kitId = id; go("kit") }, { tab = R.id.conversations; go("conversations") }).also { kitsScreen = it }
+            if (screen.getChildAt(0) !== catalog.view) { screen.removeAllViews(); screen.addView(catalog.view) }
+            catalog.render(); renderGitHubDetail(); scheduleKitsExpiry(); showReview(); return
+        }
         if (route == "conversation") {
             val detail = conversationScreen ?: ConversationScreen(this, session, { done ->
                 if (voicePermissionResult != null) done(false)
@@ -257,7 +297,6 @@ class MainActivity : AppCompatActivity() {
             "appearance" -> appearancePage()
             "recovery" -> recoveryPage()
             "conversations" -> conversationPage()
-            "kits" -> kitsPage()
             "kit" -> kitPage()
             "entry" -> entryPage()
             else -> homePage()
@@ -326,7 +365,7 @@ class MainActivity : AppCompatActivity() {
             addView(heading("A key made on your device", 22f))
             addView(label("Habibi generates a random 256-bit symmetric content key locally. It encrypts your profile, kits, entries and conversations. A separate sync token is not your private key."))
             addView(label("Android Keystore protects your local vault. No account is needed for local use. Optional encrypted sync uses a separate browser sign-in and never sends your encryption key."))
-            addView(label("If you choose host inference, your messages go to the configured harness and model provider. Keys and saved entries never go with them. You approve every kit change."))
+            addView(label("If you choose host inference, your messages go to the configured harness and model provider. Connecting GitHub also lets the agent send read-only profile and public repository results to that provider. Credentials, vault keys and saved local Kit entries never go with them. You approve every kit change."))
             addView(label("Keep a recovery backup and its recovery key separately. Losing this device without both means losing your vault.", 15f, true))
         })
         addView(action("Create my private vault", "create_vault", true) {
@@ -361,7 +400,7 @@ class MainActivity : AppCompatActivity() {
             addView(card().apply {
                 addView(heading("Privacy", 22f))
                 addView(label("Your profile, entries, conversations and drafts are encrypted locally. Optional manual sync uploads only encrypted snapshots. No analytics, automatic cloud backup or background delivery is used."))
-                addView(label("Conversations use the host's configured harness, such as Amp or Claude Code, and its model provider. Messages and kit definitions/synthetic results are shared, never vault keys or saved entries. Host/provider retention, terms and charges apply. Do not type information you do not want sent."))
+                addView(label("Conversations use the host's configured harness, such as Amp or Claude Code, and its model provider. Messages, kit definitions/synthetic results and authorized GitHub profile/public repository tool results are shared, never credentials, vault keys or saved local Kit entries. Host/provider retention, terms and charges apply. Do not type information you do not want sent."))
                 addView(label("There is no destructive sign-out. Closing Habibi keeps your encrypted vault here.", 14f, true))
             })
         }
@@ -558,7 +597,7 @@ class MainActivity : AppCompatActivity() {
             val chatId = session.conversation.id
             MaterialAlertDialogBuilder(this)
                 .setTitle("Use host inference?")
-                .setMessage("The development proxy uses the host's configured harness, such as Amp or Claude Code, and its model provider. Messages, kit definitions and synthetic tests are sent. Saved entries and vault keys stay here. Host/provider retention, terms and charges apply.")
+                .setMessage("The development proxy uses the host's configured harness, such as Amp or Claude Code, and its model provider. Messages, kit definitions and synthetic tests are sent. If GitHub is connected, the agent can also send read-only profile and public repository tool results to that provider. Credentials, saved local Kit entries and vault keys stay private. Host/provider retention, terms and charges apply.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Allow for this session") { _, _ ->
                     if (route == "conversation" && session.conversation.id == chatId) {
@@ -569,21 +608,25 @@ class MainActivity : AppCompatActivity() {
     }
     private fun kits() = session.state?.optJSONArray("kits") ?: JSONArray()
     private fun kit(): JSONObject? = (0 until kits().length()).map { kits().getJSONObject(it) }.firstOrNull { it.optString("id") == kitId }
-    private fun kitsPage() = page("Your kits", "Little tools for your own life. Entries never leave this device through the conversation agent.") {
-        if (kits().length() == 0) addView(card().apply {
-            addView(heading("A rhythm starts here.", 22f))
-            addView(label("No kits yet. Ask Habibi to design a tracker, test it with synthetic entries, then review the definition before saving.", 16f, true))
-        })
-        for (index in 0 until kits().length()) {
-            val item = kits().getJSONObject(index); val definition = item.getJSONObject("definition")
-            addView(card().apply {
-                addView(heading(definition.getString("name"), 22f))
-                addView(label(definition.optString("description"), 15f, true))
-                addView(label("${item.getJSONArray("entries").length()} entries", 13f, true))
-                addView(action("Open ${definition.getString("name")}", "kit_${item.getString("id")}") { kitId = item.getString("id"); go("kit") })
-            })
-        }
-        addView(action("Design a kit with Habibi", "design_kit", true) { tab = R.id.conversations; go("conversations") })
+    private fun openGitHubDetail() {
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(screen.windowToken, 0)
+        githubDetailOpen = true; render()
+    }
+    private fun renderGitHubDetail() {
+        if (!githubDetailOpen) return
+        val detail = githubSheet ?: GitHubDetailSheet(this, session, githubStartPending, {
+            githubSheet = null; githubDetailOpen = false; githubStartPending = false; render()
+        }, ::go).also { githubSheet = it; githubStartPending = false; it.show() }
+        detail.render()
+    }
+    private fun scheduleKitsExpiry() {
+        if (!resumed || session.githubAccount?.expired != false) return
+        val connections = session.state?.optJSONArray("connections") ?: return
+        val connection = (0 until connections.length()).map { connections.getJSONObject(it) }.firstOrNull { it.optString("kitId") == "github" } ?: return
+        val expires = connection.optLong("expiresAt", 0)
+        if (expires <= 0) return // Non-expiring tokens need no UI timer and no network check.
+        val delay = expires.coerceAtMost(Long.MAX_VALUE / 1000) * 1000 - System.currentTimeMillis()
+        screen.postDelayed(kitsExpiryRefresh, maxOf(1L, delay))
     }
     private fun kitPage(): View {
         val item = kit() ?: return page("Kit unavailable", "This kit may have been removed. Your other kits are unchanged.") {

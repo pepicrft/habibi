@@ -159,6 +159,11 @@ actor HabibiStore {
     }
 
     func call(_ operation: String, arguments: [String: Any] = [:], persist: Bool = false) throws -> [String: Any] {
+        // Device authorization must not commit if its screen was dismissed
+        // while waiting to enter this actor. Other durable writes retain their
+        // existing cancellation behavior (notably conversation autosaves).
+        let connecting = operation == "connect_kit"
+        if connecting { try Task.checkCancellation() }
         guard let identity, let document else { throw HabibiFailure(message: "Open your vault first.") }
         var command = arguments
         command["operation"] = operation
@@ -171,7 +176,9 @@ actor HabibiStore {
                 result["state"] = try HabibiCore.execute(["operation": "restore", "identity": identity, "document": candidate])["state"]
             }
             _ = try snapshot(result)
-            try persistence.saveDocument(JSONSerialization.data(withJSONObject: candidate))
+            let encoded = try JSONSerialization.data(withJSONObject: candidate)
+            if connecting { try Task.checkCancellation() }
+            try persistence.saveDocument(encoded)
             self.document = candidate
         }
         return result

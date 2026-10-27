@@ -31,6 +31,13 @@ internal class FixtureCore {
     var revision = 0
     var failOperation: String? = null
     var recoveredState: JSONObject? = null
+    var githubClientId = "public-client"
+    private val githubTools get() = JSONArray().apply {
+        for (name in listOf("github_get_profile", "github_list_repositories")) put(JSONObject().put("type", "function").put("name", name)
+            .put("description", "Read authorized GitHub results without returning credentials.").put("strict", true)
+            .put("parameters", JSONObject().put("type", "object").put("additionalProperties", false)
+                .put("required", JSONArray()).put("properties", JSONObject())))
+    }
     fun execute(input: String): String {
         val request = JSONObject(input); calls.add(request)
         val operation = request.getString("operation")
@@ -42,12 +49,58 @@ internal class FixtureCore {
         }
         fun state() = JSONObject(request.getJSONObject("document").getJSONObject("state").toString())
         val result = when (operation) {
+            "kit_page" -> JSONObject().put("version", 1).put("source", "fixture page")
+                .put("kit", JSONObject().put("id", request.getString("id")).put("name", "GitHub").put("description", "Read your profile and public repositories."))
+                .put("fallback", "GitHub\nRead your GitHub profile and 10 recent public repositories you own. No private repositories, file contents or write access.")
+            "bundled_kits" -> JSONObject().put("kits", JSONArray().put(JSONObject().put("id", "github").put("name", "GitHub")
+                .put("description", "Read your GitHub profile and public repositories without sharing credentials with the model.")
+                .put("permissions", JSONArray().put("read:user")).put("authentication", "device_code").put("clientId", githubClientId)
+                .put("tools", githubTools)))
             "create" -> candidate(JSONObject().put("version", 1).put("profile", request.getJSONObject("profile")).put("kits", JSONArray()), true)
             "restore" -> JSONObject().put("state", state())
             "recover" -> candidate(recoveredState?.let { JSONObject(it.toString()) }
                 ?: JSONObject().put("version", 1).put("profile", profile("Recovered")).put("kits", JSONArray()), true)
             "profile" -> candidate(state().put("profile", request.getJSONObject("profile")))
             "save_conversations" -> candidate(state().put("conversations", JSONArray(request.getJSONArray("conversations").toString())))
+            "connect_kit" -> candidate(state().put("connections", JSONArray().put(request.getJSONObject("connection"))))
+            "disconnect_kit" -> candidate(state().apply { remove("connections") })
+            "connection_request" -> {
+                val connection = state().getJSONArray("connections").getJSONObject(0)
+                check(request.getString("id") == "github")
+                val endpoint = if (!request.has("name")) GitHubEndpoint.USER else {
+                    check(request.getJSONObject("arguments").length() == 0)
+                    when (request.getString("name")) {
+                        "github_get_profile" -> GitHubEndpoint.USER
+                        "github_list_repositories" -> GitHubEndpoint.REPOSITORIES
+                        else -> error("Unexpected fixture connection tool")
+                    }
+                }
+                JSONObject().put("url", endpoint.url).put("method", "GET")
+                    .put("headers", JSONObject().put("Authorization", "Bearer ${connection.getString("accessToken")}")
+                        .put("Accept", "application/vnd.github+json").put("X-GitHub-Api-Version", "2022-11-28"))
+            }
+            "connection_result" -> {
+                // Minimal protocol outputs only. Full allowlisting and input
+                // validation are Rust responsibilities, not a second sanitizer.
+                val sanitized: Any = when (request.getString("name")) {
+                    "github_get_profile" -> request.getJSONObject("response").let { profile ->
+                        JSONObject().put("login", profile.getString("login")).put("name", profile.opt("name") ?: JSONObject.NULL)
+                            .put("bio", profile.opt("bio") ?: JSONObject.NULL).put("publicRepositories", profile.getLong("public_repos"))
+                            .put("followers", profile.getLong("followers"))
+                    }
+                    "github_list_repositories" -> JSONObject().put("limit", 10).put("repositories", JSONArray().apply {
+                        val repositories = request.getJSONArray("response")
+                        for (index in 0 until repositories.length()) {
+                            val repository = repositories.getJSONObject(index)
+                            put(JSONObject().put("name", repository.getString("name")).put("fullName", repository.getString("full_name"))
+                                .put("description", repository.opt("description") ?: JSONObject.NULL).put("language", repository.opt("language") ?: JSONObject.NULL)
+                                .put("stars", repository.getLong("stargazers_count")))
+                        }
+                    })
+                    else -> error("Unexpected fixture connection result")
+                }
+                JSONObject().put("result", sanitized)
+            }
             "kit_tool" -> {
                 val args = request.getJSONObject("arguments")
                 when (val name = request.getString("name")) {
@@ -90,7 +143,10 @@ internal class FixtureCore {
             }
             "summary" -> JSONObject().put("metrics", JSONArray())
             "export_recovery" -> JSONObject().put("backup", JSONObject().put("encrypted", true)).put("recoveryKey", "separate-recovery-key")
-            "agent_request" -> JSONObject().put("body", JSONObject().put("input", request.getJSONArray("history")))
+            "agent_request" -> JSONObject().put("body", JSONObject().put("input", request.getJSONArray("history")).apply {
+                val connections = request.optJSONArray("connections") ?: JSONArray()
+                if ((0 until connections.length()).any { connections.getString(it) == "github" }) put("tools", githubTools)
+            })
             "agent_response" -> request.getJSONObject("response")
             "validate_component" -> JSONObject().put("component", request.getJSONObject("component"))
             else -> error("Unexpected fixture operation: $operation")

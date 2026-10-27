@@ -14,8 +14,6 @@ struct HabibiComposer: View {
     let send: () -> Void
     let stopReply: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.habibiPalette) private var palette
     @FocusState private var typing: Bool
@@ -85,11 +83,16 @@ struct HabibiComposer: View {
             HabibiMicrophoneButton(active: recording, start: { typing = false; start() }, stop: stop, cancel: cancel)
                 .disabled(running).padding(.trailing, recording ? 0 : 48)
         }
-        .padding(4).foregroundStyle(.primary).background { surface }
+        .padding(4).foregroundStyle(.primary).background { HabibiGlassSurface() }
         .accessibilityElement(children: .contain)
     }
+}
 
-    @ViewBuilder private var surface: some View {
+struct HabibiGlassSurface: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    @ViewBuilder var body: some View {
         let shape = RoundedRectangle(cornerRadius: 28)
         if reduceTransparency || contrast == .increased {
             shape.fill(Color(uiColor: .secondarySystemBackground))

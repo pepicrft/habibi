@@ -120,7 +120,8 @@ internal class Conversation(val id: String = UUID.randomUUID().toString(), val c
 internal data class KitReview(val ticket: Long, val recordFingerprint: String, val review: String, val callId: String?, val run: AtomicBoolean?)
 private class CoreFailure(message: String) : Exception(message)
 
-/** Application-owned session. Every bridge, storage and network call is serialized.
+/** Application-owned session. Bridge/storage calls are serialized. Device OAuth
+ * polls use a separate bounded worker and rejoin the serial durable install gate.
  * Only durable candidates become public state. No identity is ever handed to UI. */
 internal class HabibiSession(
     private val storage: VaultStorage,
@@ -130,6 +131,8 @@ internal class HabibiSession(
     private val transport: InferenceTransport = HttpInferenceTransport(),
     private val oauth: NativeOAuth? = null,
     private val syncTransport: SyncTransport = HttpSyncTransport(),
+    private val githubTransport: GitHubTransport = HttpGitHubTransport(),
+    private val github: GitHubDeviceFlow = GitHubDeviceFlow(githubTransport),
 ) {
     private var record: JSONObject? = null
     @Volatile var state: JSONObject? = null; private set
@@ -149,6 +152,29 @@ internal class HabibiSession(
     private val syncLock = AtomicBoolean(false)
     val syncing get() = syncLock.get()
     val authorizing get() = oauth?.authorizing() == true
+    val kitAuthorizing get() = github.authorizing()
+    val githubAuthorization get() = github.authorization
+    @Volatile private var githubNotice: String? = null
+    private val githubAttempts = AtomicInteger()
+    val githubMessage get() = githubNotice ?: if (github.message == "Not connected" && githubAccount != null) "Connected · Check connection to verify GitHub access." else github.message
+    @Volatile var bundledKits = JSONArray(); private set
+    private val bundledGitHubClientId: String get() = (0 until bundledKits.length())
+        .map { bundledKits.getJSONObject(it) }.firstOrNull { it.optString("id") == "github" }?.opt("clientId") as? String ?: ""
+    val githubConfigured get() = bundledGitHubClientId.isNotBlank()
+    val githubAccount: GitHubAccount? get() {
+        val connections = state?.optJSONArray("connections") ?: return null
+        val connection = (0 until connections.length()).map { connections.getJSONObject(it) }.firstOrNull { it.optString("kitId") == "github" } ?: return null
+        return GitHubAccount(connection.getString("account"),
+            connection.has("expiresAt") && connection.getLong("expiresAt") <= System.currentTimeMillis() / 1000)
+    }
+    private fun resetGitHubNotice() {
+        githubNotice = when (githubAccount?.expired) {
+            null -> "Not connected"
+            true -> "Connection expired. Reconnect to continue."
+            false -> "Connected · Check connection to verify GitHub access."
+        }
+    }
+    val canManageConnections get() = loaded && state != null && !busy && !chatting && review == null && !syncing && !authorizing && !kitAuthorizing && !entrySubmission.get()
     @Volatile var conversations: List<Conversation> = listOf(Conversation()); private set
     @Volatile var conversation: Conversation = conversations.first(); private set
     var draft: JSONObject?
@@ -327,6 +353,93 @@ internal class HabibiSession(
         archiveError = null; failedArchiveRevision = null; inferenceConsent = false
     }
 
+    fun inspectBundledKits() = work { loadBundledKits() }
+    // Pure public package lookup, never authenticated() or a model tool.
+    fun kitPage(id: String): JSONObject = call("kit_page", JSONObject().put("id", id))
+
+    private fun loadBundledKits() {
+        // Catalog lookup deliberately has no identity or encrypted document.
+        val kits = call("bundled_kits").getJSONArray("kits")
+        bundledKits = JSONArray().apply {
+            for (index in 0 until kits.length()) {
+                val kit = kits.getJSONObject(index)
+                if (kit.optString("id") == "github" && kit.optString("authentication") == "device_code" &&
+                    kit.getJSONArray("permissions").toString() == JSONArray().put("read:user").toString()) put(kit)
+            }
+        }
+    }
+    private fun connectionGate() {
+        check(record != null && !chatting && review == null && !syncing && !authorizing && !entrySubmission.get()) {
+            "Finish the conversation, Kit review, sync or authorization before managing connections."
+        }
+        check(formDrafts.isEmpty()) { "Save your open personalization or entry form before managing connections." }
+    }
+    fun beginGitHubAuthorization() {
+        if (!canManageConnections) return
+        val attempt = githubAttempts.incrementAndGet()
+        work {
+            if (githubAttempts.get() != attempt) return@work
+            connectionGate()
+            loadBundledKits()
+            if (!githubConfigured) {
+                githubNotice = "The publisher hasn't configured GitHub for this build. Connect is unavailable."
+                return@work
+            }
+            checkpointConversations(retry = true)
+            check(archiveError == null) { archiveError.orEmpty() }
+            githubNotice = null
+            try {
+                synchronized(github) {
+                    if (githubAttempts.get() != attempt) return@work
+                    github.begin(bundledGitHubClientId, ::changed) { ticket, connection ->
+                        work {
+                            github.commit(ticket) {
+                                connectionGate()
+                                // Core request and checked durable install both remain
+                                // on the existing serial vault worker, not the poller.
+                                install(call("connect_kit", authenticated().put("connection", connection)))
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) { githubNotice = "This build's GitHub configuration is invalid. Contact the publisher for an updated build." }
+        }
+    }
+    fun cancelGitHubAuthorization() {
+        synchronized(github) { githubAttempts.incrementAndGet(); githubNotice = null; github.cancel() }
+        changed()
+    }
+    fun openGitHubVerification(openBrowser: (String) -> Unit) {
+        if (kitAuthorizing && githubAuthorization?.code != null) openBrowser(GitHubDeviceFlow.VERIFICATION_URL)
+    }
+    fun checkGitHubConnection() {
+        if (!canManageConnections) return
+        work {
+            try {
+                connectionGate()
+                val account = githubAccount ?: error("No connection")
+                check(!account.expired)
+                val request = call("connection_request", authenticated().put("id", "github"))
+                val response = requestGitHub(GitHubEndpoint.USER, request)
+                val login = GitHubDeviceFlow.account(response.json())
+                check(login.equals(account.login, ignoreCase = true))
+                githubNotice = "Connection checked · Signed in as $login."
+            } catch (_: Exception) {
+                githubNotice = "GitHub connection could not be verified. It may be offline, expired or revoked. Reconnect to authorize again."
+            }
+        }
+    }
+    fun disconnectGitHub() {
+        if (!canManageConnections) return
+        work {
+            try {
+                connectionGate()
+                install(call("disconnect_kit", authenticated().put("id", "github")))
+                githubNotice = "Disconnected on this device. Sync manually to share the removal. Revoke access in GitHub settings to invalidate tokens in old backups or other devices."
+            } catch (_: Exception) { githubNotice = "Could not save the disconnection. Your previous encrypted connection is unchanged. Try again." }
+        }
+    }
+
     fun configureSync(origin: SyncOrigin) = work {
         check(!syncing && !authorizing) { "Cancel authorization before changing sync origin." }
         syncOrigin = origin
@@ -350,6 +463,7 @@ internal class HabibiSession(
                 // even when stable message/conversation IDs happen to match.
                 run?.set(true); run = null; requests = 0; review = null; chatting = false
                 formDrafts.clear(); replaceConversations(restored, selected)
+                resetGitHubNotice()
             }
             updateSyncStatus(candidate)
         })
@@ -373,8 +487,9 @@ internal class HabibiSession(
         if (record != null) updateSyncStatus(coordinator().status())
     }
     fun beginSyncAuthorization(openBrowser: (String) -> Unit) {
-        if (busy || syncing) return
+        if (busy || syncing || kitAuthorizing) return
         work {
+            check(!kitAuthorizing) { "Finish or cancel GitHub authorization first." }
             val auth = oauth ?: error("OAuth is unavailable in this build.")
             val url = auth.begin(syncOrigin)
             syncMessage = "Authorization open in your browser · Return here after consent, or cancel."
@@ -416,9 +531,10 @@ internal class HabibiSession(
     fun syncNow() = performSync(null, null, emptyList(), null)
     fun resolveSync(choice: String, selected: String?, displayedHeads: List<String>, decision: String) = performSync(choice, selected, displayedHeads, decision)
     private fun performSync(choice: String?, selected: String?, displayedHeads: List<String>, decision: String?) {
-        if (busy || !syncLock.compareAndSet(false, true)) return
+        if (busy || kitAuthorizing || !syncLock.compareAndSet(false, true)) return
         work {
             try {
+                check(!kitAuthorizing) { "Finish or cancel GitHub authorization before syncing." }
                 check(!chatting && review == null) { "Stop the conversation and resolve any Kit review before syncing." }
                 check(formDrafts.isEmpty()) { "Save your open personalization or entry form before syncing. Unsaved forms will not be replaced." }
                 checkpointConversations(retry = true)
@@ -448,6 +564,7 @@ internal class HabibiSession(
                 record = saved
                 state = restored.getJSONObject("state")
                 replaceConversations(chats)
+                resetGitHubNotice()
             }
             loadFailed = false
         } catch (cause: Exception) {
@@ -460,19 +577,22 @@ internal class HabibiSession(
         install(call("create", JSONObject().put("profile", profile)))
     }
     fun recover(backup: Any, recoveryKey: String, saved: () -> Unit = {}) = work {
+        check(!kitAuthorizing) { "Finish or cancel GitHub authorization before restoring." }
         check(!chatting && review == null) { "Stop the conversation and resolve any kit review before restoring." }
         val candidate = call("recover", JSONObject().put("backup", backup).put("recoveryKey", recoveryKey))
         val chats = restoredConversations(candidate.getJSONObject("state"))
         install(candidate)
         replaceConversations(chats)
+        resetGitHubNotice()
         publish(saved)
     }
     fun updateProfile(profile: JSONObject) = work {
+        check(!kitAuthorizing) { "Finish or cancel GitHub authorization before editing your profile." }
         install(call("profile", authenticated().put("profile", profile)))
         formDrafts.keys.filter { it.startsWith("profile_") }.forEach(formDrafts::remove)
     }
     fun updateAppearance(theme: String, appearance: String) {
-        if (busy || chatting || review != null || syncing) return
+        if (busy || chatting || review != null || syncing || kitAuthorizing) return
         require(ThemeCatalog.validId.matches(theme) && appearance in setOf("system", "light", "dark"))
         work {
             check(!chatting && review == null && !syncing) { "Finish the conversation, review or sync before changing appearance." }
@@ -482,6 +602,7 @@ internal class HabibiSession(
         }
     }
     fun addEntry(id: String, values: JSONObject, saved: () -> Unit) = work {
+        check(!kitAuthorizing) { "Finish or cancel GitHub authorization before saving an entry." }
         install(call("add_entry", authenticated().put("id", id).put("values", values)))
         publish(saved)
     }
@@ -519,6 +640,7 @@ internal class HabibiSession(
         publish { complete(backup) }
     }
     fun tool(name: String, arguments: JSONObject) = work {
+        check(!kitAuthorizing) { "Finish or cancel GitHub authorization before using Kit tools." }
         check(review == null) { "Resolve the current kit review first." }
         val output = executeTool(name, arguments)
         val pending = output.optJSONObject("review")
@@ -526,11 +648,36 @@ internal class HabibiSession(
         else lines = lines + ChatLine("Kit tool", "$name completed" + if (output.has("draft")) ". Draft ready to review." else ".", detail = toolResult)
         checkpointConversations()
     }
-    private fun executeTool(name: String, arguments: JSONObject): JSONObject {
+    private fun requestGitHub(endpoint: GitHubEndpoint, descriptor: JSONObject): SyncResponse {
+        check(descriptor.keys().asSequence().toSet() == setOf("url", "method", "headers"))
+        check(descriptor.getString("url") == endpoint.url && descriptor.getString("method") == "GET" && endpoint.method == "GET")
+        val headers = descriptor.getJSONObject("headers").let { value -> value.keys().asSequence().associateWith { value.getString(it) } }
+        val bearer = headers["Authorization"] ?: error("Missing authorization")
+        check(bearer.startsWith("Bearer ") && headers == GitHubDeviceFlow.userHeaders(bearer.removePrefix("Bearer ")))
+        return githubTransport.request(endpoint, headers, null).also {
+            check(it.code == 200 && it.body.size <= endpoint.responseLimit)
+        }
+    }
+    private fun executeTool(name: String, arguments: JSONObject, active: AtomicBoolean? = null): JSONObject {
         // The core's review is bound to the input document too. Flush BEFORE
         // asking for it, never between receiving it and capturing the fingerprint.
         checkpointConversations()
-        val output = call("kit_tool", authenticated().put("name", name).put("arguments", arguments).put("today", LocalDate.now().toString()))
+        check(active?.get() != true)
+        val output = if (name == "github_get_profile" || name == "github_list_repositories") {
+            // Only the core's sanitized result can cross into agent history or
+            // the archive. Descriptors, raw bodies and credentials stay here.
+            try {
+                check(arguments.length() == 0 && githubAccount?.expired == false)
+                val endpoint = if (name == "github_get_profile") GitHubEndpoint.USER else GitHubEndpoint.REPOSITORIES
+                val descriptor = call("connection_request", authenticated().put("id", "github").put("name", name).put("arguments", arguments))
+                check(active?.get() != true)
+                val response = requestGitHub(endpoint, descriptor)
+                check(active?.get() != true)
+                val body: Any = if (endpoint == GitHubEndpoint.USER) response.json() else JSONArray(String(response.body, Charsets.UTF_8))
+                call("connection_result", JSONObject().put("name", name).put("response", body))
+            } catch (_: Exception) { error("The GitHub tool failed. Check the connection or reconnect in Profile → Kits → GitHub.") }
+        } else call("kit_tool", authenticated().put("name", name).put("arguments", arguments).put("today", LocalDate.now().toString()))
+        check(active?.get() != true)
         output.optJSONObject("draft")?.let { draft = it }
         toolResult = output.opt("result")?.toString()
         return output
@@ -570,7 +717,7 @@ internal class HabibiSession(
     fun configure(endpoint: InferenceEndpoint?) = work {
         if (!chatting) { this.endpoint = endpoint; connected = endpoint != null }
     }
-    val canSwitchConversation get() = !busy && !chatting && review == null
+    val canSwitchConversation get() = !busy && !chatting && review == null && !kitAuthorizing
     fun newConversation(): Boolean {
         if (!canSwitchConversation) return false
         synchronized(archiveLock) {
@@ -588,9 +735,10 @@ internal class HabibiSession(
         return true
     }
     fun send(message: String) {
-        if (busy || chatting || review != null) return
+        if (busy || chatting || review != null || syncing || kitAuthorizing) return
         val sentDraftRevision = conversation.draftRevision
         work {
+            check(!kitAuthorizing && !syncing) { "Finish authorization or sync before chatting." }
             check(!chatting) { "A reply is already running." }
             check(endpoint != null) { "Not connected. A developer must connect an inference bridge for conversations. Your local vault and Kits still work." }
             check(message.isNotBlank()) { "Write a message first." }
@@ -606,7 +754,7 @@ internal class HabibiSession(
             continueChat(active)
         }
     }
-    val canSubmitKitEntry get() = loaded && state != null && !busy && !chatting && review == null && !syncing && !entrySubmission.get()
+    val canSubmitKitEntry get() = loaded && state != null && !busy && !chatting && review == null && !syncing && !kitAuthorizing && !entrySubmission.get()
 
     /** A private user action, never an agent tool/output. The core binds the
      * archived message to its installed Kit and atomically stamps its receipt. */
@@ -659,7 +807,10 @@ internal class HabibiSession(
     private fun continueChat(active: AtomicBoolean) {
         try {
             while (!active.get() && requests++ < 8) {
-                val request = call("agent_request", JSONObject().put("history", history).put("today", LocalDate.now().toString()))
+                // Only availability IDs, never account names, credentials or the
+                // vault document, are sent when advertising connected tools.
+                val connections = JSONArray().apply { if (githubAccount?.expired == false) put("github") }
+                val request = call("agent_request", JSONObject().put("history", history).put("today", LocalDate.now().toString()).put("connections", connections))
                 val response = transport.send(endpoint ?: error("Not connected"), request.getJSONObject("body"), active)
                 if (active.get()) break
                 val parsed = call("agent_response", JSONObject().put("response", response))
@@ -679,7 +830,7 @@ internal class HabibiSession(
                         changed()
                         continue
                     }
-                    val output = executeTool(tool.getString("name"), tool.getJSONObject("arguments"))
+                    val output = executeTool(tool.getString("name"), tool.getJSONObject("arguments"), active)
                     if (active.get()) { appendTool(callId, JSONObject().put("approved", false).put("changed", false)); break }
                     val pending = output.optJSONObject("review")
                     if (pending != null) { queueReview(pending, callId, active); return }
@@ -688,6 +839,9 @@ internal class HabibiSession(
                     checkpointConversations()
                     changed()
                 } catch (cause: Exception) {
+                    // Close the protocol call without publishing a late result,
+                    // so the next user message can resume a valid tool history.
+                    if (active.get()) { appendTool(callId, JSONObject().put("approved", false).put("changed", false)); break }
                     val reason = if (cause is CoreFailure) cause.message else "The local tool failed. No change was published."
                     appendTool(callId, JSONObject().put("error", reason))
                     lines = lines + ChatLine("Kit tool", reason ?: "The local tool failed.")

@@ -967,6 +967,11 @@ mod tests {
             "add_entry",
             json!({"id":installed["result"]["id"],"values":{"minutes":25}}),
         );
+        source.write(
+            "connect_kit",
+            json!({"connection":{"kitId":"github","clientId":"fictional-client",
+                "account":"noor-dev","accessToken":"private-synced-github-token","scope":"read:user"}}),
+        );
         let conversations = json!([{"id":crypto::id().unwrap(),"createdAt":"2026-10-26T10:00:00Z","composer":"Private draft 🏃",
             "draft":definition,"messages":[{"id":crypto::id().unwrap(),"createdAt":"2026-10-26T10:01:00Z","kind":"assistant","text":"25 min",
             "component":{"type":"result_table","version":1,"data":{"title":"Walking plan","columns":["Minutes"],"rows":[["25"]]},
@@ -977,6 +982,8 @@ mod tests {
         assert_eq!(expected["profile"]["appearance"], "dark");
         let record = source.prepare();
         assert!(!record.to_string().contains("future-catalog-v3"));
+        assert!(!record.to_string().contains("private-synced-github-token"));
+        assert!(!record.to_string().contains("noor-dev"));
         assert!(record.get("theme").is_none());
         assert!(record.get("appearance").is_none());
         source.complete(&record, 2);
@@ -1003,6 +1010,20 @@ mod tests {
         assert_eq!(adopted["cursor"], 2);
         assert_eq!(adopted["heads"], scanned["heads"]);
         assert_eq!(adopted["dirty"], false);
+        assert_eq!(
+            clean.read("connection_request", json!({"id":"github"}))["headers"]["Authorization"],
+            "Bearer private-synced-github-token"
+        );
+        // Disconnect is a new encrypted snapshot, not a server-side token
+        // revocation or deletion of old immutable snapshots and backups.
+        source.write("disconnect_kit", json!({"id":"github"}));
+        let removed = source.prepare();
+        source.complete(&removed, 3);
+        source.ingest(&removed, 3);
+        clean.ingest(&removed, 3);
+        clean.adopt(&removed);
+        assert!(clean.state().get("connections").is_none());
+        assert_rejected(&clean, "connection_request", json!({"id":"github"}));
         let conflicted = dirty.ingest(&record, 2);
         assert_eq!(conflicted["heads"].as_array().unwrap().len(), 1);
         assert_eq!(conflicted["conflict"], true);

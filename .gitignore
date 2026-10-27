@@ -12,3 +12,4 @@
 /native/target/
 /native/android/.gradle/
 /native/android/local.properties
+/native/kits/*/.nsh/

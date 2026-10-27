@@ -1,0 +1,8 @@
+{
+  "runtime": "0.2.0",
+  "sha256": {
+    "kits/github/App.tsx": "2b5cf7e43883868dc7bc926dba45c495467c8e88d01e840855967c132173f8c6",
+    "kits/github/nsh.json": "47ace550e36c74726650c7907a87a654c64e4f14200708ad9e4a72ee83aac63f",
+    "core/assets/github-page.js": "2e6a2844a8f8860ed900b00ca28d4397a2eb9a938c9478c07a17436045a04c24"
+  }
+}

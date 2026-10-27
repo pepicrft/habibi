@@ -14,6 +14,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -80,6 +81,27 @@ internal fun Context.card() = column(20).apply {
     background = GradientDrawable().apply { setColor(color(R.color.surface)); cornerRadius = dp(24).toFloat() }
     layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16); bottomMargin = dp(8) }
 }
+
+internal fun Context.kitIcon(github: Boolean, size: Int = 44) = ImageView(this).apply {
+    setImageResource(if (github) R.drawable.ic_github else R.drawable.ic_prompts)
+    imageTintList = ColorStateList.valueOf(color(R.color.ink))
+    background = GradientDrawable().apply { setColor(color(R.color.accent)); cornerRadius = dp(size / 4).toFloat() }
+    val inset = dp(size / 5); setPadding(inset, inset, inset, inset)
+    layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
+    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+}
+
+internal fun Context.kitTextButton(value: String, identifier: String, action: () -> Unit) =
+    MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+        text = value; tag = identifier; isAllCaps = false
+        minHeight = dp(48); minimumHeight = dp(48); minWidth = 0; minimumWidth = 0
+        insetTop = dp(4); insetBottom = dp(4)
+        setPadding(dp(14), 0, dp(14), 0)
+        setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(ColorUtils.setAlphaComponent(color(R.color.ink), 97), color(R.color.primary))))
+        layoutParams = LinearLayout.LayoutParams(-2, -2)
+        setOnClickListener { action() }
+    }
 
 internal fun Context.heartling(identifier: String) = HeartlingView(this).apply {
     tag = identifier

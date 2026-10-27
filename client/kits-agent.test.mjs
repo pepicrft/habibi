@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { openKitVault, exampleKits, validateSummary } from "./kits.mjs";
 import { runKit } from "./kits-runtime.mjs";
 import { executeKitTool, converseWithKits, kitTools } from "./kits-agent.mjs";
-import { decisionSchema, nativeDecisionSchema, nativeKitTools, inferenceProtocol, kitInferenceResponse } from "./kits-local-inference.mjs";
+import { decisionSchema, nativeDecisionSchema, nativeKitTools, connectedGitHubTools, inferenceProtocol, kitInferenceResponse } from "./kits-local-inference.mjs";
 import { harnessInferenceResponse } from "../native/resources/harness-inference.mjs";
 
 const today = "2026-10-25";
@@ -164,6 +164,28 @@ test("native display tools are opt-in protocol data; the browser retains only se
   const supplied = nativeKitTools.map(tool => ({ name: tool.name, description: "untrusted", parameters: {} }));
   assert.equal(inferenceProtocol(supplied).tools, nativeKitTools);
   for (const tools of [[], [nativeKitTools.at(-1)], [...kitTools, { name: "read_file" }], [...kitTools, kitTools[0]]]) {
+    assert.throws(() => inferenceProtocol(tools));
+  }
+});
+
+test("connected GitHub tool calls pass through the native harness protocol without enabling host tools", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../native/core/assets/github-kit.json", import.meta.url), "utf8"));
+  assert.deepEqual(connectedGitHubTools.slice(nativeKitTools.length), manifest.tools);
+  assert.equal(inferenceProtocol(connectedGitHubTools).schema.properties.name.enum.includes("github_get_profile"), true);
+  for (const name of ["github_get_profile", "github_list_repositories"]) {
+    const decision = { kind: "tool", name, arguments_json: "{}", reply: "" };
+    assert.throws(() => kitInferenceResponse(decision, true, nativeKitTools));
+    assert.throws(() => kitInferenceResponse({ ...decision, arguments_json: '{"url":"https://attacker.invalid"}' }, true, connectedGitHubTools));
+    const result = kitInferenceResponse(decision, true, connectedGitHubTools);
+    assert.equal(result.output[0].name, name);
+    assert.equal(result.output[0].arguments, "{}");
+    const text = JSON.stringify(decision);
+    const amp = JSON.stringify({ type: "result", subtype: "success", is_error: false, result: text });
+    const pi = JSON.stringify({ type: "message_end", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text }] } });
+    assert.equal(harnessInferenceResponse("amp", amp, connectedGitHubTools).output[0].name, name);
+    assert.equal(harnessInferenceResponse("pi", pi, connectedGitHubTools).output[0].name, name);
+  }
+  for (const tools of [connectedGitHubTools.slice(0, -1), [...connectedGitHubTools, { name: "http_fetch" }]]) {
     assert.throws(() => inferenceProtocol(tools));
   }
 });

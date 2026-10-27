@@ -74,10 +74,91 @@ Without a bridge, Conversations explicitly says **Not connected** and disables
 Send. It never substitutes fake intelligence.
 
 The Rust core constructs inference requests from the active thread's text context,
-not profile/identity/document. Host-owned dialogs approve save/update/remove.
+not the vault profile/identity/document. Native supplies only the IDs of connected,
+unexpired bundled Kits to advertise their tools. Authorized GitHub tool calls add
+sanitized profile/public repository results to inference context and the encrypted
+conversation archive; credentials and raw HTTP responses never enter either.
+Host-owned dialogs approve save/update/remove.
 Reviews are bound to a fingerprint of the identity plus encrypted document, and
-any intervening change invalidates approval. Stopping disconnects network work,
-denies pending agent review, and preserves already committed changes.
+any intervening change invalidates approval. Stopping disconnects inference
+network work, suppresses late GitHub results, denies pending agent review, and
+preserves already committed changes.
+
+## Bundled GitHub connection
+
+Profile → Kits → **GitHub** is a reviewed, host-only bundled connector, separate
+from user-designed local Kits. The **publisher** bundles the public GitHub OAuth
+client ID, with device flow enabled, in `native/core/assets/github-kit.json`,
+returned by `bundled_kits` (`clientId`). End users only tap **Connect GitHub** and authenticate;
+there is no client-ID or secret entry/state. An empty manifest ID disables Connect
+and explains that the publisher has not configured this build. No client secret,
+private-repository scope, write scope, redirect callback or arbitrary URL is
+accepted. Habibi requests only `read:user`; a returned empty scope is also valid.
+Before Connect, the native screen discloses that the agent can read the authorized
+profile and up to 10 recently updated public repositories owned by the user, and
+send sanitized results to the conversation's inference provider. Credentials stay
+private. Inference consent and privacy copy distinguish these authorized results
+from credentials, vault keys and saved local Kit entries.
+
+Device authorization opens the system browser only at
+`https://github.com/login/device`, without a code or credential in the URL.
+Bounded HTTPS requests disable redirects and target only the fixed device-code,
+token, `https://api.github.com/user`, and
+`https://api.github.com/user/repos?visibility=public&affiliation=owner&sort=updated&per_page=10`
+endpoints. Responses are bounded to 64 KiB except the public repository list,
+which has a 256 KiB limit. The device code is memory-only
+and expires within GitHub's documented 900 seconds, measured from request start.
+A separate scheduled auth worker respects polling intervals and `slow_down`, so
+the vault's serial worker never sleeps waiting for browser consent. Cancel
+invalidates pending requests and queued success before the durable install gate.
+Process death requires starting again.
+
+The host validates the token's bearer type/scope/optional expiry and performs a
+real authenticated `GET /user` before storing anything. The connection joins the
+existing encrypted vault only after a successful durable save. **Check
+connection** repeats the real authenticated request and displays the login only
+in local settings, without sharing the check result with inference. Connecting
+does not automatically share account data. Only explicit agent calls to
+`github_get_profile` and `github_list_repositories` return sanitized profile or
+public repository fields to inference and the conversation archive. Both tools
+accept only `{}`. Native requests `connection_request` with `id: "github"`, tool
+`name` and `arguments`, validates the exact fixed GET descriptor and headers, then
+executes it through the fixed native transport. It passes the object/array response
+only to the core's `connection_result` operation (`name`, `response`), and forwards
+only that operation's `result` through the existing tool-output/archive flow.
+Descriptors, headers, raw bodies, token responses and credentials are never
+forwarded to inference, Kit guests or transcripts. Stop suppresses late tool
+results, including responses already in flight or being sanitized. Refresh tokens
+are deliberately never stored or used: sharing rotating refresh credentials
+between devices would race.
+Expired or revoked connections require reconnecting. Native connection screens
+disable saved view state for device codes/accounts and use `FLAG_SECURE`.
+
+Connections travel inside encrypted recovery backups and manual encrypted sync
+snapshots. Another device needs the **same vault backup and its separate recovery
+key**, then manual sync; Habibi account login does not recover keys. Disconnect
+removes only this device's encrypted connection until you sync. Other devices and
+old backups may retain usable tokens. For actual revocation, use GitHub Settings
+→ Applications → Authorized OAuth Apps (or Authorized GitHub Apps) and revoke the
+app.
+
+`GitHubConnectorTest` uses injected HTTP/scheduling and protocol fixtures only,
+covering pending/slow-down/error states, request-start deadlines, malformed and
+ambiguous responses, cancellation before network/after success, storage failure,
+identity validation, automatic account-data isolation, sanitized GitHub tool loops
+and encrypted archive restoration, cancellation during tool HTTP/sanitization,
+rejection of expanded descriptors/nonempty arguments, publisher-only configuration
+UI, fixed browser intents and endpoint-specific transport limits. It never
+contacts GitHub. Live device/browser consent and JNI
+encryption/sync remain integration checks, not claims made by the fixtures.
+
+The catalog hides bottom navigation before, during and after keyboard use.
+The GitHub sheet embeds its reviewed Kit-owned NSH presentation on Android 9+;
+Android 8, missing runtimes and page failures use native text. Only public Kit
+metadata and theme colors enter the page, with empty granted capabilities and
+no authentication or tool bridge. Native disclosure and connection controls
+remain available independently. See [Kit-owned presentation pages](../README.md#kit-owned-presentation-pages)
+for the package, build and isolation contract.
 
 ## Encrypted cloud sync
 

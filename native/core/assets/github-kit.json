@@ -1,0 +1,42 @@
+{
+  "id": "github",
+  "name": "GitHub",
+  "description": "Connect GitHub so Habibi can read your profile and recent public repositories when you ask.",
+  "permissions": [
+    "read:user"
+  ],
+  "authentication": "device_code",
+  "clientId": "",
+  "presentation": {
+    "version": 1,
+    "entry": "github-page.js",
+    "sha256": "2e6a2844a8f8860ed900b00ca28d4397a2eb9a938c9478c07a17436045a04c24",
+    "fallback": "GitHub\nYour profile and public projects, ready to talk about with Habibi.\nRead your GitHub profile and list 10 recently updated public repositories you own. No private repositories, file contents or write access."
+  },
+  "tools": [
+    {
+      "type": "function",
+      "name": "github_get_profile",
+      "description": "Read the connected GitHub account's profile. Requires the user to connect the bundled GitHub Kit. Results are shared with this conversation; credentials are never returned.",
+      "strict": true,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "type": "function",
+      "name": "github_list_repositories",
+      "description": "List up to ten recently updated public repositories owned by the connected GitHub account. Does not read private repositories or repository contents. Results are shared with this conversation; credentials are never returned.",
+      "strict": true,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    }
+  ]
+}

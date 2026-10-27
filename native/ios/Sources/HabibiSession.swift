@@ -137,6 +137,9 @@ final class HabibiSession: ObservableObject {
     var syncMutationsLocked = false
     let inferenceURL: URL?
     private let inferenceToken: String?
+    private let inferenceHTTP: (any HabibiSyncHTTP)?
+    private let github: HabibiGitHub
+    private let bundledKitCatalog: () throws -> [HabibiBundledKit]
     private var conversation: Task<Void, Never>?
     private var approval: CheckedContinuation<Bool, Never>?
     private var saveDebounce: Task<Void, Never>?
@@ -144,10 +147,16 @@ final class HabibiSession: ObservableObject {
     private var conversationRevision: UInt64 = 0
     private var savedConversationRevision: UInt64 = 0
     private var preparingTool = false
+    private var connectionMutationsLocked = false
 
-    init(store: HabibiStore = HabibiStore(), syncAccount: HabibiSyncAccount = HabibiSyncAccount()) {
+    init(store: HabibiStore = HabibiStore(), syncAccount: HabibiSyncAccount = HabibiSyncAccount(),
+         github: HabibiGitHub? = nil, bundledKits: @escaping () throws -> [HabibiBundledKit] = HabibiBundledKit.catalog,
+         inferenceURL: URL? = nil, inferenceHTTP: (any HabibiSyncHTTP)? = nil) {
         self.store = store
         self.syncAccount = syncAccount
+        self.github = github ?? HabibiGitHub()
+        self.bundledKitCatalog = bundledKits
+        self.inferenceHTTP = inferenceHTTP
         var url: URL?
         var token: String?
         #if DEBUG && targetEnvironment(simulator)
@@ -162,8 +171,16 @@ final class HabibiSession: ObservableObject {
             token = arguments[keyIndex + 1]
         }
         #endif
-        inferenceURL = url
+        self.inferenceURL = inferenceURL ?? url
         inferenceToken = token
+    }
+
+    func bundledKits() throws -> [HabibiBundledKit] { try bundledKitCatalog() }
+
+    // Only capability IDs cross into request preparation, never the connection
+    // summary (account/client ID), vault or request descriptors with credentials.
+    var agentConnections: [String] {
+        (snapshot?.connections ?? []).filter { $0.kitId == "github" && !$0.expired }.map(\.kitId)
     }
 
     func start() async {
@@ -215,17 +232,83 @@ final class HabibiSession: ObservableObject {
 
     func persist(_ operation: String, arguments: [String: Any]) async throws -> [String: Any] {
         guard !syncMutationsLocked else { throw HabibiFailure(message: "Wait for encrypted sync to finish before making changes.") }
+        guard !connectionMutationsLocked || ["connect_kit", "disconnect_kit"].contains(operation) else {
+            throw HabibiFailure(message: "Finish or cancel the GitHub connection before making changes.")
+        }
         let result = try await store.call(operation, arguments: arguments, persist: true)
         snapshot = try await store.snapshot(result)
         return result
     }
 
+    // These host operations never go through executeTool or conversation
+    // history. Hold the UI mutation gate across authentication and its commit.
+    func connectGitHub(using github: HabibiGitHub, showCode: (String, Date) -> Void) async throws {
+        guard snapshot != nil, !busy, !syncing, !chatRunning, review == nil, !preparingTool else {
+            throw HabibiFailure(message: "Finish the current save, conversation, review or sync before connecting GitHub.")
+        }
+        guard let kit = try bundledKits().first(where: { $0.id == "github" }), kit.githubConfigured else {
+            throw HabibiFailure(message: HabibiBundledKit.githubUnavailable)
+        }
+        busy = true
+        defer { connectionMutationsLocked = false; busy = false; scheduleConversationSave() }
+        await flushConversations()
+        try Task.checkCancellation()
+        guard conversationsSaved else { throw HabibiFailure(message: "Save your conversations before connecting GitHub.") }
+        connectionMutationsLocked = true
+        let connection = try await github.authorize(clientID: kit.clientId, showCode: showCode)
+        try Task.checkCancellation()
+        _ = try await persist("connect_kit", arguments: ["connection": connection.vaultValue])
+    }
+
+    func disconnectGitHub() async throws {
+        guard snapshot != nil, !busy, !syncing, !chatRunning, review == nil, !preparingTool else {
+            throw HabibiFailure(message: "Finish the current operation before disconnecting GitHub.")
+        }
+        busy = true
+        defer { connectionMutationsLocked = false; busy = false; scheduleConversationSave() }
+        await flushConversations()
+        try Task.checkCancellation()
+        guard conversationsSaved else { throw HabibiFailure(message: "Save your conversations before disconnecting GitHub.") }
+        connectionMutationsLocked = true
+        _ = try await persist("disconnect_kit", arguments: ["id": "github"])
+    }
+
+    func checkGitHub(using github: HabibiGitHub) async throws -> String {
+        guard snapshot != nil, !busy, !syncing, !chatRunning, review == nil, !preparingTool else {
+            throw HabibiFailure(message: "Finish the current operation before checking GitHub.")
+        }
+        busy = true
+        defer { busy = false }
+        let descriptor = try await store.call("connection_request", arguments: ["id": "github"])
+        return try await github.checkConnection(descriptor)
+    }
+
     func executeTool(_ name: String, arguments: [String: Any]) async throws -> Any {
         guard !syncing else { throw HabibiFailure(message: "Wait for encrypted sync to finish before using a Kit tool.") }
+        guard !busy, !connectionMutationsLocked, !preparingTool else { throw HabibiFailure(message: "Finish the current save or connection before using a Kit tool.") }
         // Saving the archive changes the vault revision. Keep it out of the
         // preparation/approval/commit interval so it cannot stale its own review.
         preparingTool = true
         defer { preparingTool = false; scheduleConversationSave() }
+        try Task.checkCancellation()
+        if name == "github_get_profile" || name == "github_list_repositories" {
+            guard arguments.isEmpty else { throw HabibiFailure(message: "GitHub tools take no arguments.") }
+            do {
+                let descriptor = try await store.call("connection_request", arguments: ["id": "github", "name": name, "arguments": arguments])
+                try Task.checkCancellation()
+                let response = try await github.fetchTool(name, descriptor: descriptor)
+                try Task.checkCancellation()
+                let sanitized = try HabibiCore.execute(["operation": "connection_result", "name": name, "response": response])
+                try Task.checkCancellation()
+                guard let result = sanitized["result"] else { throw HabibiFailure(message: "Invalid GitHub tool result.") }
+                return result
+            } catch {
+                try Task.checkCancellation()
+                // Neither core validation nor a transport failure may leak a
+                // descriptor, raw body or credentials via conversation errors.
+                throw HabibiFailure(message: "Could not read GitHub securely. Check the connection in Kits, reconnect if needed, and try again.")
+            }
+        }
         let result = try await store.call("kit_tool", arguments: ["name": name, "arguments": arguments, "today": habibiDay()])
         try Task.checkCancellation()
         if let draft = result["draft"] as? [String: Any] { self.draft = draft }
@@ -259,7 +342,7 @@ final class HabibiSession: ObservableObject {
     }
 
     private func updateConversation(persist: Bool = true, _ update: (inout HabibiConversation) -> Void) {
-        guard !syncMutationsLocked else { return }
+        guard !syncMutationsLocked, !connectionMutationsLocked else { return }
         guard let index = conversations.firstIndex(where: { $0.id == activeConversationID }) else { return }
         update(&conversations[index])
         if persist { conversationChanged() }
@@ -273,7 +356,7 @@ final class HabibiSession: ObservableObject {
 
     private func scheduleConversationSave() {
         saveDebounce?.cancel()
-        guard snapshot != nil, !conversationsSaved, !preparingTool, review == nil else { return }
+        guard snapshot != nil, !conversationsSaved, !preparingTool, !connectionMutationsLocked, review == nil else { return }
         saveDebounce = Task {
             do { try await Task.sleep(for: .milliseconds(400)) }
             catch { return }
@@ -282,7 +365,7 @@ final class HabibiSession: ObservableObject {
     }
 
     func flushConversations() async {
-        guard snapshot != nil, !preparingTool, review == nil else { return }
+        guard snapshot != nil, !preparingTool, !connectionMutationsLocked, review == nil else { return }
         if let saveWriter { await saveWriter.value; return }
         guard conversationRevision != savedConversationRevision else { return }
         // Never cancel a durable write when a newer keystroke cancels debounce.
@@ -308,6 +391,7 @@ final class HabibiSession: ObservableObject {
 
     func exportRecovery() async throws -> [String: Any] {
         guard !syncing else { throw HabibiFailure(message: "Wait for sync to finish before preparing a recovery backup.") }
+        guard !connectionMutationsLocked else { throw HabibiFailure(message: "Finish or cancel the GitHub connection before preparing a recovery backup.") }
         await flushConversations()
         guard conversationsSaved else {
             throw HabibiFailure(message: conversationSaveError ?? "Finish the Kit review and save conversations before exporting a backup.")
@@ -402,14 +486,20 @@ final class HabibiSession: ObservableObject {
                     try Task.checkCancellation()
                     let requestHistory = history
                     let today = habibiDay()
-                    let prepared = try await Task.detached { try HabibiCore.execute(["operation": "agent_request", "history": requestHistory, "today": today]) }.value
+                    let connections = agentConnections
+                    let prepared = try await Task.detached {
+                        try HabibiCore.execute(["operation": "agent_request", "history": requestHistory, "today": today, "connections": connections])
+                    }.value
                     var request = URLRequest(url: inferenceURL)
                     request.httpMethod = "POST"
                     request.timeoutInterval = 100
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("Bearer \(inferenceToken ?? "")", forHTTPHeaderField: "Authorization")
                     request.httpBody = try JSONSerialization.data(withJSONObject: prepared["body"] ?? [:])
-                    let (data, response) = try await URLSession.shared.data(for: request)
+                    let data: Data
+                    let response: URLResponse
+                    if let inferenceHTTP { (data, response) = try await inferenceHTTP.send(request, limit: 128 * 1024) }
+                    else { (data, response) = try await URLSession.shared.data(for: request) }
                     guard let response = response as? HTTPURLResponse, response.statusCode == 200,
                           response.url == inferenceURL, data.count <= 128 * 1024 else {
                         throw HabibiFailure(message: "The development inference connection failed. Your saved Kits are unchanged.")

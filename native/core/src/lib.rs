@@ -1,8 +1,10 @@
 mod agent;
 mod bridge;
 mod components;
+mod connections;
 mod conversations;
 mod crypto;
+mod kit_pages;
 mod kits;
 mod profile;
 mod runtime;
@@ -59,6 +61,31 @@ struct Backup {
 enum Command {
     Create {
         profile: Profile,
+    },
+    BundledKits,
+    KitPage {
+        id: String,
+    },
+    ConnectKit {
+        identity: Identity,
+        document: Document,
+        connection: connections::Connection,
+    },
+    DisconnectKit {
+        identity: Identity,
+        document: Document,
+        id: String,
+    },
+    ConnectionRequest {
+        identity: Identity,
+        document: Document,
+        id: String,
+        name: Option<String>,
+        arguments: Option<Value>,
+    },
+    ConnectionResult {
+        name: String,
+        response: Value,
     },
     Restore {
         identity: Identity,
@@ -167,6 +194,8 @@ enum Command {
     AgentRequest {
         history: Vec<Value>,
         today: String,
+        #[serde(default)]
+        connections: Vec<String>,
     },
     AgentResponse {
         response: Value,
@@ -185,6 +214,53 @@ fn dispatch(command: Command) -> Result<Value> {
             result["identity"] = serde_json::to_value(&identity)?;
             Ok(result)
         }
+        Command::BundledKits => Ok(connections::catalog()),
+        Command::KitPage { id } => kit_pages::page(&id),
+        Command::ConnectKit {
+            identity,
+            document,
+            connection,
+        } => {
+            connection.validate()?;
+            connection.require_current()?;
+            let mut state = State::open(&identity, &document)?;
+            state
+                .connections
+                .retain(|item| item.kit_id != connection.kit_id);
+            state.connections.push(connection);
+            state.sealed(&identity, Some(&document))
+        }
+        Command::DisconnectKit {
+            identity,
+            document,
+            id,
+        } => {
+            if id != "github" {
+                return Err(Error::invalid("Unknown bundled Kit."));
+            }
+            let mut state = State::open(&identity, &document)?;
+            state.connections.retain(|item| item.kit_id != id);
+            state.sealed(&identity, Some(&document))
+        }
+        Command::ConnectionRequest {
+            identity,
+            document,
+            id,
+            name,
+            arguments,
+        } => {
+            let state = State::open(&identity, &document)?;
+            state
+                .connections
+                .iter()
+                .find(|item| item.kit_id == id)
+                .ok_or_else(|| Error::invalid("Connect this Kit first."))?
+                .request(
+                    name.as_deref().unwrap_or("github_get_profile"),
+                    &arguments.unwrap_or(json!({})),
+                )
+        }
+        Command::ConnectionResult { name, response } => connections::tool_result(&name, response),
         Command::Restore { identity, document } => {
             Ok(json!({"state":State::open(&identity, &document)?}))
         }
@@ -355,7 +431,11 @@ fn dispatch(command: Command) -> Result<Value> {
             record_id.as_deref(),
             envelope.as_deref(),
         ),
-        Command::AgentRequest { history, today } => agent::request(history, &today),
+        Command::AgentRequest {
+            history,
+            today,
+            connections,
+        } => agent::request(history, &today, &connections),
         Command::AgentResponse { response } => agent::response(response),
         Command::ValidateComponent { component } => {
             Ok(json!({"component":components::validate(component)?}))

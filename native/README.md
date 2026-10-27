@@ -93,10 +93,11 @@ bridge token. Without the flags, Conversations is explicitly disconnected rather
 than using mock responses. Both platforms ask for cloud disclosure consent.
 
 **A local CLI is not local inference.** The harness/provider receives messages,
-requested Kit metadata/definitions and synthetic test results. Its terms,
-retention and charges apply. App tools never send profile, saved entries, real
-summaries or keys. Anything typed into chat or embedded in a definition is still
-disclosed. Do not put recovery secrets in a prompt or recording.
+requested Kit metadata/definitions, synthetic test results and authorized GitHub
+tool results. Its terms, retention and charges apply. App tools never send the
+Habibi profile, saved local Kit entries, real local summaries, credentials or keys.
+Anything typed into chat or embedded in a definition is still disclosed. Do not
+put recovery secrets in a prompt or recording.
 
 ## Kit and storage boundary
 
@@ -125,11 +126,104 @@ node native/resources/prepare_quickjs.mjs
 
 The trusted conversation loop exposes seven Kit tools: list/read/write/evaluate/
 save/update/remove, plus the native-only `present_component` display operation.
+Connecting a bundled service Kit adds its reviewed service tools to that loop.
 Evaluation receives **synthetic data**, not saved entries.
 Save/update/remove require host-owned approval, tied to the current encrypted
 document revision. Updates cannot change fields. The loop stops after eight
 provider requests per user message. Approved changes survive cancellation and
 restart; transcript persistence cannot approve or replay a Kit operation.
+
+## Bundled connection Kits
+
+Profile → Kits includes **GitHub**, the first reviewed connection Kit on iOS and
+Android. **The Kit publisher owns OAuth configuration; users only tap Connect
+and authenticate.** The reviewed manifest at `core/assets/github-kit.json`
+bundles the public `clientId`, requested permissions and agent tool schemas.
+The publisher registers a GitHub **OAuth app**, enables **device flow** and sets
+that ID before distributing a build. The checked-in ID is empty until supplied;
+unconfigured builds disable Connect, never ask end users to configure OAuth.
+No client secret belongs in the app or Habibi server. The device flow does not
+use a callback, even if GitHub requires one when registering the app.
+
+The app requests only `read:user`, shows a short-lived code and opens
+`https://github.com/login/device` in the system browser. It honors polling
+intervals/backoff, checks the authenticated account before saving, and drops
+cancelled or expired transactions. Once connected, the agent gains two tools:
+
+- `github_get_profile`: the connected account's profile.
+- `github_list_repositories`: up to ten recently updated public repositories
+  owned by that account, not private repositories or repository contents.
+
+The native host reads credentials from the encrypted vault and performs only
+the reviewed fixed-endpoint GETs. Rust projects bounded result fields before
+they reach inference and the encrypted conversation archive. **Requested tool
+results are shared with the conversation's inference provider; credentials are
+never shared.** Connecting does not automatically send the profile or other
+GitHub data. **Check connection** remains a local-only diagnostic. Disconnect
+or expiry removes the tools from subsequent inference requests, and actual
+execution independently rejects missing/expired connections. Guest JavaScript
+has no network or connection access. Slack and Google Calendar are not
+implemented yet.
+
+The resulting session is saved in the same client-encrypted vault as your Kits,
+profile and conversations, so recovery exports and manual encrypted sync include
+it. Recover **the same vault** on the second device using its encrypted backup
+and separate recovery key, then use Profile → Encrypted sync on both devices.
+Signing into a Habibi account alone does not transfer the vault key. Offline
+conflicts use the existing explicit full-snapshot choice, including connections;
+there is no silent account/session merge or automatic background sync. Older
+native clients reject snapshots containing connections instead of stripping
+credentials: update both devices before syncing.
+
+Expiring access tokens require reconnection. Refresh tokens are deliberately
+not persisted or used: two offline clients cannot safely rotate a shared refresh
+token without coordinating ownership. Provider revocation is also detected by
+the next API request. Disconnect removes the local session and propagates on
+sync, but **does not revoke GitHub access** or erase tokens from older snapshots,
+backups or offline devices. Revoke the app in GitHub Settings → Applications to
+invalidate those copies. The existing vault has no forward secrecy, and this
+prototype remains unaudited; use a disposable account while dogfooding.
+
+### Kit-owned presentation pages
+
+The GitHub detail sheet embeds the Kit's own NSH `kits/github/App.tsx` page.
+The host retains the native sheet, icon, permission/disclosure text and all
+Connect, check, disconnect and recovery controls. The catalog hides bottom
+navigation for its entire lifetime; its iOS search uses the conversation
+composer's glass surface and accessibility fallbacks.
+
+The iOS catalog uses grouped lists and system scope controls, switching to a
+menu at accessibility text sizes. Android uses tonal search, Material filter
+chips and a resizable modal sheet with an accessible drag handle and a 640 dp
+maximum width. Kit pages receive platform typography tokens; authentication
+and disclosure controls remain native.
+
+The manifest's `presentation` declares version 1, a compiled entry, SHA-256 and
+native text fallback. The host-only `kit_page` operation accepts `{id}` without
+a vault document, resolves only reviewed bundled entries and verifies their
+digest. It is not an agent tool. Repository downloads, installation and package
+signature/trust policies are not implemented.
+
+The `habibi.kit-page` bridge sends only `{kit:{id,name,description},colors,typography}`.
+It accepts only a finite height from 1 to 6000 logical points (zero is ignored
+during initial layout), not authentication, tool, navigation or install actions.
+Each page has empty granted capabilities, denied network/filesystem/process/
+clipboard/status-bar capabilities, disposable storage, 16 MB memory, 512 nodes,
+a 1-second load budget and a 250 ms call budget. A missing runtime, error or
+3-second readiness timeout shows native text without disabling host controls.
+Android 8 uses the native fallback. These limits are not a security audit.
+
+After editing the page, rebuild with the pinned NSH 0.2.0 CLI and review both
+source and generated artifacts:
+
+```sh
+NSH_BIN=/path/to/nsh kits/build.sh
+python3 kits/verify.py
+```
+
+The verifier checks source/configuration/bundle hashes and the manifest; Once
+runs it for both native builds. Re-recording hashes is a developer build step,
+not permission to load arbitrary or remote code.
 
 ## Conversations and native components
 

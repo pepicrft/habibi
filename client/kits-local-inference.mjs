@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { kitTools } from "./kits-agent.mjs";
 import { kitGenerationSchema, validateKit } from "./kits.mjs";
+import githubKit from "../native/core/assets/github-kit.json" with { type: "json" };
 
 // Native-only display protocol. The browser reference still has seven Kit tools.
 // The host validates the complete component in Rust before rendering it.
@@ -81,10 +82,18 @@ export const nativeDecisionSchema = {
   properties: { ...decisionSchema.properties, name: { type: "string", enum: ["", ...nativeKitTools.map(tool => tool.name)] } },
 };
 
+// The host advertises these only after the user connects the bundled Kit.
+// Import the reviewed schemas, never the credentials or caller-supplied tools.
+export const connectedGitHubTools = [...nativeKitTools, ...githubKit.tools];
+const connectedGitHubSchema = {
+  ...decisionSchema,
+  properties: { ...decisionSchema.properties, name: { type: "string", enum: ["", ...connectedGitHubTools.map(tool => tool.name)] } },
+};
+
 export function inferenceProtocol(requested = kitTools) {
   // Only canonical, complete protocols are accepted. Never forward caller-supplied
   // tool definitions to a harness, or turn a protocol name into a host tool.
-  for (const [tools, schema] of [[kitTools, decisionSchema], [nativeKitTools, nativeDecisionSchema]]) {
+  for (const [tools, schema] of [[kitTools, decisionSchema], [nativeKitTools, nativeDecisionSchema], [connectedGitHubTools, connectedGitHubSchema]]) {
     if (Array.isArray(requested) && requested.length === tools.length &&
         requested.every((tool, index) => tool?.name === tools[index].name)) return { tools, schema };
   }
@@ -137,6 +146,9 @@ export function kitInferenceResponse(result, conversation = true, tools = kitToo
       let arguments_;
       try { arguments_ = JSON.parse(result.arguments_json); } catch { throw new Error("Invalid tool argument JSON"); }
       if (!arguments_ || typeof arguments_ !== "object" || Array.isArray(arguments_)) throw new Error("Invalid tool argument object");
+      if (githubKit.tools.some(tool => tool.name === result.name) && Object.keys(arguments_).length) {
+        throw new Error("GitHub tools take no arguments");
+      }
       output = [{ type: "function_call", call_id: randomUUID(), name: result.name, arguments: result.arguments_json }];
     } else if (result.kind === "reply" && result.name === "" && result.arguments_json === "{}" &&
         typeof result.reply === "string" && result.reply.trim() && result.reply.length <= 16000) {

@@ -103,7 +103,7 @@ struct HabibiWorkspaceView: View {
                 Text("This prototype has not had an independent security audit. Use fictional data for now. Device compromise and malicious app updates are outside the encryption boundary.")
             }
             Section("When you ask a cloud model") {
-                Text("Your messages, requested Kit definitions and synthetic test results are shared with the selected inference provider only after approval. Saved entries and vault keys are not included by the tools. Personal information you type in a message is still disclosed.")
+                Text("Your messages, requested Kit definitions and synthetic test results are shared with the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with the conversation’s provider and saved in encrypted conversation history. Connecting or checking GitHub alone does not share account data with the provider. Saved Kit entries, vault keys and connection credentials are never included by tools. Personal information you type in a message is still disclosed.")
             }
         }.background(palette.canvas).navigationTitle("Privacy & storage").navigationBarTitleDisplayMode(.inline)
     }

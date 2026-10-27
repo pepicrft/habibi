@@ -17,6 +17,14 @@ def _validate_cards(ctx):
         create_dirs = [ctx["build_dir"]],
         toolchain_identity = python + "\x00" + host_command([python, "--version"]).strip(),
     )
+    pages = declare_output("kit-pages-verified.json")
+    run_action(
+        argv = [python, "kits/verify.py", "--output", pages],
+        inputs = glob(["kits/**/*.tsx", "kits/**/nsh.json", "kits/**/bundle.json", "kits/verify.py", "core/assets/*-kit.json", "core/assets/*-page.js"]),
+        outputs = [pages],
+        create_dirs = [ctx["build_dir"]],
+        toolchain_identity = python + "\x00" + host_command([python, "--version"]).strip(),
+    )
 
 def _nsh_apple_impl(ctx):
     _validate_cards(ctx)

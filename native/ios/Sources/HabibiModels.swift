@@ -26,6 +26,43 @@ struct HabibiSnapshot: Decodable {
     let profile: HabibiProfile
     let kits: [HabibiKit]
     let conversations: [HabibiConversation]?
+    let connections: [HabibiConnectionSummary]?
+}
+
+// Display-only projection. Credentials are deliberately not decoded into the
+// snapshot used by views, conversation history or model-facing Kit tools.
+struct HabibiConnectionSummary: Decodable {
+    let kitId: String
+    let clientId: String
+    let account: String
+    let expiresAt: Int64?
+
+    var expired: Bool { expired(at: Date()) }
+
+    func expired(at date: Date) -> Bool {
+        expiresAt.map { Double($0) <= date.timeIntervalSince1970 } ?? false
+    }
+}
+
+struct HabibiBundledKit: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let description: String
+    let permissions: [String]
+    let authentication: String
+    let clientId: String
+
+    @MainActor var githubConfigured: Bool {
+        id == "github" && permissions == ["read:user"] && authentication == "device_code"
+            && HabibiGitHub.validClientID(clientId)
+    }
+
+    static let githubUnavailable = "The publisher hasn’t configured GitHub for this build. Connect is unavailable."
+
+    static func catalog() throws -> [HabibiBundledKit] {
+        let result = try HabibiCore.execute(["operation": "bundled_kits"])
+        return try JSONDecoder().decode([Self].self, from: JSONSerialization.data(withJSONObject: result["kits"] ?? []))
+    }
 }
 
 struct HabibiKit: Decodable, Identifiable {

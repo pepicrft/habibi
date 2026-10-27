@@ -14,6 +14,8 @@ Kits can present native input cards directly inside a conversation, such as aski
 
 Simulator/debug launch flags connect to a loopback host inference bridge using authenticated Amp, Claude or Pi. The host CLI returns tool requests as data; the app validates, executes and approves them. Messages and requested definitions reach the selected provider, but tools never send saved entries or keys. Profile → Encrypted sync connects native apps through system-browser OAuth/PKCE and immutable encrypted snapshots, with explicit conflict choices. Account sign-in does not recover encryption keys. See the [build, inference and privacy instructions](native/README.md). Production inference, public sharing and migrations are not connected. The browser workbench below remains a separate reference client with different local key storage.
 
+Profile → Kits also includes a bundled **GitHub connection Kit**. Its publisher supplies the public OAuth client ID in the Kit manifest; users only connect and authenticate through GitHub’s device flow. Once connected, the agent can read the GitHub profile and recent public repositories through reviewed tools. Requested results reach the conversation’s inference provider, but credentials never do. Sessions stay in the encrypted vault and travel through the same recovery/manual-sync path to another device holding that vault’s key. Expiring tokens require reconnection; disconnect is not provider revocation. See [publisher configuration and cross-device limitations](native/README.md#bundled-connection-kits). Slack and Google Calendar are not connected yet.
+
 ## Habibi Kits: personal tools, made from a prompt
 
 Kits are named, described personal trackers: for example, a calorie journal or workout log. The **local browser reference workbench** supports conversation → draft → test → review → install → log entries, with management under **Profile → Kits**. It is not a native app, marketplace, or production sandbox.
@@ -212,6 +214,53 @@ The API is small:
 | GET | `/ready` | Database connectivity and initial sync schema; 503 until migrations complete |
 
 Every vault API operation requires `Authorization: Bearer <OAuth access token>`. Record operations additionally require `X-Habibi-Vault-Token: <sync token>`. This replaces the prototype's capability-only Authorization header. Neither credential decrypts content. There is deliberately no account-to-vault ownership mapping: another authenticated account still needs the separate vault capability. No bearer tokens in URLs. Responses have `Cache-Control: no-store`; parameter and SQL-query logging are disabled. The metadata digest is an upload identity check, not a substitute for client GCM authentication. Clients must decrypt/authenticate records before accepting them as history. The local demo reads its OAuth token from `HABIBI_ACCESS_TOKEN`; never commit it or put it on a command line.
+
+### Server-backed Kit locks
+
+Trusted Kit hosts can coordinate across devices using **PostgreSQL leases**,
+shared by every server replica. Locks require both the OAuth access token and
+`X-Habibi-Vault-Token`. Keep one stable random lock UUID per shared resource in
+encrypted state; do not send provider names or credentials as lock identifiers.
+Each acquisition uses a fresh random 32-byte base64url owner token; the server
+stores only its hash. Lock ownership tokens are not provider refresh tokens.
+
+| Method | Vault-relative route | JSON body |
+| --- | --- | --- |
+| PUT | `/locks/:id` | `{ "token": "<owner token>" }` |
+| POST | `/locks/:id/renew` | `{ "token": "<owner token>", "generation": 1 }` |
+| DELETE | `/locks/:id` | `{ "token": "<owner token>", "generation": 1 }` |
+
+Acquire/renew return `{id,generation,expires_at,lease_seconds:30,cursor}`.
+Contention returns **423** with `Retry-After: 1..5`; clients wait, then acquire
+and sync through the returned cursor before reading credentials. Renew before
+expiry during long operations. Expiry uses the database clock. Renew/release
+require the current owner and generation, preventing an old client from
+releasing its successor's lock. Acquire retries with the same active owner are
+idempotent but do not extend expiry. Each vault supports 32 distinct lock IDs,
+including released generation tombstones; reuse stable IDs.
+
+[`acquireKitLock`](client/kit-locks.mjs) is the reference **trusted-host** API.
+Supply `{vaultId,lockId,request,signal}`, where `request(path,init)` binds a fixed
+Habibi origin and adds both authorization headers. It waits on contention
+(cancellable, two-minute default), then returns `cursor`, `generation`,
+`expiresAt`, `renew()`, `release()` and `headers()`. It does not auto-renew or
+auto-release; release only after the replacement ciphertext is durably uploaded.
+Attach its three `X-Habibi-Lock-*` headers to the record PUT to reject stale
+publication inside the same database transaction. An identical immutable record
+retry still succeeds after expiry because it publishes nothing new. Unfenced
+record APIs retain their existing behavior. This API is not exposed to guest
+JavaScript or model tools.
+
+**A lease alone does not make token rotation crash-safe.** A paused old client
+can still contact a third party, and a lost refresh response can lose its new
+token. A refresh implementation must publish an encrypted in-progress marker
+before the provider call, re-read state after waiting, fence the replacement
+upload, and require recovery/reconnection on an ambiguous outcome. Generic
+locking does not provide provider-side exactly-once execution. The native
+GitHub Kit currently requires reconnection on expiry; automatic refresh and
+its durable recovery protocol are not wired yet. The server never receives or
+refreshes provider credentials. The additive lock migration must be applied
+before deploying the new server; no shared database was migrated here.
 
 ## Native app authentication
 
