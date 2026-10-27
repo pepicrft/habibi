@@ -30,12 +30,25 @@ if [[ ${1:-} == --coding ]]; then
     echo "Coding runtime prepared; run guest/coding_smoke.py with a booted simulator"
     exit 0
 fi
-python3 "$experiment/guest/prepare.py"
-[[ -f "$scratch/bridge.json" ]] || { echo "Start bridge.mjs before building the app" >&2; exit 1; }
-app="$scratch/HabibiLab.app"
+flags=()
+if [[ ${1:-} == --coding-app ]]; then
+    python3 "$experiment/guest/prepare.py" --coding
+    pack="$scratch/coding-pack"
+    bridge="$root/.amp/in/tinyarm-coding/bridge.json"
+    app="$scratch/HabibiCodingLab.app"
+    bundle=fyi.habibi.tinyarmcoding
+    flags=(-D CODING_LAB)
+else
+    python3 "$experiment/guest/prepare.py"
+    pack="$scratch/pack"
+    bridge="$scratch/bridge.json"
+    app="$scratch/HabibiLab.app"
+    bundle=fyi.habibi.tinyarmlab
+fi
+[[ -f "$bridge" ]] || { echo "Start bridge.mjs (with --coding for --coding-app) before building the app" >&2; exit 1; }
 mkdir -p "$app/pack"
-cp "$scratch/pack/"* "$app/pack/"
-cp "$scratch/bridge.json" "$app/bridge.json"
+cp "$pack/"* "$app/pack/"
+cp "$bridge" "$app/bridge.json"
 cat > "$app/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,8 +67,9 @@ cat > "$app/Info.plist" <<'PLIST'
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 PLIST
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bundle" "$app/Info.plist"
 xcrun derq query -f xml -i "$experiment/Simulator.entitlements" -o "$scratch/entitlements.der" --raw
-xcrun swiftc -swift-version 5 -parse-as-library -Onone -g \
+xcrun swiftc ${flags[@]+"${flags[@]}"} -swift-version 5 -parse-as-library -Onone -g \
     -target arm64-apple-ios17.0-simulator -sdk "$sdk" \
     -Xclang-linker "-isysroot$sdk" \
     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker "$experiment/Simulator.entitlements" \

@@ -208,8 +208,12 @@ private enum Palette {
 }
 
 @main struct HabibiLab: App {
+    #if CODING_LAB
+    var body: some Scene { WindowGroup { CodingView() } }
+    #else
     @StateObject private var model = LabModel()
     var body: some Scene { WindowGroup { LabView(model: model).preferredColorScheme(.light) } }
+    #endif
 }
 
 private struct LabView: View {

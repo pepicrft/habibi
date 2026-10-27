@@ -9,8 +9,9 @@ source through the simulator app's JSON `exec` interface.
 There is also a separate [coding-agent pack](guest/README.md#coding-agent-pack)
 with Node, Ruby, Elixir and mise, a guest-resident checkpointed Node harness,
 host-brokered read-only Git access, byte/inode quotas, and optional request/body
-and file-syscall recordings. Its driver and policy broker run on the Mac, using
-the iOS simulator library. They are **not integrated into the Swift app**.
+and file-syscall recordings. Its command-line driver and policy broker run on
+the Mac, using the iOS simulator library. A separate simulator coding app below
+runs the driver and a narrower, fixed-repository Git broker inside the app.
 Inference remains outside the VM; the model returns commands as data.
 
 ## Run locally
@@ -36,6 +37,41 @@ Enable the disclosure toggle and request a workout tracker. Review committed
 source before installing, enter sets using native controls, then run the Python
 summary. This narrow prototype supports one installed Kit. It is not wired into
 the production vault, sync, onboarding, extension registry or model harness.
+
+### On-device repository coding demo
+
+Start `node native/experiments/tinyarm/bridge.mjs --coding` in another terminal,
+then build and install the separate app (the default Kit app is unchanged):
+
+```sh
+bash native/experiments/tinyarm/build-simulator.sh --coding-app
+xcrun simctl install <simulator-id> .amp/in/tinyarm-sim/HabibiCodingLab.app
+xcrun simctl launch <simulator-id> fyi.habibi.tinyarmcoding
+```
+
+Approve the source disclosure and tap **Pull project & work on it**. The app
+boots the coding pack, shallow sparse-clones public `tuist/tuist`, runs the
+standalone bin-packer ExUnit file, asks the remote model to add one negative-total
+test through the guest Node harness, then independently reruns ExUnit and checks
+that only the requested test changed and every original line remains. This is
+**not the full Mix/server suite**, local model inference, or production Habibi.
+There is no commit or push. The guest workspace is discarded on completion.
+
+The app's URLSession broker permits only that repository's two read-only Git
+upload-pack endpoints. It rejects other destinations, push and redirects; it
+does not grant arbitrary package downloads or automatic mise installation.
+It uses platform HTTPS validation, 64 attempts, 64 KiB requests, 8 MiB responses
+and a 16 MiB session budget. Source/tool output goes to the remote model through
+the Mac development inference bridge on loopback 8085; no guest command executes
+on the Mac. This bridge is still required and is not a physical-device setup.
+
+Actual command results, before/after counts and recorded Git request/response
+bodies with SHA256s are saved under the app's Documents directory in a unique
+`coding-<UUID>` directory. These logs contain public source. To automate a
+simulator recording, launch with `--run-coding-demo`; this is an explicit opt-in
+that bypasses the disclosure toggle/button and starts the same real workflow.
+Use `xcrun simctl io <simulator-id> recordVideo --codec=h264 <output.mp4>` and
+send that recorder SIGINT to finalize the video.
 
 The development bridge listens on runner loopback port 8084, with a random local
 bearer token embedded only in this simulator build. Restarting the bridge
@@ -76,7 +112,8 @@ The pinned TinyARM source is `bac69aa0253b10fce6a93b3d2eccf134911ed231`.
 `tinyarm-no-host-fs.patch` removes **all three** 9p devices and corrects the device
 tree count; stock native TinyARM exports the actual host root. Both packs have no
 drives, NICs or snapshots. The coding pack has a loopback-only HTTP adapter whose
-external requests require the Mac policy broker. A separate copy of Zig's stdlib
+external requests require a host policy broker (the Mac driver or the separate
+coding app's fixed-repository broker). A separate copy of Zig's stdlib
 gets the small iOS process-replacement availability fix; the installed toolchain
 is unchanged.
 

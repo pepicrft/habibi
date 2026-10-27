@@ -12,6 +12,8 @@ final class NativeMachine: @unchecked Sendable {
     private let lock = NSLock()
     private let outputQueue = DispatchQueue(label: "habibi.lab.console")
     private var output = Data()
+    private var networkOutput = Data()
+    private var network: (([String: Any]) async -> [String: Any])?
     private var ready: CheckedContinuation<[String: Any], Error>?
     private var pending: (String, CheckedContinuation<[String: Any], Error>)?
     private var running = false
@@ -19,7 +21,8 @@ final class NativeMachine: @unchecked Sendable {
     private var generation = UUID()
     private var finished: CheckedContinuation<Void, Never>?
 
-    func start() async throws -> [String: Any] {
+    func start(bootTimeout: TimeInterval = 120,
+               network: (([String: Any]) async -> [String: Any])? = nil) async throws -> [String: Any] {
         try await withCheckedThrowingContinuation { continuation in
             lock.lock()
             guard !running else {
@@ -33,14 +36,24 @@ final class NativeMachine: @unchecked Sendable {
             stopping = false
             ready = continuation
             lock.unlock()
-            outputQueue.sync { output.removeAll(keepingCapacity: true) }
+            outputQueue.sync {
+                output.removeAll(keepingCapacity: true)
+                networkOutput.removeAll(keepingCapacity: true)
+                self.network = network
+            }
             let worker = Thread { [self] in
                 let context = Unmanaged.passUnretained(self).toOpaque()
                 tinyarm_set_console_output({ context, channel, bytes, length in
-                    guard channel == 1, let context, let bytes, length > 0 else { return }
+                    guard channel == 1 || channel == 2, let context, let bytes, length > 0 else { return }
                     let machine = Unmanaged<NativeMachine>.fromOpaque(context).takeUnretainedValue()
                     let data = Data(bytes: bytes, count: length)
-                    machine.outputQueue.async { machine.receive(data) }
+                    machine.lock.lock()
+                    let run = machine.generation
+                    machine.lock.unlock()
+                    machine.outputQueue.async {
+                        if channel == 2 { machine.receiveNetwork(data, run: run) }
+                        else { machine.receive(data) }
+                    }
                 }, context)
                 guard let config = Bundle.main.url(forResource: "config", withExtension: nil, subdirectory: "pack") else {
                     end(status: 1, message: "The offline Linux pack is missing.")
@@ -66,12 +79,12 @@ final class NativeMachine: @unchecked Sendable {
             worker.qualityOfService = .userInitiated
             worker.name = "Habibi Linux"
             worker.start()
-            DispatchQueue.global().asyncAfter(deadline: .now() + 120) { [weak self] in
+            DispatchQueue.global().asyncAfter(deadline: .now() + bootTimeout) { [weak self] in
                 guard let self else { return }
                 lock.lock()
                 let overdue = generation == run && ready != nil
                 lock.unlock()
-                if overdue { fail("Linux did not become ready within two minutes.") }
+                if overdue { fail("Linux did not become ready within \(Int(bootTimeout)) seconds.") }
             }
         }
     }
@@ -135,6 +148,49 @@ final class NativeMachine: @unchecked Sendable {
     }
 
     func interrupt() { fail("Cancelled. The Linux workspace will be discarded.") }
+
+    private func receiveNetwork(_ data: Data, run: UUID) {
+        lock.lock()
+        let active = running && !stopping && generation == run
+        lock.unlock()
+        guard active else { return }
+        networkOutput.append(data)
+        guard networkOutput.count <= 128 * 1024 else {
+            networkOutput.removeAll()
+            fail("The guest exceeded its network request budget.")
+            return
+        }
+        while let newline = networkOutput.firstIndex(of: 10) {
+            let line = Data(networkOutput.prefix(upTo: newline))
+            networkOutput.removeSubrange(...newline)
+            guard let request = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  request["event"] as? String == "network" else { continue }
+            let handler = network
+            Task { [self] in
+                let result = await handler?(request) ?? ["ok": false, "error": "Network access was not granted."]
+                guard var bytes = try? JSONSerialization.data(withJSONObject: result),
+                      bytes.count <= 12 * 1024 * 1024 else { fail("Invalid broker response."); return }
+                bytes.append(10)
+                // The emulator's bounded input ring may accept only part of a
+                // Git pack. Feed it off the callback/main queues, checking the
+                // generation so a cancelled request cannot enter a fresh VM.
+                DispatchQueue.global().async { [self] in
+                    var offset = 0
+                    while offset < bytes.count {
+                        lock.lock()
+                        let active = running && !stopping && generation == run
+                        lock.unlock()
+                        guard active else { return }
+                        let sent = bytes.withUnsafeBytes { pointer in
+                            tinyarm_console_input(2, pointer.baseAddress!.assumingMemoryBound(to: UInt8.self).advanced(by: offset), bytes.count - offset)
+                        }
+                        offset += sent
+                        if sent == 0 { Thread.sleep(forTimeInterval: 0.005) }
+                    }
+                }
+            }
+        }
+    }
 
     private func receive(_ data: Data) {
         output.append(data)
