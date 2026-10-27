@@ -59,6 +59,7 @@ struct HabibiConversationView: View {
     @State private var jumping = false
     @State private var consent = false
     @State private var details = false
+    @State private var choosingCostume = false
     @State private var startingVoice: Task<Void, Never>?
     @State private var evidence: HabibiComponent?
     @Environment(\.scenePhase) private var scenePhase
@@ -146,8 +147,40 @@ struct HabibiConversationView: View {
         .navigationTitle("Habibi").navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Conversation details", systemImage: "info.circle") { details = true }
+            ToolbarItem(placement: .principal) {
+                Menu {
+                    if session.showsModelPicker {
+                        Menu {
+                            Picker("Model", selection: Binding(get: { session.modelOverride ?? "" }, set: { session.setConversationModel($0.isEmpty ? nil : $0) })) {
+                                Text("Use default · \(session.modelName(session.defaultModel))").tag("")
+                                if let model = session.modelOverride, !session.models.contains(where: { $0.id == model }) {
+                                    Text(session.modelName(model)).tag(model)
+                                }
+                                ForEach(session.models) { model in
+                                    Text(model.name).tag(model.id)
+                                        .disabled(model.id == HabibiFoundationModels.id && session.onDeviceUnavailableReason != nil)
+                                }
+                            }
+                        } label: {
+                            Label("Model · \(session.modelName(session.conversationModel))", systemImage: "cpu")
+                        }.disabled(!session.canChangeModel)
+                    }
+                    Button("Conversation details", systemImage: "info.circle") { details = true }
+                } label: {
+                    VStack(spacing: 2) {
+                        HStack(spacing: 5) {
+                            Text("Habibi").font(.headline)
+                            Image(systemName: "chevron.down").font(.caption2)
+                        }
+                        Text(session.showsModelPicker ? session.modelName(session.conversationModel) : session.inferenceName)
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }.frame(minHeight: 44)
+                }
+                .foregroundStyle(palette.ink)
+                .accessibilityLabel("Conversation options")
+                .accessibilityValue("\(session.modelName(session.conversationModel)), \(session.modelOverride == nil ? "using default" : "this conversation only")")
+                .accessibilityHint("Choose a model or view conversation details")
+                .accessibilityIdentifier("habibi.model.conversation")
             }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -156,14 +189,44 @@ struct HabibiConversationView: View {
                 }.accessibilityIdentifier("habibi.keyboard.done")
             }
         }
+        .sheet(isPresented: $choosingCostume) {
+            NavigationStack {
+                List {
+                    Section {
+                        Button("Just Habibi · No costume") { session.setConversationCostume(nil); choosingCostume = false }
+                            .accessibilityIdentifier("habibi.costumes.take-off")
+                        ForEach(session.wardrobe) { costume in
+                            Button {
+                                session.setConversationCostume(costume.definition); choosingCostume = false
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(costume.definition.name)
+                                    Text(costume.definition.description).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }.disabled(!session.canChangeCostume)
+                    Section {
+                        NavigationLink("Open wardrobe") { HabibiCostumesView(session: session) }
+                        Text("Applies to future replies in this conversation. Costumes change the approach, not permissions. The selected name and instructions go to your chosen model when you send a message.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("Wear a costume").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { choosingCostume = false } } }
+            }
+        }
         .sheet(isPresented: $details) {
             NavigationStack {
                 List {
-                    Label("What the inference provider receives", systemImage: "lock")
-                    Text("Messages, requested Kit definitions and synthetic tests go to the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with that provider. Saved Kit entries, vault keys and connection credentials are never included by tools.")
+                    Label(session.usesOnDeviceModel ? "On-device inference" : "What the inference provider receives", systemImage: "lock")
+                    Text(session.usesOnDeviceModel
+                         ? "Apple’s model processes messages and requested tool results on this device. No inference requests go to OpenAI or Habibi’s server. Connected service tools still contact their service when you ask to use them."
+                         : "Messages, requested Kit definitions and synthetic tests go to the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with that provider. Saved Kit entries, vault keys and connection credentials are never included by tools.")
                     Text("Dictation runs on this device. Audio is never uploaded, and transcription never sends a message automatically.")
-                    Text("Messages, tool results, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation shares its text context with the provider after approval; tools and pending approvals are never replayed.")
-                    LabeledContent("Inference", value: session.inferenceURL == nil ? "Not connected" : "Development host proxy")
+                    Text("The selected costume’s name and instructions also go to your chosen model. The rest of your wardrobe is not included.")
+                    Text("Messages, tool results, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation uses its text context with the selected model; tools and pending approvals are never replayed. Cloud inference requires approval.")
+                    LabeledContent("Inference", value: session.inferenceName)
                 }
                 .navigationTitle("Conversation details").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { details = false } } }
@@ -181,14 +244,16 @@ struct HabibiConversationView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { evidence = nil } } }
             }
         }
-        .alert("Use host inference?", isPresented: $consent) {
+        .alert(session.chatGPTConnected ? "Use your ChatGPT plan?" : "Use host inference?", isPresented: $consent) {
             Button("Allow for this session") { session.cloudConsent = true; send() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The development proxy uses the host’s configured harness and inference provider. Messages, requested Kit definitions and synthetic tests are sent. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are shared with that provider and saved in encrypted conversation history. Saved Kit entries, vault keys and connection credentials are never included by tools. Host/provider retention, terms and charges apply.")
+            Text("\(session.chatGPTConnected ? "Habibi sends requests directly to OpenAI using your ChatGPT plan." : "The development proxy uses the host’s configured harness and inference provider.") Messages, the selected costume’s name and instructions, requested Kit definitions and synthetic tests are sent. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are shared with that provider and saved in encrypted conversation history. Saved Kit entries, vault keys and connection credentials are never included by tools. Provider retention, terms and usage limits apply.")
         }
         .onDisappear { cancelVoice(); Task { await session.flushConversations() } }
+        .onChange(of: session.activeConversationID) { _, _ in choosingCostume = false }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { session.refreshOnDeviceAvailability() }
             if phase == .background || (phase == .inactive && voice.phase != .requesting) { cancelVoice() }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in cancelVoice() }
@@ -198,8 +263,8 @@ struct HabibiConversationView: View {
         VStack(alignment: .leading, spacing: 20) {
             HabibiHeartling().frame(width: 144, height: 144)
             Text("What’s on your mind?").font(.title2.weight(.semibold))
-            Text("A little tool, a new rhythm, or an idea you want to explore. Let’s make it yours.").foregroundStyle(.secondary)
-            ForEach(["Help me build a workout tracker.", "Make a gentle daily energy journal.", "I have an idea for my own Kit."], id: \.self) { prompt in
+            Text(session.costume?.description ?? "A little tool, a new rhythm, or an idea you want to explore. Let’s make it yours.").foregroundStyle(.secondary)
+            ForEach(session.costume.map { [$0.examplePrompt] } ?? ["Help me build a workout tracker.", "Make a gentle daily energy journal.", "I have an idea for my own Kit."], id: \.self) { prompt in
                 Button {
                     session.composer += (session.composer.isEmpty ? "" : "\n\n") + prompt
                 } label: {
@@ -208,8 +273,10 @@ struct HabibiConversationView: View {
                         .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 16))
                 }.buttonStyle(.plain)
             }
-            if session.inferenceURL == nil {
-                Label("Inference is not connected", systemImage: "network.slash").font(.footnote).foregroundStyle(.secondary)
+            if !session.inferenceConnected {
+                Label(session.usesOnDeviceModel ? session.onDeviceUnavailableReason ?? "On-device model unavailable" : "Inference is not connected", systemImage: "network.slash")
+                    .font(.footnote).foregroundStyle(.secondary)
+                NavigationLink("AI settings") { HabibiChatGPTView(session: session) }
             }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 24)
     }
@@ -255,6 +322,12 @@ struct HabibiConversationView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
+            Button { choosingCostume = true } label: {
+                Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a costume", systemImage: "tshirt")
+                    .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 10)
+                    .background(palette.surface, in: Capsule())
+            }.buttonStyle(.plain).disabled(!session.canChangeCostume)
+                .accessibilityIdentifier("habibi.costume.conversation")
             HabibiConversationSaveStatus(session: session)
                 .frame(maxWidth: .infinity, alignment: .leading).background(palette.canvas)
             Text(session.draftSyncMessage).font(.caption).foregroundStyle(.secondary)
@@ -268,16 +341,19 @@ struct HabibiConversationView: View {
                 .accessibilityHint("Switch drafts without sending. Both versions stay saved.")
                 .accessibilityIdentifier("habibi.drafts.versions")
             }
+            if session.usesOnDeviceModel, let reason = session.onDeviceUnavailableReason {
+                Text(reason).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.model.unavailable")
+            }
             if let error = voice.errorMessage { Text(error).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.voice.error") }
             if session.composer.count > 4000 { Text("Keep your message under 4,000 characters.").font(.caption).foregroundStyle(.red) }
-            HabibiComposer(draft: $session.composer, connected: session.inferenceURL != nil, running: session.chatRunning,
+            HabibiComposer(draft: $session.composer, connected: session.inferenceConnected && !session.connectingChatGPT, running: session.chatRunning,
                            phase: voice.phase, levels: voice.levels, start: {
                 startingVoice = Task { await voice.start() }
             }, stop: {
                 startingVoice?.cancel()
                 voice.finish { session.composer = HabibiVoiceInput.appending($0, to: session.composer) }
             }, cancel: cancelVoice, send: {
-                if session.cloudConsent { send() } else { consent = true }
+                if !session.requiresCloudConsent || session.cloudConsent { send() } else { consent = true }
             }, stopReply: session.stop)
         }
         .frame(maxWidth: 688).padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10).frame(maxWidth: .infinity)

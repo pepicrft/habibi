@@ -53,6 +53,95 @@ generated Android layers and iOS primary/preview/alternate PNGs. Android artwork
 the central 66dp adaptive-icon safe zone and includes Android 13+ monochrome
 layers. Neither platform bakes rounded corners into the master.
 
+## Costumes
+
+**Profile → Costumes** opens Habibi's local wardrobe. Coach, Socratic Tutor and
+Gentle Planner are bundled starting points. **Try on** opens a separate saved
+conversation with an editable example; it neither installs the costume nor sends
+a message. **Add to wardrobe** opens an explicit, editable review. **Wear** starts
+a new conversation. The costume control above the composer switches future
+replies in that conversation or returns to **Just Habibi**. New ordinary
+conversations have no costume, and selection is disabled during an active turn.
+
+Costumes are portable JSON definitions with `apiVersion:1`, `name`, `description`,
+`author`, `instructions` and `examplePrompt`. Make one in the native editor, or
+import a file (32 KiB maximum) and review it before adding. Exports contain only
+the definition, never conversations, entries or credentials. Any personal text
+you put in the definition is still exported; author names are self-declared,
+not verified. A wardrobe holds up to 24 costumes. Editing/removing a costume
+does not rewrite existing conversations: each keeps its selected definition.
+The wardrobe and those copies are encrypted in the vault, recovery and sync.
+
+Only the selected name and instructions join the model request, alongside the
+conversation's normal context and tool results. The example is sent only if you
+send it as a message. Other costumes and author metadata are not sent. Costumes
+change conversational guidance, not tools, data access, approval requirements or
+professional qualifications. The native host still enforces those boundaries;
+prompt text is not a security boundary. There is no executable costume code,
+public catalogue, automatic update, model-generated creation flow or costume
+artwork in this first version.
+
+## Connect ChatGPT
+
+Onboarding offers **Connect with ChatGPT**, with **Skip for now** for local-only
+use. Existing users can connect or disconnect in **Profile → AI provider**.
+Copy the displayed device code, open OpenAI's sign-in page, approve there, and
+return to Habibi. Device-code login may need enabling in ChatGPT security
+settings or workspace permissions. Connecting does not send a prompt or create
+a Habibi sync account; the first conversation still asks for disclosure consent.
+
+This experimental integration follows Pi's **legacy `openai-codex` provider** at
+[`b3a29f1`](https://github.com/earendil-works/pi/blob/b3a29f1111114fac696e2cfcd65acdb382a6ed5e/packages/ai/src/auth/oauth/openai-codex.ts):
+public client ID `app_EMoamEEZ73f0CkXaXp7hrann`, OpenAI device authorization and
+PKCE code exchange, and direct HTTPS SSE inference at
+`https://chatgpt.com/backend-api/codex/responses`. Profile → AI provider sets the
+default model, initially `gpt-6.1-sol`. The iOS conversation title menu and Android
+toolbar options override it for that conversation; **Use default** resumes following
+the Profile choice. New conversations inherit the default. Both preferences are
+encrypted with the vault and included in recovery and sync. A running turn keeps
+one model through tool calls and approvals. The shared Rust catalog follows Pi's
+legacy provider, not account-specific entitlements; all use medium reasoning.
+Onboarding does not ask for a model. Plan eligibility and model availability
+apply; no ordinary OpenAI API billing or unrestricted ChatGPT access is implied.
+Partial or failed streams cannot execute tools or become successful replies.
+Habibi's existing local tool validation and mutation approval remain in force.
+
+Credentials live only in a device-only Keychain item on iOS or a separate
+Keystore-encrypted record on Android, **not** in vault snapshots, recovery
+backups, model prompts or Habibi's server. Each device connects separately and
+serializes its own refreshes. A durable marker precedes refresh; an ambiguous
+rotation or failed replacement write requires reconnection instead of replaying
+the old refresh token. Disconnect deletes local credentials without deleting the
+vault or revoking other ChatGPT sessions. Manage usage in ChatGPT settings.
+
+Pi now prefers the newer [Sign in with ChatGPT OSS registration flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in),
+which issues an app-specific client ID and uses the public Responses API. Its
+documented return path is HTTP loopback, not a native app link. Neither Pi's
+public legacy client ID nor mocked tests establish OpenAI approval for Habibi,
+production mobile support, account-specific model access, or App Store policy
+compliance. Validate a real account and obtain the appropriate provider approval
+before distributing this experimental connection.
+
+## Apple on-device inference
+
+On iOS 26+, **Profile → AI provider → Default model** and the conversation title
+menu include **Apple · On device**. It uses Foundation Models' on-device
+`SystemLanguageModel`, without an account, API key or cloud disclosure prompt.
+Apple Intelligence must be supported, enabled and have its model ready. The UI
+shows the actual availability reason and retains saved preferences if unavailable.
+An Apple preference synced to Android is preserved but cannot run there; choose
+a ChatGPT override explicitly. Nothing silently falls back to a cloud provider.
+
+The smaller model is best for short conversations, not complex Kit code generation.
+Each step selects an operation before receiving that operation's argument schema,
+instead of placing every schema in its 4K-token context window. Arguments still
+pass through Rust validation and native mutation approval. Context overflow,
+refusal, cancellation and generation failures produce no executable partial output.
+Requests contain only the same bounded conversation and tool context as other
+providers. Connected service tools still contact their service when requested;
+encrypted sync and recovery retain the transcript as before. Switching from
+on-device inference to cloud inference requires disclosure approval again.
+
 ## Use host inference in the simulator
 
 From the repository root, start one opt-in development bridge with an already
@@ -103,8 +192,12 @@ adb shell am start -n fyi.habibi.app/.MainActivity \
 
 Android immediately removes the extras from the activity intent. Release builds
 ignore them and disallow cleartext networking. Neither platform persists the
-bridge token. Without the flags, Conversations is explicitly disconnected rather
-than using mock responses. Both platforms ask for cloud disclosure consent.
+bridge token. Without the flags, a connected ChatGPT account or an available
+selected Apple model, Conversations is explicitly disconnected rather than using
+mock responses. Both platforms ask for cloud disclosure consent. An explicitly
+selected Apple model takes precedence over cloud and development inference;
+otherwise a connected ChatGPT account takes precedence over a development bridge.
+Provider failures never silently fall back to another provider.
 
 **A local CLI is not local inference.** The harness/provider receives messages,
 requested Kit metadata/definitions, synthetic test results and authorized GitHub
@@ -352,7 +445,8 @@ Habibi's Phoenix server remains marketing pages, OAuth routes and client APIs.
 It does not run component renderers or receive decryption keys. Local-stack E2E
 uses the local Phoenix service; the explicit developer inference bridge is a
 separate loopback-only process, not a new server dashboard or production relay.
-Production inference remains unconnected.
+ChatGPT inference connects directly from the native device; no production relay
+or production mobile-provider approval has been configured.
 
 ## Encrypted sync
 
@@ -447,8 +541,8 @@ AES-GCM and checks durable writes before publishing state. The size limits are
 closed. Recovery needs both the exported encrypted backup and a separate recovery
 key. Backups are not rollback proofs, and Habibi cannot reset encryption.
 
-Production inference, public distribution, signed updates and schema migration
-execution are **not connected**. A future migration
+Public distribution, production provider approval, signed updates and schema
+migration execution are **not connected**. A future migration
 must run locally over a copy, validate its result, show a preview, obtain approval
 and atomically replace encrypted state with a recoverable backup. Neither guest
 code nor a server migration should receive the vault key. No App Store naming or

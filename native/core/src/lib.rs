@@ -1,8 +1,10 @@
 mod agent;
 mod bridge;
+mod chatgpt;
 mod components;
 mod connections;
 mod conversations;
+mod costumes;
 mod crypto;
 mod drafts;
 mod kit_pages;
@@ -62,6 +64,21 @@ struct Backup {
 enum Command {
     Create {
         profile: Profile,
+    },
+    BundledCostumes,
+    ValidateCostume {
+        definition: costumes::Definition,
+    },
+    SaveCostume {
+        identity: Identity,
+        document: Document,
+        id: Option<String>,
+        definition: costumes::Definition,
+    },
+    RemoveCostume {
+        identity: Identity,
+        document: Document,
+        id: String,
     },
     BundledKits,
     KitPage {
@@ -208,9 +225,20 @@ enum Command {
         connections: Vec<String>,
         #[serde(default, rename = "reactionTargets")]
         reaction_targets: Vec<agent::ReactionTarget>,
+        #[serde(default)]
+        costume: Option<costumes::Definition>,
     },
     AgentResponse {
         response: Value,
+    },
+    ChatgptModels,
+    ChatgptRequest {
+        body: Value,
+        #[serde(default)]
+        model: Option<String>,
+    },
+    ChatgptResponse {
+        stream: String,
     },
     ValidateComponent {
         component: Value,
@@ -225,6 +253,47 @@ fn dispatch(command: Command) -> Result<Value> {
             let mut result = state.sealed(&identity, None)?;
             result["identity"] = serde_json::to_value(&identity)?;
             Ok(result)
+        }
+        Command::BundledCostumes => Ok(json!({"costumes": costumes::catalog()})),
+        Command::ValidateCostume { mut definition } => {
+            definition.validate()?;
+            Ok(json!({"definition": definition}))
+        }
+        Command::SaveCostume {
+            identity,
+            document,
+            id,
+            mut definition,
+        } => {
+            definition.validate()?;
+            let mut state = State::open(&identity, &document)?;
+            if let Some(id) = id {
+                let costume = state
+                    .costumes
+                    .iter_mut()
+                    .find(|item| item.id == id)
+                    .ok_or_else(|| Error::invalid("Costume not found."))?;
+                costume.definition = definition;
+            } else {
+                state.costumes.push(costumes::Costume {
+                    id: crypto::id()?,
+                    definition,
+                });
+            }
+            costumes::validate(&mut state.costumes)?;
+            state.sealed(&identity, Some(&document))
+        }
+        Command::RemoveCostume {
+            identity,
+            document,
+            id,
+        } => {
+            let mut state = State::open(&identity, &document)?;
+            if !state.costumes.iter().any(|item| item.id == id) {
+                return Err(Error::invalid("Costume not found."));
+            }
+            state.costumes.retain(|item| item.id != id);
+            state.sealed(&identity, Some(&document))
         }
         Command::BundledKits => Ok(connections::catalog()),
         Command::KitPage { id } => kit_pages::page(&id),
@@ -476,8 +545,12 @@ fn dispatch(command: Command) -> Result<Value> {
             today,
             connections,
             reaction_targets,
-        } => agent::request(history, &today, &connections, reaction_targets),
+            costume,
+        } => agent::request(history, &today, &connections, reaction_targets, costume),
         Command::AgentResponse { response } => agent::response(response),
+        Command::ChatgptModels => Ok(chatgpt::models()),
+        Command::ChatgptRequest { body, model } => chatgpt::request(body, model.as_deref()),
+        Command::ChatgptResponse { stream } => chatgpt::response(&stream),
         Command::ValidateComponent { component } => {
             Ok(json!({"component":components::validate(component)?}))
         }
@@ -684,6 +757,66 @@ mod tests {
             {"id":"326c2270-a709-46a4-a3b5-5fecb59a7cc6","createdAt":"2026-10-26T13:01:04Z","kind":"assistant","text":"Tuesday: 25 minutes",
              "component":{"type":"result_table","version":1,"data":{"title":"Walking plan","columns":["Day","Minutes"],"rows":[["Tuesday","25"]]},"actions":[{"id":"show_source","label":"View data"}],"fallback":"Tuesday: 25 minutes"}}
         ]}])
+    }
+
+    #[test]
+    fn model_preferences_are_optional_encrypted_recoverable_and_validated() {
+        let profile = json!({"name":"Noor","goals":["health"],"style":"warm"});
+        let created = call(json!({"operation":"create","profile":profile}));
+        let identity = &created["ok"]["identity"];
+        assert!(
+            created["ok"]["state"]["profile"]
+                .get("defaultModel")
+                .is_none()
+        );
+        let mut selected = profile.clone();
+        selected["defaultModel"] = json!("gpt-6.1-terra");
+        let saved = call(json!({"operation":"profile","identity":identity,
+            "document":created["ok"]["document"],"profile":selected}));
+        assert_eq!(
+            saved["ok"]["state"]["profile"]["defaultModel"],
+            "gpt-6.1-terra"
+        );
+        let mut chats = transcript();
+        chats[0]["modelOverride"] = json!("gpt-6-luna");
+        let saved = call(json!({"operation":"save_conversations","identity":identity,
+            "document":saved["ok"]["document"],"conversations":chats}));
+        let document = &saved["ok"]["document"];
+        assert!(!document.to_string().contains("gpt-6"));
+        let restored = call(json!({"operation":"restore","identity":identity,"document":document}));
+        assert_eq!(restored["ok"]["state"]["conversations"], chats);
+        let recovery =
+            call(json!({"operation":"export_recovery","identity":identity,"document":document}));
+        let recovered = call(
+            json!({"operation":"recover","backup":recovery["ok"]["backup"],"recoveryKey":recovery["ok"]["recoveryKey"]}),
+        );
+        assert_eq!(recovered["ok"]["state"], restored["ok"]["state"]);
+        for invalid in [
+            json!(""),
+            json!("bad\nmodel"),
+            json!("https://other.host"),
+            json!("a".repeat(101)),
+            json!(42),
+        ] {
+            let mut bad_profile = selected.clone();
+            bad_profile["defaultModel"] = invalid.clone();
+            assert!(call(json!({"operation":"profile","identity":identity,"document":document,"profile":bad_profile}))["error"].is_object());
+            chats[0]["modelOverride"] = invalid.clone();
+            assert!(call(json!({"operation":"save_conversations","identity":identity,"document":document,"conversations":chats}))["error"].is_object());
+            assert!(
+                call(json!({"operation":"chatgpt_request","body":{},"model":invalid}))["error"]
+                    .is_object()
+            );
+        }
+        // Old archives still work; removing the override resumes inheritance.
+        let reset = call(
+            json!({"operation":"save_conversations","identity":identity,"document":document,"conversations":transcript()}),
+        );
+        assert_eq!(reset["ok"]["state"]["conversations"], transcript());
+        assert_eq!(
+            reset["ok"]["state"]["profile"]["defaultModel"],
+            "gpt-6.1-terra"
+        );
     }
 
     #[test]

@@ -187,7 +187,7 @@ info_plist = "ios/Info.plist"
 [[target]]
 name = "HabibiIOSTests"
 kind = "apple_test_bundle"
-srcs = ["ios/Tests/**/*.swift", "ios/Sources/HabibiStore.swift", "ios/Sources/HabibiModels.swift", "ios/Sources/HabibiSession.swift", "ios/Sources/HabibiSync.swift", "ios/Sources/HabibiSyncAccount.swift", "ios/Sources/HabibiGitHub.swift", "ios/Sources/HabibiVoiceInput.swift", "ios/Sources/HabibiConversationScrollState.swift", "ios/Sources/HabibiComponentView.swift", "ios/Sources/HabibiBrand.swift", "ios/Sources/HabibiAppearance.swift", "ios/Sources/HabibiHeartling.swift"]
+srcs = ["ios/Tests/**/*.swift", "ios/Sources/HabibiStore.swift", "ios/Sources/HabibiModels.swift", "ios/Sources/HabibiSession.swift", "ios/Sources/HabibiChatGPT.swift", "ios/Sources/HabibiFoundationModels.swift", "ios/Sources/HabibiSync.swift", "ios/Sources/HabibiSyncAccount.swift", "ios/Sources/HabibiGitHub.swift", "ios/Sources/HabibiVoiceInput.swift", "ios/Sources/HabibiConversationScrollState.swift", "ios/Sources/HabibiComponentView.swift", "ios/Sources/HabibiBrand.swift", "ios/Sources/HabibiAppearance.swift", "ios/Sources/HabibiHeartling.swift"]
 deps = ["./HabibiCoreIOS", "./HabibiCoreFFI", "./HabibiSimulatorSDK", "./HabibiNSHSimulator"]
 [target.attrs]
 platform = "ios"

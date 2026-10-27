@@ -73,12 +73,18 @@ struct HabibiWorkspaceView: View {
                 }
             }
             Section {
+                NavigationLink { HabibiChatGPTView(session: session) } label: {
+                    Label("AI provider", systemImage: "sparkles")
+                }.accessibilityIdentifier("habibi.profile.provider")
                 NavigationLink { HabibiAppearanceView(session: session) } label: {
                     Label("Appearance", systemImage: "paintpalette")
                 }.accessibilityIdentifier("habibi.profile.appearance")
                 NavigationLink { HabibiKitsView(session: session) } label: {
                     Label("Kits", systemImage: "square.stack.3d.up")
                 }.accessibilityIdentifier("habibi.profile.kits")
+                NavigationLink { HabibiCostumesView(session: session) } label: {
+                    Label("Costumes", systemImage: "tshirt")
+                }.accessibilityIdentifier("habibi.profile.costumes")
                 NavigationLink { HabibiRecoveryView(session: session) } label: {
                     Label("Recovery backup", systemImage: "key")
                 }

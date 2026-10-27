@@ -36,6 +36,11 @@ pub struct Conversation {
     pub composer_clock: Option<std::collections::BTreeMap<String, u64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     draft: Option<Definition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model_override: Option<String>,
+    // Pin the definition: wardrobe edits/removal must not rewrite a conversation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    costume: Option<crate::costumes::Definition>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -75,6 +80,12 @@ pub fn validate(conversations: &mut [Conversation]) -> Result<()> {
             })
         {
             return Err(Error::invalid("Invalid saved conversation."));
+        }
+        if let Some(model) = &conversation.model_override {
+            crate::chatgpt::validate_model(model)?;
+        }
+        if let Some(costume) = &mut conversation.costume {
+            costume.validate()?;
         }
         let mut messages = HashSet::new();
         for message in &mut conversation.messages {

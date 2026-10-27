@@ -48,7 +48,8 @@ class HabibiApplication : Application() {
             oauth = NativeOAuth(SecureVaultStorage(this, "oauth-v1"), HttpSyncTransport()), draftDeviceId = deviceId,
             saveDraftDeviceId = { id ->
                 check(preferences.edit().putString("id", id).commit()) { "Could not save the draft replica identity." }
-            })
+            },
+            chatGPT = ChatGPT(SecureVaultStorage(this, "chatgpt-v1")))
     }
 }
 
@@ -115,6 +116,8 @@ internal class Conversation(val id: String = UUID.randomUUID().toString(), val c
     @Volatile var lines: List<ChatLine> = emptyList()
     @Volatile var draft = ""
     @Volatile var composerClock = JSONObject()
+    @Volatile var modelOverride: String? = null
+    @Volatile var costume: JSONObject? = null
     @Volatile var draftRevision = 0L
     @Volatile var definition: JSONObject? = null
     @Volatile var toolResult: String? = null
@@ -143,6 +146,7 @@ internal class HabibiSession(
     private val github: GitHubDeviceFlow = GitHubDeviceFlow(githubTransport),
     private var draftDeviceId: String = UUID.randomUUID().toString(),
     private val saveDraftDeviceId: (String) -> Unit = {},
+    private val chatGPT: ChatGPT? = null,
 ) {
     private var record: JSONObject? = null
     @Volatile var state: JSONObject? = null; private set
@@ -207,12 +211,98 @@ internal class HabibiSession(
             scheduleConversationSave()
         }
     @Volatile var chatting = false; private set
-    @Volatile var connected = false; private set
+    val usesAppleModel get() = conversationModel == "apple-foundation-models"
+    val connected get() = (chatGPTConnected || endpoint != null) && !usesAppleModel
+    val chatGPTConnected get() = chatGPT?.connected == true
+    val inferenceName get() = if (usesAppleModel) "Apple · Unavailable on Android" else if (chatGPTConnected) "ChatGPT · Using your plan" else if (endpoint != null) "Development inference bridge connected" else "Not connected · Connect ChatGPT in Profile → AI provider."
+    private val chatGPTCatalog by lazy { call("chatgpt_models", JSONObject()) }
+    val chatGPTModels: List<Pair<String, String>> by lazy {
+        val models = chatGPTCatalog.getJSONArray("models")
+        (0 until models.length()).map { models.getJSONObject(it).let { model -> model.getString("id") to model.getString("name") } }
+    }
+    val defaultModel get() = state?.optJSONObject("profile")?.optString("defaultModel")?.takeIf { it.isNotBlank() && it != "null" }
+        ?: chatGPTCatalog.getString("defaultModel")
+    val conversationModel get() = conversation.modelOverride ?: defaultModel
+    fun modelName(id: String) = if (id == "apple-foundation-models") "Apple · On device" else chatGPTModels.firstOrNull { it.first == id }?.second ?: id
+    val canChangeModel get() = state != null && canSwitchConversation && !syncing && !connectingChatGPT
+    val canChangeCostume get() = canChangeModel
+    val wardrobe: List<JSONObject> get() = state?.optJSONArray("costumes")?.let { items ->
+        (0 until items.length()).map { JSONObject(items.getJSONObject(it).toString()) }
+    } ?: emptyList()
+    fun bundledCostumes(): List<JSONObject> = call("bundled_costumes").getJSONArray("costumes").let { items ->
+        (0 until items.length()).map { items.getJSONObject(it) }
+    }
+    fun validateCostume(definition: JSONObject): JSONObject = call("validate_costume", JSONObject().put("definition", definition)).getJSONObject("definition")
+    fun setConversationCostume(definition: JSONObject?) {
+        if (!canChangeCostume) return
+        try {
+            val checked = definition?.let(::validateCostume)
+            synchronized(archiveLock) { conversation.costume = checked; archiveRevision++ }
+            scheduleConversationSave(); changed()
+        } catch (cause: Exception) { failure(cause); changed() }
+    }
+    fun saveCostume(definition: JSONObject, id: String?, complete: () -> Unit) {
+        if (!canChangeCostume) return
+        val copy = JSONObject(definition.toString())
+        work {
+            check(!chatting && review == null && !syncing && !kitAuthorizing) { "Finish the current operation before changing your wardrobe." }
+            install(call("save_costume", authenticated().put("definition", copy).put("id", id)))
+            publish(complete)
+        }
+    }
+    fun removeCostume(id: String, complete: () -> Unit) {
+        if (!canChangeCostume) return
+        work {
+            check(!chatting && review == null && !syncing && !kitAuthorizing) { "Finish the current operation before changing your wardrobe." }
+            install(call("remove_costume", authenticated().put("id", id)))
+            publish(complete)
+        }
+    }
+    fun readCostumeFile(open: () -> InputStream?, complete: (JSONObject) -> Unit) {
+        work {
+            val bytes = (open() ?: error("Could not open the costume file.")).use { input ->
+                val output = ByteArrayOutputStream(); val buffer = ByteArray(4096)
+                while (true) {
+                    val count = input.read(buffer); if (count < 0) break
+                    check(output.size() + count <= 32 * 1024) { "Costume files must be smaller than 32 KiB." }
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            val checked = validateCostume(JSONObject(String(bytes, Charsets.UTF_8)))
+            publish { complete(checked) } // A draft only: saving requires the user's Add action.
+        }
+    }
+    fun writeCostumeFile(definition: String, open: () -> OutputStream?) {
+        work {
+            val checked = validateCostume(JSONObject(definition))
+            (open() ?: error("Could not open the costume destination.")).use { it.write(checked.toString(2).toByteArray(Charsets.UTF_8)) }
+        }
+    }
+    fun setConversationModel(model: String?) {
+        if (!canChangeModel) return
+        synchronized(archiveLock) { conversation.modelOverride = model; archiveRevision++ }
+        scheduleConversationSave(); changed()
+    }
+    fun setDefaultModel(model: String) {
+        if (!canChangeModel) return
+        work {
+            check(!chatting && review == null && !syncing) { "Finish the current operation before choosing a model." }
+            val profile = JSONObject(state!!.getJSONObject("profile").toString()).put("defaultModel", model)
+            install(call("profile", authenticated().put("profile", profile)))
+        }
+    }
+    @Volatile var chatGPTCode: String? = null; private set
+    @Volatile var chatGPTMessage: String? = null; private set
+    @Volatile private var chatGPTAuthorization: AtomicBoolean? = null
+    val connectingChatGPT get() = chatGPTAuthorization != null
+    private val chatGPTWorker by lazy { Executors.newSingleThreadExecutor() }
     var inferenceConsent = false
     private val history get() = conversation.history
     private val pendingWork = AtomicInteger()
     private var endpoint: InferenceEndpoint? = null
     @Volatile private var run: AtomicBoolean? = null
+    private var runModel: String? = null
     private var requests = 0
     private var reviewTicket = 0L
     private val listeners = linkedSetOf<() -> Unit>()
@@ -310,6 +400,8 @@ internal class HabibiSession(
         conversations.forEach { chat ->
             put(JSONObject().put("id", chat.id).put("createdAt", chat.createdAt).put("composer", chat.draft)
                 .put("composerClock", chat.composerClock)
+                .put("modelOverride", chat.modelOverride)
+                .put("costume", chat.costume?.let { JSONObject(it.toString()) })
                 .put("draft", chat.definition?.let { JSONObject(it.toString()) }).put("messages", JSONArray().apply {
                     chat.lines.forEach { line ->
                         put(JSONObject().put("id", line.id).put("createdAt", line.createdAt).put("text", line.text)
@@ -358,6 +450,8 @@ internal class HabibiSession(
             Conversation(item.getString("id"), item.getString("createdAt")).apply {
                 draft = item.getString("composer")
                 composerClock = item.optJSONObject("composerClock") ?: JSONObject()
+                modelOverride = item.optString("modelOverride").takeIf { item.has("modelOverride") && !item.isNull("modelOverride") }
+                costume = item.optJSONObject("costume")?.let { JSONObject(it.toString()) }
                 definition = item.optJSONObject("draft")?.let { JSONObject(it.toString()) }
                 val messages = item.getJSONArray("messages")
                 lines = (0 until messages.length()).map { messageIndex ->
@@ -717,6 +811,7 @@ internal class HabibiSession(
 
     fun start() { if (!loaded) reload() }
     fun reload() = work {
+        runCatching { chatGPT?.inspect() }.onFailure { chatGPTMessage = "ChatGPT credentials could not be opened. Unlock your device and try again." }
         try {
             val saved = storage.load()
             if (saved != null) {
@@ -878,13 +973,44 @@ internal class HabibiSession(
     }
 
     fun configure(endpoint: InferenceEndpoint?) = work {
-        if (!chatting) { this.endpoint = endpoint; connected = endpoint != null }
+        if (!chatting) { this.endpoint = endpoint; inferenceConsent = false }
+    }
+    fun connectChatGPT() {
+        if (busy || chatting || connectingChatGPT) return
+        val provider = chatGPT ?: return
+        val cancelled = AtomicBoolean(false)
+        chatGPTAuthorization = cancelled; chatGPTCode = null; chatGPTMessage = null
+        changed()
+        chatGPTWorker.execute {
+            try {
+                provider.authorize(cancelled) { code ->
+                    if (!cancelled.get()) { chatGPTCode = code; changed() }
+                }
+                inferenceConsent = false
+            } catch (_: Exception) {
+                if (!cancelled.get()) chatGPTMessage = "ChatGPT sign-in failed or expired. Enable device-code login in ChatGPT security settings, then connect again."
+            } finally {
+                chatGPTCode = null; chatGPTAuthorization = null; changed()
+            }
+        }
+    }
+    fun cancelChatGPTAuthorization() {
+        val authorization = chatGPTAuthorization ?: return
+        synchronized(authorization) { authorization.set(true) }
+        chatGPT?.cancel(); chatGPTCode = null; changed()
+    }
+    fun disconnectChatGPT() {
+        if (chatting || connectingChatGPT) return
+        work { chatGPT?.disconnect(); inferenceConsent = false; chatGPTMessage = null }
     }
     val canSwitchConversation get() = !busy && !chatting && review == null && !kitAuthorizing
-    fun newConversation(): Boolean {
-        if (!canSwitchConversation) return false
+    fun newConversation(costume: JSONObject? = null, prompt: String = ""): Boolean {
+        if (!canSwitchConversation || syncing) return false
+        val checked = try { costume?.let(::validateCostume) }
+        catch (cause: Exception) { failure(cause); changed(); return false }
         synchronized(archiveLock) {
-            conversation = Conversation(); conversations = conversations + conversation; archiveRevision++
+            conversation = Conversation().apply { this.costume = checked; draft = prompt }
+            conversations = conversations + conversation; archiveRevision++
         }
         scheduleConversationSave()
         changed()
@@ -898,12 +1024,15 @@ internal class HabibiSession(
         return true
     }
     fun send(message: String) {
-        if (busy || chatting || review != null || syncing || kitAuthorizing) return
+        if (busy || chatting || review != null || syncing || kitAuthorizing || connectingChatGPT) return
         val sentDraftRevision = conversation.draftRevision
+        val model = if (chatGPTConnected) conversationModel else null
         work {
             check(!kitAuthorizing && !syncing) { "Finish authorization or sync before chatting." }
             check(!chatting) { "A reply is already running." }
-            check(endpoint != null) { "Not connected. A developer must connect an inference bridge for conversations. Your local vault and Kits still work." }
+            check(!usesAppleModel) { "Apple’s on-device model isn’t available on Android. Choose a ChatGPT model from this conversation’s menu." }
+            check(connected) { "Not connected. Connect ChatGPT in Profile → AI provider. Your local vault and Kits still work." }
+            check(!chatGPTConnected || inferenceConsent) { "Approve sharing this conversation with the inference provider first." }
             check(message.isNotBlank()) { "Write a message first." }
             check(review == null) { "Resolve the kit review first." }
             history.put(JSONObject().put("role", "user").put("content", message))
@@ -912,7 +1041,7 @@ internal class HabibiSession(
                 if (conversation.draftRevision == sentDraftRevision && conversationDraft.trim() == message.trim()) conversationDraft = ""
             }
             checkpointConversations()
-            val active = AtomicBoolean(false); run = active; chatting = true; requests = 0
+            val active = AtomicBoolean(false); run = active; runModel = model; chatting = true; requests = 0
             changed()
             continueChat(active)
         }
@@ -979,8 +1108,12 @@ internal class HabibiSession(
                     }
                 }
                 val request = call("agent_request", JSONObject().put("history", history).put("today", LocalDate.now().toString())
-                    .put("connections", connections).put("reactionTargets", targets))
-                val response = transport.send(endpoint ?: error("Not connected"), request.getJSONObject("body"), active)
+                    .put("connections", connections).put("reactionTargets", targets).put("costume", conversation.costume))
+                val response = if (chatGPTConnected) {
+                    val body = call("chatgpt_request", JSONObject().put("body", request.getJSONObject("body")).put("model", runModel)).getJSONObject("body")
+                    val stream = chatGPT!!.send(body, active)
+                    call("chatgpt_response", JSONObject().put("stream", stream)).getJSONObject("response")
+                } else transport.send(endpoint ?: error("Not connected"), request.getJSONObject("body"), active)
                 if (active.get()) break
                 val parsed = call("agent_response", JSONObject().put("response", response))
                 parsed.optJSONArray("output")?.let { output -> for (index in 0 until output.length()) history.put(output.get(index)) }
@@ -1038,6 +1171,7 @@ internal class HabibiSession(
     fun stop() {
         run?.set(true)
         transport.cancel()
+        chatGPT?.cancel()
         work {
             review?.takeIf { it.run != null }?.let {
                 if (it.callId != null) appendTool(it.callId, JSONObject().put("approved", false).put("changed", false))

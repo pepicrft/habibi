@@ -27,6 +27,8 @@ struct HabibiConversation: Identifiable {
     var composerClock: [String: UInt64] = [:]
     var history: [[String: Any]] = []
     var draft: [String: Any]?
+    var modelOverride: String?
+    var costume: HabibiCostumeDefinition?
     var title: String { messages.first(where: { $0.kind == "user" })?.text ?? "New conversation" }
 }
 
@@ -68,7 +70,7 @@ extension HabibiMessage: Codable {
 }
 
 extension HabibiConversation: Codable {
-    private enum CodingKeys: String, CodingKey { case id, createdAt, messages, composer, composerClock, draft }
+    private enum CodingKeys: String, CodingKey { case id, createdAt, messages, composer, composerClock, draft, modelOverride, costume }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -77,6 +79,8 @@ extension HabibiConversation: Codable {
         messages = try values.decode([HabibiMessage].self, forKey: .messages)
         composer = try values.decode(String.self, forKey: .composer)
         composerClock = try values.decodeIfPresent([String: UInt64].self, forKey: .composerClock) ?? [:]
+        modelOverride = try values.decodeIfPresent(String.self, forKey: .modelOverride)
+        costume = try values.decodeIfPresent(HabibiCostumeDefinition.self, forKey: .costume)
         if let definition = try values.decodeIfPresent(HabibiDefinition.self, forKey: .draft) {
             draft = try JSONSerialization.jsonObject(with: JSONEncoder().encode(definition)) as? [String: Any]
         }
@@ -92,6 +96,8 @@ extension HabibiConversation: Codable {
         try values.encode(messages, forKey: .messages)
         try values.encode(composer, forKey: .composer)
         try values.encodeIfPresent(composerClock, forKey: .composerClock)
+        try values.encodeIfPresent(modelOverride, forKey: .modelOverride)
+        try values.encodeIfPresent(costume, forKey: .costume)
         if let draft {
             let definition = try JSONDecoder().decode(HabibiDefinition.self, from: JSONSerialization.data(withJSONObject: draft))
             try values.encode(definition, forKey: .draft)
@@ -127,6 +133,47 @@ final class HabibiSession: ObservableObject {
     @Published private(set) var activeConversationID: UUID?
     @Published var conversationPath: [UUID] = []
     @Published var chatRunning = false
+    @Published private(set) var chatGPTConnected = false
+    @Published private(set) var connectingChatGPT = false
+    @Published private(set) var onDeviceUnavailableReason: String?
+    let chatGPT: HabibiChatGPT
+    let onDevice: HabibiFoundationModels
+    var usesOnDeviceModel: Bool { conversationModel == HabibiFoundationModels.id }
+    var requiresCloudConsent: Bool { !usesOnDeviceModel }
+    var showsModelPicker: Bool { usesOnDeviceModel || chatGPTConnected || inferenceURL == nil }
+    var inferenceConnected: Bool { usesOnDeviceModel ? onDeviceUnavailableReason == nil : chatGPTConnected || inferenceURL != nil }
+    var inferenceName: String {
+        if usesOnDeviceModel { return onDeviceUnavailableReason == nil ? "Apple · On device" : "Apple · Unavailable on this device" }
+        return chatGPTConnected ? "ChatGPT · Using your plan" : inferenceURL == nil ? "Not connected" : "Development host proxy"
+    }
+    var defaultModel: String { snapshot?.profile.defaultModel ?? HabibiChatGPTCatalog.shared.defaultModel }
+    var modelOverride: String? { activeConversation?.modelOverride }
+    var conversationModel: String { modelOverride ?? defaultModel }
+    var models: [HabibiChatGPTCatalog.Model] {
+        [.init(id: HabibiFoundationModels.id, name: HabibiFoundationModels.name)] + HabibiChatGPTCatalog.shared.models
+    }
+    func modelName(_ id: String) -> String { models.first { $0.id == id }?.name ?? id }
+    func refreshOnDeviceAvailability() { onDeviceUnavailableReason = onDevice.unavailableReason }
+    var canChangeModel: Bool { snapshot != nil && !busy && !chatRunning && !syncing && review == nil && !preparingTool && !connectingChatGPT && !connectionMutationsLocked }
+
+    func setConversationModel(_ model: String?) {
+        guard canChangeModel else { return }
+        let wasOnDevice = usesOnDeviceModel
+        updateConversation { $0.modelOverride = model }
+        if wasOnDevice != usesOnDeviceModel { cloudConsent = false }
+    }
+
+    func setDefaultModel(_ model: String) async throws {
+        guard canChangeModel, var profile = snapshot?.profile else { return }
+        busy = true
+        defer { busy = false }
+        let wasOnDevice = usesOnDeviceModel
+        profile.defaultModel = model
+        let value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile))
+        _ = try await persist("profile", arguments: ["profile": value])
+        if wasOnDevice != usesOnDeviceModel { cloudConsent = false }
+    }
+
     var composer: String {
         get { activeConversation?.composer ?? "" }
         set { updateConversation { $0.composer = newValue } }
@@ -166,13 +213,17 @@ final class HabibiSession: ObservableObject {
     init(store: HabibiStore = HabibiStore(), syncAccount: HabibiSyncAccount = HabibiSyncAccount(),
          github: HabibiGitHub? = nil, bundledKits: @escaping () throws -> [HabibiBundledKit] = HabibiBundledKit.catalog,
          inferenceURL: URL? = nil, inferenceHTTP: (any HabibiSyncHTTP)? = nil,
-         draftDeviceID: String? = nil) {
+         draftDeviceID: String? = nil, chatGPT: HabibiChatGPT = HabibiChatGPT(),
+         onDevice: HabibiFoundationModels? = nil) {
         self.store = store
         self.syncAccount = syncAccount
         // This random replica identifier is not a credential or user content.
         let localID = UserDefaults.standard.string(forKey: "habibi.draftDeviceID") ?? UUID().uuidString.lowercased()
         UserDefaults.standard.set(localID, forKey: "habibi.draftDeviceID")
         self.draftDeviceID = draftDeviceID ?? localID
+        self.chatGPT = chatGPT
+        self.onDevice = onDevice ?? HabibiFoundationModels()
+        onDeviceUnavailableReason = self.onDevice.unavailableReason
         self.github = github ?? HabibiGitHub()
         self.bundledKitCatalog = bundledKits
         self.inferenceHTTP = inferenceHTTP
@@ -196,6 +247,52 @@ final class HabibiSession: ObservableObject {
 
     func bundledKits() throws -> [HabibiBundledKit] { try bundledKitCatalog() }
 
+    var wardrobe: [HabibiCostume] { snapshot?.costumes ?? [] }
+    var costume: HabibiCostumeDefinition? { activeConversation?.costume }
+    var canChangeCostume: Bool { canChangeModel }
+
+    func setConversationCostume(_ definition: HabibiCostumeDefinition?) {
+        guard canChangeCostume else { return }
+        do {
+            let checked = try definition?.validated()
+            updateConversation { $0.costume = checked }
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func saveCostume(_ definition: HabibiCostumeDefinition, id: String?) async throws {
+        guard canChangeCostume else { throw HabibiFailure(message: "Finish the current operation before changing your wardrobe.") }
+        busy = true
+        defer { busy = false }
+        let checked = try definition.validated()
+        let value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(checked))
+        var arguments: [String: Any] = ["definition": value]
+        arguments["id"] = id
+        _ = try await persist("save_costume", arguments: arguments)
+    }
+
+    func removeCostume(_ id: String) async throws {
+        guard canChangeCostume else { throw HabibiFailure(message: "Finish the current operation before changing your wardrobe.") }
+        busy = true
+        defer { busy = false }
+        _ = try await persist("remove_costume", arguments: ["id": id])
+    }
+
+    func connectChatGPT(showCode: @MainActor (String) -> Void) async throws {
+        guard !chatRunning, !connectingChatGPT else { throw HabibiFailure(message: "Finish the current ChatGPT request first.") }
+        connectingChatGPT = true
+        defer { connectingChatGPT = false }
+        try await chatGPT.authorize(showCode: showCode)
+        chatGPTConnected = true
+        cloudConsent = false
+    }
+
+    func disconnectChatGPT() async throws {
+        guard !chatRunning, !connectingChatGPT else { throw HabibiFailure(message: "Finish or cancel the ChatGPT request first.") }
+        try await chatGPT.disconnect()
+        chatGPTConnected = false
+        cloudConsent = false
+    }
+
     // Only capability IDs cross into request preparation, never the connection
     // summary (account/client ID), vault or request descriptors with credentials.
     var agentConnections: [String] {
@@ -206,6 +303,7 @@ final class HabibiSession: ObservableObject {
         guard !ready, !busy else { return }
         busy = true
         defer { ready = true; busy = false }
+        chatGPTConnected = (try? await chatGPT.connected()) == true
         do {
             snapshot = try await store.restore()
             conversations = snapshot?.conversations ?? []
@@ -493,13 +591,17 @@ final class HabibiSession: ObservableObject {
         conversationSaveError = nil
     }
 
-    func newConversation(prompt: String = "") {
+    func newConversation(prompt: String = "", costume: HabibiCostumeDefinition? = nil) {
         guard !busy, !chatRunning, !syncing, review == nil else { return }
         var item = HabibiConversation()
         item.composer = prompt
+        do { item.costume = try costume?.validated() }
+        catch { self.error = error.localizedDescription; return }
+        let wasOnDevice = usesOnDeviceModel
         conversations.append(item)
         conversationChanged()
         activeConversationID = item.id
+        if wasOnDevice != usesOnDeviceModel { cloudConsent = false }
         selectedTab = 1
         conversationPath = [item.id]
     }
@@ -507,7 +609,9 @@ final class HabibiSession: ObservableObject {
     func openConversation(_ id: UUID) {
         guard !busy, !syncing, conversations.contains(where: { $0.id == id }), !chatRunning || activeConversationID == id,
               review == nil || activeConversationID == id else { return }
+        let wasOnDevice = usesOnDeviceModel
         activeConversationID = id
+        if wasOnDevice != usesOnDeviceModel { cloudConsent = false }
         selectedTab = 1
         conversationPath = [id]
     }
@@ -548,15 +652,21 @@ final class HabibiSession: ObservableObject {
     }
 
     func send() {
+        refreshOnDeviceAvailability()
         let message = composer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard activeConversationID != nil, !busy, !syncing, !chatRunning, !message.isEmpty, message.count <= 4000, cloudConsent, let inferenceURL else { return }
+        guard activeConversationID != nil, !busy, !syncing, !chatRunning, !connectingChatGPT,
+              !message.isEmpty, message.count <= 4000, (!requiresCloudConsent || cloudConsent), inferenceConnected else { return }
         composer = ""
         messages.append(HabibiMessage(kind: "user", text: message))
         history.append(["role": "user", "content": message])
         chatRunning = true
+        // Keep one model across tool calls and approval continuations.
+        let model = conversationModel
+        let selectedCostume = costume
         conversation = Task {
             defer { chatRunning = false; conversation = nil; scheduleConversationSave() }
             do {
+                let costumeValue = try selectedCostume.map { try JSONSerialization.jsonObject(with: JSONEncoder().encode($0)) }
                 await flushConversations()
                 if let conversationSaveError { throw HabibiFailure(message: conversationSaveError) }
                 for _ in 0..<8 {
@@ -570,25 +680,36 @@ final class HabibiSession: ObservableObject {
                         return target
                     }
                     let prepared = try await Task.detached {
-                        try HabibiCore.execute(["operation": "agent_request", "history": requestHistory, "today": today, "connections": connections,
-                                                "reactionTargets": reactionTargets])
+                        var command: [String: Any] = ["operation": "agent_request", "history": requestHistory, "today": today, "connections": connections,
+                                                      "reactionTargets": reactionTargets]
+                        command["costume"] = costumeValue
+                        return try HabibiCore.execute(command)
                     }.value
-                    var request = URLRequest(url: inferenceURL)
-                    request.httpMethod = "POST"
-                    request.timeoutInterval = 100
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue("Bearer \(inferenceToken ?? "")", forHTTPHeaderField: "Authorization")
-                    request.httpBody = try JSONSerialization.data(withJSONObject: prepared["body"] ?? [:])
-                    let data: Data
-                    let response: URLResponse
-                    if let inferenceHTTP { (data, response) = try await inferenceHTTP.send(request, limit: 128 * 1024) }
-                    else { (data, response) = try await URLSession.shared.data(for: request) }
-                    guard let response = response as? HTTPURLResponse, response.statusCode == 200,
-                          response.url == inferenceURL, data.count <= 128 * 1024 else {
-                        throw HabibiFailure(message: "The development inference connection failed. Your saved Kits are unchanged.")
+                    let responseObject: Any
+                    if model == HabibiFoundationModels.id {
+                        responseObject = try await onDevice.send(prepared["body"] as? [String: Any] ?? [:])
+                    } else if chatGPTConnected {
+                        responseObject = try await chatGPT.send(prepared["body"] as? [String: Any] ?? [:], model: model)
+                    } else if let inferenceURL {
+                        var request = URLRequest(url: inferenceURL)
+                        request.httpMethod = "POST"
+                        request.timeoutInterval = 100
+                        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        request.setValue("Bearer \(inferenceToken ?? "")", forHTTPHeaderField: "Authorization")
+                        request.httpBody = try JSONSerialization.data(withJSONObject: prepared["body"] ?? [:])
+                        let data: Data
+                        let response: URLResponse
+                        if let inferenceHTTP { (data, response) = try await inferenceHTTP.send(request, limit: 128 * 1024) }
+                        else { (data, response) = try await URLSession.shared.data(for: request) }
+                        guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+                              response.url == inferenceURL, data.count <= 128 * 1024 else {
+                            throw HabibiFailure(message: "The development inference connection failed. Your saved Kits are unchanged.")
+                        }
+                        responseObject = try JSONSerialization.jsonObject(with: data)
+                    } else {
+                        throw HabibiFailure(message: "Connect ChatGPT in Profile → AI provider.")
                     }
                     try Task.checkCancellation()
-                    let responseObject = try JSONSerialization.jsonObject(with: data)
                     let step = try await Task.detached { try HabibiCore.execute(["operation": "agent_response", "response": responseObject]) }.value
                     history.append(contentsOf: step["output"] as? [[String: Any]] ?? [])
                     if let reply = step["reply"] as? String {

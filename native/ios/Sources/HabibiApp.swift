@@ -51,6 +51,7 @@ private struct HabibiRootView: View {
             .onChange(of: scenePhase) { _, phase in
                 session.setDraftSyncActive(phase == .active)
                 if phase == .background { session.stop(); session.finishDraftHandoff() }
+                if phase == .active { session.refreshOnDeviceAvailability() }
             }
             .sheet(item: $session.review, onDismiss: { session.resolveReview(false) }) { review in
                 HabibiReviewView(session: session, review: review)

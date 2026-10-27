@@ -25,6 +25,10 @@ internal class MemoryVault : VaultStorage {
 internal fun profile(name: String = "Alex") = JSONObject().put("name", name).put("goals", JSONArray().put("learning")).put("style", "warm")
 internal fun definition() = JSONObject("""{"apiVersion":1,"name":"Energy","description":"Notice your day","fields":[{"key":"energy","label":"Energy","type":"number","unit":"points","min":0,"max":10}],"source":"function summarize(s){return JSON.stringify({metrics:[]})}"}""")
 
+internal fun costumeDefinition(name: String = "Coach") = JSONObject().put("apiVersion", 1).put("name", name)
+    .put("description", "Take one step at a time.").put("author", "Habibi")
+    .put("instructions", "Ask one question before suggesting a small next step.").put("examplePrompt", "Help me find a first step.")
+
 /** Protocol fixture only, not a second crypto/runtime implementation. */
 internal class FixtureCore {
     val calls = mutableListOf<JSONObject>()
@@ -49,6 +53,27 @@ internal class FixtureCore {
         }
         fun state() = JSONObject(request.getJSONObject("document").getJSONObject("state").toString())
         val result = when (operation) {
+            "bundled_costumes" -> JSONObject().put("costumes", JSONArray().put(costumeDefinition()))
+            "validate_costume" -> JSONObject().put("definition", request.getJSONObject("definition"))
+            "save_costume" -> {
+                val state = state()
+                val id = request.optString("id").takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString()
+                val items = state.optJSONArray("costumes") ?: JSONArray()
+                state.put("costumes", JSONArray().apply {
+                    for (index in 0 until items.length()) if (items.getJSONObject(index).getString("id") != id) put(items.getJSONObject(index))
+                    put(JSONObject().put("id", id).put("definition", request.getJSONObject("definition")))
+                })
+                candidate(state)
+            }
+            "remove_costume" -> {
+                val state = state(); val items = state.getJSONArray("costumes")
+                candidate(state.put("costumes", JSONArray().apply {
+                    for (index in 0 until items.length()) if (items.getJSONObject(index).getString("id") != request.getString("id")) put(items.getJSONObject(index))
+                }))
+            }
+            "chatgpt_models" -> JSONObject("""{"defaultModel":"gpt-6.1-sol","models":[{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol"},{"id":"gpt-6.1-terra","name":"GPT-6.1 Terra"},{"id":"gpt-6-luna","name":"GPT-6 Luna"}]}""")
+            "chatgpt_request" -> JSONObject().put("body", JSONObject(request.getJSONObject("body").toString()).put("model", request.optString("model", "gpt-6.1-sol")))
+            "chatgpt_response" -> JSONObject().put("response", JSONObject(request.getString("stream")))
             "kit_page" -> JSONObject().put("version", 1).put("source", "fixture page")
                 .put("kit", JSONObject().put("id", request.getString("id")).put("name", "GitHub").put("description", "Read your profile and public repositories."))
                 .put("fallback", "GitHub\nRead your GitHub profile and 10 recent public repositories you own. No private repositories, file contents or write access.")

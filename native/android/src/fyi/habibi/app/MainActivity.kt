@@ -6,6 +6,7 @@ import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
+import android.view.Menu
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
@@ -55,6 +56,8 @@ class MainActivity : AppCompatActivity() {
     private var previousState: JSONObject? = null
     private var conversationScreen: ConversationScreen? = null
     private var kitsScreen: KitsCatalogScreen? = null
+    private var costumesScreen: CostumesScreen? = null
+    private var pendingCostumeExport: String? = null
     // Search can contain personal Kit names. Keep it in memory, not Android saved state.
     private var kitsQuery = ""
     private var kitsFilter = "all"
@@ -76,6 +79,15 @@ class MainActivity : AppCompatActivity() {
         if (uri != null) session.readRecoveryFile({ contentResolver.openInputStream(uri) }) { backup ->
             if (!isDestroyed && route == "restore") { selectedBackupImport = backup; render() }
         }
+    }
+    private val costumeSource = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) session.readCostumeFile({ contentResolver.openInputStream(uri) }) { definition ->
+            if (!isDestroyed && route == "costumes") costumesScreen?.edit(definition)
+        }
+    }
+    private val costumeDestination = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val definition = pendingCostumeExport; pendingCostumeExport = null
+        if (uri != null && definition != null) session.writeCostumeFile(definition) { contentResolver.openOutputStream(uri, "wt") }
     }
     private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val callback = voicePermissionResult; voicePermissionResult = null; callback?.invoke(granted)
@@ -102,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         root = column(0)
         toolbar = MaterialToolbar(this).apply {
+            tag = "conversation_toolbar"
             setNavigationOnClickListener { back() }
             navigationContentDescription = "Back"
         }
@@ -177,6 +190,7 @@ class MainActivity : AppCompatActivity() {
         destroying = true; conversationScreen?.close(); voicePermissionResult = null
         screen.removeCallbacks(kitsExpiryRefresh)
         pendingBackupExport = null; selectedBackupImport = null
+        pendingCostumeExport = null; costumesScreen?.close(); costumesScreen = null
         githubSheet?.dispose(); githubSheet = null; kitsScreen = null
         reviewDialog?.dismiss(); session.unobserve(observer); themes.unobserve(observer)
         super.onDestroy()
@@ -189,9 +203,11 @@ class MainActivity : AppCompatActivity() {
     }
     private fun go(next: String) {
         if (session.syncing) return
+        if (route == "provider" && next != route) session.cancelChatGPTAuthorization()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(screen.windowToken, 0)
         if (route == "conversation" && next != route) session.flushConversations()
         if (route == "restore" && next != route) selectedBackupImport = null
+        if (route == "costumes" && next != route) { costumesScreen?.close(); costumesScreen = null }
         if (next != "kits") githubSheet?.dismiss()
         route = next; render()
         if (next == "sync") session.inspectSync()
@@ -204,8 +220,9 @@ class MainActivity : AppCompatActivity() {
             "conversation" -> "conversations"
             "name", "restore" -> if (session.state != null) "recovery" else "welcome"
             "goals" -> "name"
-            "privacy" -> "goals"
-            "kits", "personalization", "appearance", "recovery", "sync" -> "profile"
+            "provider" -> if (session.state == null) "goals" else "profile"
+            "privacy" -> "provider"
+            "kits", "costumes", "personalization", "appearance", "recovery", "sync" -> "profile"
             "kit" -> "kits"
             "entry" -> "kit"
             "profile", "conversations" -> { tab = R.id.home; "home" }
@@ -222,7 +239,7 @@ class MainActivity : AppCompatActivity() {
         isEnabled = !session.busy && session.loaded
     }
     private fun updateNavigationVisibility() {
-        navigation.visibility = if (session.state != null && !keyboard && route !in setOf("conversation", "kits")) View.VISIBLE else View.GONE
+        navigation.visibility = if (session.state != null && !keyboard && route !in setOf("conversation", "kits", "costumes")) View.VISIBLE else View.GONE
     }
     private fun render() {
         if (isDestroyed || destroying) return
@@ -237,12 +254,13 @@ class MainActivity : AppCompatActivity() {
             // encrypted draft, selection and history. No provider request is started.
             conversationScreen?.close(); conversationScreen = null
             kitsScreen = null
+            costumesScreen?.close(); costumesScreen = null
             githubStartPending = githubSheet?.startingAuthorization ?: githubStartPending
             githubSheet?.dispose(); githubSheet = null
             appliedPalette = palette
         }
         if (session.state != null && (route in setOf("welcome", "name", "goals", "privacy") || (route == "restore" && previousState !== session.state))) { route = "home"; tab = R.id.home }
-        if (session.state == null && session.loaded && route !in setOf("welcome", "name", "goals", "privacy", "restore")) route = "welcome"
+        if (session.state == null && session.loaded && route !in setOf("welcome", "name", "goals", "provider", "privacy", "restore")) route = "welcome"
         if (route != "kits" && githubDetailOpen) {
             githubDetailOpen = false; githubSheet?.dismiss(); githubSheet = null
         }
@@ -263,11 +281,30 @@ class MainActivity : AppCompatActivity() {
             else -> route.replaceFirstChar { it.uppercase() }
         }
         toolbar.navigationIcon = if (route in setOf("home", "conversations", "profile")) null else androidx.core.content.ContextCompat.getDrawable(this, R.drawable.ic_back)
+        toolbar.menu.clear()
+        toolbar.subtitle = null
+        if (route == "conversation" && (session.chatGPTConnected || !session.connected)) {
+            toolbar.subtitle = session.modelName(session.conversationModel)
+            toolbar.menu.add(0, Menu.FIRST, 0, getString(R.string.conversation_model_menu, session.modelName(session.conversationModel))).apply {
+                setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
+                isEnabled = session.canChangeModel
+                setOnMenuItemClickListener { conversationScreen?.showModelPicker(); true }
+            }
+        }
         applyChrome()
         binding = true; navigation.selectedItemId = tab; binding = false
         updateNavigationVisibility()
         if (route in setOf("restore", "recovery") || githubDetailOpen) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (route == "costumes") {
+            val wardrobe = costumesScreen ?: CostumesScreen(this, session, { definition, prompt ->
+                if (session.newConversation(definition, prompt)) { tab = R.id.conversations; go("conversation") }
+            }, { costumeSource.launch(arrayOf("application/json")) }, { definition ->
+                pendingCostumeExport = definition.toString(); costumeDestination.launch("habibi-costume.json")
+            }).also { costumesScreen = it }
+            if (screen.getChildAt(0) !== wardrobe.view) { screen.removeAllViews(); screen.addView(wardrobe.view) }
+            wardrobe.render(); return
+        }
         if (route == "kits") {
             val catalog = kitsScreen ?: KitsCatalogScreen(this, session, kitsQuery, kitsFilter,
                 { query, filter -> kitsQuery = query; kitsFilter = filter }, ::openGitHubDetail,
@@ -291,6 +328,7 @@ class MainActivity : AppCompatActivity() {
             } else welcome({ go("name") }, { go("restore") }, session.loaded && !session.busy)
             "name" -> namePage()
             "goals" -> goalsPage()
+            "provider" -> providerPage()
             "privacy" -> privacyPage()
             "restore" -> restorePage()
             "profile" -> profilePage()
@@ -325,7 +363,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun namePage() = page("What should I call you?", "A name that feels like you. It stays in your private vault.") {
-        addView(label("1 of 3 · A personal welcome", 13f, true))
+        addView(label("1 of 4 · A personal welcome", 13f, true))
         val (box, input) = input("Your name", "onboarding_name", session.onboardingName)
         input.doAfterTextChanged { session.onboardingName = it.toString() }; addView(box)
         addView(action("Continue", "name_continue", true) {
@@ -334,7 +372,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
     private fun goalsPage() = page("A little more you.", "Choose one to five things you would like space for. You can change these later.") {
-        addView(label("2 of 3 · Your intentions", 13f, true))
+        addView(label("2 of 4 · Your intentions", 13f, true))
         goals.forEach { (id, title) ->
             addView(MaterialCheckBox(this@MainActivity).apply {
                 text = title; tag = "goal_$id"; contentDescription = title; minimumHeight = dp(48)
@@ -349,8 +387,68 @@ class MainActivity : AppCompatActivity() {
         addView(validation)
         addView(action("Continue", "goals_continue", true) {
             if (session.onboardingGoals.isEmpty()) validation.text = "Choose at least one intention."
-            else go("privacy")
+            else go("provider")
         })
+    }
+    private fun providerPage() = page("Connect ChatGPT", if (session.state == null) "3 of 4 · Optional. You can connect later in Profile." else "Your AI provider") {
+        addView(card().apply {
+            addView(heading("ChatGPT · Experimental", 22f))
+            addView(label("Use your ChatGPT plan with Habibi. No API key needed."))
+            addView(label("With your approval, messages and tool results go to OpenAI. Vault keys, saved Kit entries and credentials stay private.", 14f, true))
+            if (session.chatGPTConnected) {
+                addView(label("Connected to ChatGPT", 16f).apply {
+                    tag = "chatgpt_connected"; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                })
+                addView(action("Disconnect ChatGPT", "chatgpt_disconnect") { session.disconnectChatGPT() }.apply { isEnabled = isEnabled && !session.chatting && !session.connectingChatGPT })
+                addView(label("Disconnects this device only. Your vault and other ChatGPT sessions stay unchanged.", 14f, true))
+            } else if (session.connectingChatGPT) {
+                session.chatGPTCode?.let { code ->
+                    addView(label("Enter this code in ChatGPT:"))
+                    addView(label(code, 28f).apply {
+                        tag = "chatgpt_code"; typeface = android.graphics.Typeface.MONOSPACE
+                        setTextIsSelectable(true); minimumHeight = dp(48)
+                        contentDescription = "Sign-in code: ${code.toList().joinToString(" ")}"
+                    })
+                    addView(button("Copy code & open ChatGPT", "chatgpt_open", true) {
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ChatGPT sign-in code", code))
+                        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ChatGPT.VERIFICATION_URL))) }
+                        catch (_: Exception) { session.cancelChatGPTAuthorization() }
+                    })
+                    addView(label("Return here after approving sign-in. This code expires in 15 minutes.", 14f, true))
+                }
+                addView(LinearProgressIndicator(this@MainActivity).apply {
+                    isIndeterminate = true; setIndicatorColor(color(R.color.primary)); trackColor = color(R.color.accent)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    layoutParams = LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(12); bottomMargin = dp(8) }
+                })
+                addView(label(if (session.chatGPTCode == null) "Preparing sign-in…" else "Waiting for ChatGPT…", 14f, true).apply {
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                })
+                addView(kitTextButton("Cancel sign-in", "chatgpt_cancel") { session.cancelChatGPTAuthorization() })
+            } else {
+                addView(action("Connect with ChatGPT", "chatgpt_connect", true) { session.connectChatGPT() }.apply { isEnabled = isEnabled && !session.chatting })
+            }
+            addView(kitTextButton("Manage usage", "chatgpt_usage") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ChatGPT.USAGE_URL))) })
+            addView(label("Experimental connection. Your ChatGPT plan’s limits apply. Encrypted sync is separate.", 13f, true))
+            session.chatGPTMessage?.let {
+                addView(label(it, 14f).apply { tag = "chatgpt_error"; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE })
+            }
+        })
+        if (session.state != null) addView(card().apply {
+            addView(heading("Default model", 22f))
+            addView(action(session.modelName(session.defaultModel), "default_model") {
+                val models = session.chatGPTModels.toMutableList()
+                if (models.none { it.first == session.defaultModel }) models.add(0, session.defaultModel to session.modelName(session.defaultModel))
+                MaterialAlertDialogBuilder(this@MainActivity).setTitle("Default model")
+                    .setSingleChoiceItems(models.map { it.second }.toTypedArray(), models.indexOfFirst { it.first == session.defaultModel }) { dialog, index ->
+                        dialog.dismiss(); session.setDefaultModel(models[index].first)
+                    }.setNegativeButton("Cancel", null).show()
+            }.apply { isEnabled = session.canChangeModel })
+            addView(label("Used unless you choose another model from a conversation’s menu. Apple’s on-device model is available only on supported Apple devices.", 14f, true))
+        })
+        if (session.state == null) addView(action(if (session.chatGPTConnected) "Continue" else "Skip for now", "provider_continue", session.chatGPTConnected) { go("privacy") }
+            .apply { isEnabled = isEnabled && !session.connectingChatGPT })
     }
     private fun stylePicker(style: String, selected: (String) -> Unit) = RadioGroup(this).apply {
         listOf("warm" to "Warm · gentle encouragement", "direct" to "Direct · clear and practical").forEach { (id, title) ->
@@ -362,12 +460,12 @@ class MainActivity : AppCompatActivity() {
             })
         }
     }
-    private fun privacyPage() = page("Yours. Really yours.", "3 of 3 · A private beginning") {
+    private fun privacyPage() = page("Yours. Really yours.", "4 of 4 · A private beginning") {
         addView(card().apply {
             addView(heading("A key made on your device", 22f))
             addView(label("Habibi generates a random 256-bit symmetric content key locally. It encrypts your profile, kits, entries and conversations. A separate sync token is not your private key."))
             addView(label("Android Keystore protects your local vault. No account is needed for local use. Optional encrypted sync uses a separate browser sign-in and never sends your encryption key."))
-            addView(label("If you choose host inference, your messages go to the configured harness and model provider. Connecting GitHub also lets the agent send read-only profile and public repository results to that provider. Credentials, vault keys and saved local Kit entries never go with them. You approve every kit change."))
+            addView(label("If you connect ChatGPT, approved conversations go directly to OpenAI using your plan. Connecting GitHub also lets the agent send read-only profile and public repository results to your inference provider. Credentials, vault keys and saved local Kit entries never go with them. You approve every kit change."))
             addView(label("Keep a recovery backup and its recovery key separately. Losing this device without both means losing your vault.", 15f, true))
         })
         addView(action("Create my private vault", "create_vault", true) {
@@ -394,7 +492,9 @@ class MainActivity : AppCompatActivity() {
     private fun profilePage(): View {
         val profile = session.state?.getJSONObject("profile") ?: JSONObject()
         return page(profile.optString("name", "Your profile"), "Your Habibi, on your terms.") {
+            addView(action("AI provider", "profile_provider") { go("provider") })
             addView(action("Kits", "profile_kits", true) { go("kits") })
+            addView(action("Costumes", "profile_costumes") { go("costumes") })
             addView(action("Personalization", "profile_personalization") { go("personalization") })
             addView(action("Appearance", "profile_appearance") { go("appearance") })
             addView(action("Recovery", "profile_recovery") { go("recovery") })
@@ -402,7 +502,7 @@ class MainActivity : AppCompatActivity() {
             addView(card().apply {
                 addView(heading("Privacy", 22f))
                 addView(label("Your profile, entries, conversations and drafts are encrypted locally. Optional manual sync uploads only encrypted snapshots. No analytics, automatic cloud backup or background delivery is used."))
-                addView(label("Conversations use the host's configured harness, such as Amp or Claude Code, and its model provider. Messages, kit definitions/synthetic results and authorized GitHub profile/public repository tool results are shared, never credentials, vault keys or saved local Kit entries. Host/provider retention, terms and charges apply. Do not type information you do not want sent."))
+                addView(label("Conversations use your connected ChatGPT plan, or an explicitly configured development bridge. Messages, kit definitions/synthetic results and authorized GitHub profile/public repository tool results are shared, never credentials, vault keys or saved local Kit entries. Provider retention, terms and usage limits apply. Do not type information you do not want sent."))
                 addView(label("There is no destructive sign-out. Closing Habibi keeps your encrypted vault here.", 14f, true))
             })
         }
@@ -591,7 +691,8 @@ class MainActivity : AppCompatActivity() {
         })
     }
     private fun conversationPage() = page("Conversations", "A little room for each idea. Conversations, cards and drafts are saved locally in your encrypted vault. Unsent edits save after a short pause.") {
-        addView(label(if (session.connected) "Development inference bridge connected" else "Not connected · Connect an inference bridge to chat. Local vault and installed Kits remain available.", 14f, true))
+        addView(label(session.inferenceName, 14f, true))
+        if (!session.connected) addView(action("Connect with ChatGPT", "conversations_connect") { go("provider") })
         addView(button("New conversation", "new_conversation", true) {
             if (session.newConversation()) go("conversation")
         }.apply { isEnabled = session.canSwitchConversation })
@@ -620,8 +721,8 @@ class MainActivity : AppCompatActivity() {
         else {
             val chatId = session.conversation.id
             MaterialAlertDialogBuilder(this)
-                .setTitle("Use host inference?")
-                .setMessage("The development proxy uses the host's configured harness, such as Amp or Claude Code, and its model provider. Messages, kit definitions and synthetic tests are sent. If GitHub is connected, the agent can also send read-only profile and public repository tool results to that provider. Credentials, saved local Kit entries and vault keys stay private. Host/provider retention, terms and charges apply.")
+                .setTitle(if (session.chatGPTConnected) "Use your ChatGPT plan?" else "Use host inference?")
+                .setMessage("${if (session.chatGPTConnected) "Habibi sends requests directly to OpenAI using your ChatGPT plan." else "The development proxy uses the host’s configured harness and inference provider."} Messages, the selected costume’s name and instructions, kit definitions and synthetic tests are sent. If GitHub is connected, the agent can also send read-only profile and public repository tool results to that provider. Credentials, saved local Kit entries and vault keys stay private. Provider retention, terms and usage limits apply.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Allow for this session") { _, _ ->
                     if (route == "conversation" && session.conversation.id == chatId) {

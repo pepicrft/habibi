@@ -13,6 +13,8 @@ pub struct Profile {
     pub theme: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
 }
 
 impl Profile {
@@ -59,6 +61,9 @@ impl Profile {
         {
             return Err(Error::invalid("Choose system, light or dark appearance."));
         }
+        if let Some(model) = &self.default_model {
+            crate::chatgpt::validate_model(model)?;
+        }
         Ok(())
     }
 }
@@ -75,6 +80,7 @@ mod tests {
             style: "direct".into(),
             theme: None,
             appearance: None,
+            default_model: None,
         };
         profile.validate().unwrap();
         assert_eq!(profile.name, "Noor");

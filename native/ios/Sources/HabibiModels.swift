@@ -11,6 +11,7 @@ struct HabibiProfile: Codable, Equatable {
     var style: String
     var theme: String? = nil
     var appearance: String? = nil
+    var defaultModel: String? = nil
 
     static let interests = [
         ("health", "Health & fitness", "figure.strengthtraining.traditional"),
@@ -28,6 +29,7 @@ struct HabibiSnapshot: Decodable {
     let conversations: [HabibiConversation]?
     let connections: [HabibiConnectionSummary]?
     let drafts: [HabibiSyncedDraft]?
+    let costumes: [HabibiCostume]?
 }
 
 struct HabibiSyncedDraft: Decodable, Equatable {
@@ -37,6 +39,32 @@ struct HabibiSyncedDraft: Decodable, Equatable {
     }
     let id: UUID
     let versions: [Version]
+}
+
+struct HabibiCostumeDefinition: Codable, Equatable, Identifiable {
+    var apiVersion = 1
+    var name = ""
+    var description = ""
+    var author = ""
+    var instructions = ""
+    var examplePrompt = ""
+    var id: String { name }
+
+    func validated() throws -> Self {
+        let definition = try JSONSerialization.jsonObject(with: JSONEncoder().encode(self))
+        let result = try HabibiCore.execute(["operation": "validate_costume", "definition": definition])
+        return try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: result["definition"] ?? [:]))
+    }
+
+    static func catalog() throws -> [Self] {
+        let result = try HabibiCore.execute(["operation": "bundled_costumes"])
+        return try JSONDecoder().decode([Self].self, from: JSONSerialization.data(withJSONObject: result["costumes"] ?? []))
+    }
+}
+
+struct HabibiCostume: Codable, Identifiable {
+    let id: String
+    let definition: HabibiCostumeDefinition
 }
 
 // Display-only projection. Credentials are deliberately not decoded into the

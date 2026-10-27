@@ -2,33 +2,7 @@ import XCTest
 
 final class OnboardingTests: XCTestCase {
     func testNativeOnboardingAndProfileKits() {
-        let app = XCUIApplication()
-        app.launchArguments = ["--sync-url", "http://localhost:4000"]
-        app.launch()
-        // Once reinstalls this disposable test app, removing its document but
-        // retaining Keychain. Exercise the explicit incomplete-setup recovery.
-        if app.buttons["Discard orphaned key"].waitForExistence(timeout: 3) {
-            app.buttons["Discard orphaned key"].tap()
-            app.buttons["Discard key & restart setup"].tap()
-        }
-        if app.buttons["habibi.create"].waitForExistence(timeout: 10) {
-            app.buttons["habibi.create"].tap()
-            let name = app.textFields["habibi.name"]
-            XCTAssertTrue(name.waitForExistence(timeout: 5))
-            name.tap()
-            name.typeText("Noor")
-            app.buttons["habibi.continue"].tap()
-            let health = app.switches["habibi.interest.health"]
-            health.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -30, dy: 0)).tap()
-            XCTAssertEqual(health.value as? String, "1")
-            app.buttons["habibi.continue"].tap()
-            app.swipeUp()
-            let understood = app.switches["habibi.understood"]
-            understood.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -30, dy: 0)).tap()
-            XCTAssertEqual(understood.value as? String, "1")
-            XCTAssertTrue(app.buttons["habibi.continue"].isEnabled)
-            app.buttons["habibi.continue"].tap()
-        }
+        let app = launchHabibi()
         let home = app.buttons.matching(NSPredicate(format: "identifier == 'house' OR label == 'Home'")).firstMatch
         let conversations = app.buttons.matching(NSPredicate(format: "identifier == 'bubble.left.and.bubble.right' OR label == 'Conversations'")).firstMatch
         let profile = app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch
@@ -163,5 +137,108 @@ final class OnboardingTests: XCTestCase {
         profile.tap()
         app.buttons["habibi.profile.appearance"].tap()
         XCTAssertTrue(app.buttons["habibi.theme.clay"].isSelected)
+        app.navigationBars.buttons["Profile"].tap()
+    }
+
+    func testCostumesReviewTryOnAndConversationPersistence() {
+        let app = launchHabibi()
+        let home = app.buttons.matching(NSPredicate(format: "identifier == 'house' OR label == 'Home'")).firstMatch
+        let conversations = app.buttons.matching(NSPredicate(format: "identifier == 'bubble.left.and.bubble.right' OR label == 'Conversations'")).firstMatch
+        let profile = app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch
+        let composer = app.descendants(matching: .any).matching(identifier: "habibi.composer").firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 10))
+        profile.tap()
+        app.buttons["habibi.profile.costumes"].tap()
+        XCTAssertTrue(app.staticTexts["Your wardrobe is ready for its first costume."].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.tabBars.count, 0)
+        capture(app, "Costumes-Empty-Wardrobe")
+        app.buttons["habibi.costumes.bundled.Socratic Tutor"].tap()
+        XCTAssertTrue(app.buttons["habibi.costumes.try"].waitForExistence(timeout: 5))
+        capture(app, "Costumes-Tutor-Details")
+        app.buttons["habibi.costumes.try"].tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Learn through questions and hints, one idea at a time."].exists)
+        XCTAssertEqual(composer.value as? String, "Help me understand probability. Ask me a question to see where to begin.")
+        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wearing Socratic Tutor")
+        XCTAssertFalse(app.buttons["habibi.send"].isEnabled)
+        capture(app, "Costumes-Tutor-Conversation")
+        app.navigationBars.buttons["Conversations"].tap()
+        profile.tap()
+        app.navigationBars.buttons["Costumes"].tap()
+        XCTAssertTrue(app.staticTexts["Your wardrobe is ready for its first costume."].exists)
+        app.buttons["habibi.costumes.bundled.Socratic Tutor"].tap()
+        let addCostume = app.buttons["habibi.costumes.add"]
+        for _ in 0..<3 where !addCostume.isHittable { app.swipeUp() }
+        addCostume.tap()
+        XCTAssertTrue(app.textFields["habibi.costumes.name"].waitForExistence(timeout: 5))
+        capture(app, "Costumes-Review")
+        app.buttons["habibi.costumes.save"].tap()
+        XCTAssertTrue(app.navigationBars["Socratic Tutor"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Costumes"].tap()
+        let savedCostume = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'habibi.costumes.saved.'")).firstMatch
+        XCTAssertTrue(savedCostume.waitForExistence(timeout: 5))
+        app.swipeDown()
+        capture(app, "Costumes-Wardrobe")
+        savedCostume.tap()
+        let wearCostume = app.buttons["habibi.costumes.wear"]
+        for _ in 0..<3 where !wearCostume.isHittable { app.swipeUp() }
+        wearCostume.tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap(); composer.typeText("A costume draft to keep")
+        app.buttons["habibi.keyboard.done"].tap()
+        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wearing Socratic Tutor")
+        app.navigationBars.buttons["Conversations"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(home.waitForExistence(timeout: 10))
+        conversations.tap()
+        app.buttons.containing(.staticText, identifier: "A costume draft to keep").firstMatch.tap()
+        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wearing Socratic Tutor")
+        app.buttons["habibi.costume.conversation"].tap()
+        XCTAssertTrue(app.buttons["habibi.costumes.take-off"].waitForExistence(timeout: 5))
+        capture(app, "Costumes-Chooser")
+        app.buttons["habibi.costumes.take-off"].tap()
+        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wear a costume")
+        XCTAssertEqual(composer.value as? String, "A costume draft to keep")
+    }
+
+    private func launchHabibi() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--sync-url", "http://localhost:4000"]
+        app.launch()
+        // Once reinstalls this disposable test app, removing its document but
+        // retaining Keychain. Exercise the explicit incomplete-setup recovery.
+        if app.buttons["Discard orphaned key"].waitForExistence(timeout: 3) {
+            app.buttons["Discard orphaned key"].tap()
+            app.buttons["Discard key & restart setup"].tap()
+        }
+        if app.buttons["habibi.create"].waitForExistence(timeout: 10) {
+            app.buttons["habibi.create"].tap()
+            let name = app.textFields["habibi.name"]
+            XCTAssertTrue(name.waitForExistence(timeout: 5))
+            name.tap()
+            name.typeText("Noor")
+            app.buttons["habibi.continue"].tap()
+            let health = app.switches["habibi.interest.health"]
+            health.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -30, dy: 0)).tap()
+            XCTAssertEqual(health.value as? String, "1")
+            app.buttons["habibi.continue"].tap()
+            XCTAssertTrue(app.buttons["habibi.chatgpt.connect"].waitForExistence(timeout: 5))
+            XCTAssertEqual(app.buttons["habibi.continue"].label, "Skip for now")
+            let provider = XCTAttachment(screenshot: app.screenshot())
+            provider.name = "ChatGPT-Onboarding"; provider.lifetime = .keepAlways; add(provider)
+            app.buttons["habibi.continue"].tap()
+            app.swipeUp()
+            let understood = app.switches["habibi.understood"]
+            understood.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -30, dy: 0)).tap()
+            XCTAssertEqual(understood.value as? String, "1")
+            XCTAssertTrue(app.buttons["habibi.continue"].isEnabled)
+            app.buttons["habibi.continue"].tap()
+        }
+        return app
+    }
+
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
 }

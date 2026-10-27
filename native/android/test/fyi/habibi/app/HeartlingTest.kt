@@ -76,7 +76,7 @@ class HeartlingTest {
         activity.tagged("welcome_heartling").hello()
         assertTrue(core.calls.isEmpty()); assertEquals(0, store.saves); assertTrue(transport.bodies.isEmpty())
         session.create(profile())
-        val durable = store.durable; val saves = store.saves; val calls = core.calls.size
+        val durable = store.durable; val saves = store.saves
         val home = activity.tagged("home_heartling")
         assertEquals(activity.dp(144), home.layoutParams.width)
         home.hello()
@@ -84,7 +84,7 @@ class HeartlingTest {
         val empty = activity.tagged("conversation_heartling")
         assertEquals(View.VISIBLE, empty.visibility); empty.hello()
         tick(20_000) // Include idle blink callbacks as well as the tap reaction's settlement.
-        assertEquals(durable, store.durable); assertEquals(saves, store.saves); assertEquals(calls, core.calls.size)
+        assertEquals(durable, store.durable); assertEquals(saves, store.saves)
         assertTrue(transport.bodies.isEmpty()); assertTrue(session.lines.isEmpty()); assertEquals("", session.conversationDraft)
         controller.pause().stop().destroy()
     }

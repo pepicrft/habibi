@@ -63,6 +63,69 @@ private actor ReactionInference: HabibiSyncHTTP {
 }
 
 @MainActor
+@Test func costumesAreExplicitPinnedAndOnlySelectedGuidanceReachesInference() async throws {
+    let storage = MemoryPersistence()
+    let target = HabibiMessage(kind: "user", text: "Thanks")
+    let inference = ReactionInference(target: target.id)
+    let session = HabibiSession(store: HabibiStore(persistence: storage),
+        inferenceURL: URL(string: "https://inference.example/inference")!, inferenceHTTP: inference)
+    #expect(await session.create(.init(name: "Noor", goals: ["learning"], style: "warm")))
+    var selected = try #require(HabibiCostumeDefinition.catalog().first)
+    selected.instructions = "SELECTED-GUIDANCE: Ask one focused question."
+    selected.author = "PRIVATE-AUTHOR-NOT-FOR-INFERENCE"
+    var other = selected
+    other.name = "Private costume"
+    other.instructions = "UNSELECTED-GUIDANCE-NOT-FOR-INFERENCE"
+    try await session.saveCostume(other, id: nil)
+    session.newConversation(prompt: selected.examplePrompt, costume: selected)
+    let conversationID = try #require(session.activeConversationID)
+    #expect(session.wardrobe.count == 1) // Trying on is not installation.
+    #expect(session.composer == selected.examplePrompt)
+    session.send()
+    #expect(await inference.captured().isEmpty) // No cloud consent yet.
+    try await session.saveCostume(selected, id: nil)
+    let savedID = try #require(session.wardrobe.last?.id)
+    session.messages = [target]
+    session.cloudConsent = true
+    session.composer = "Thanks again"
+    session.send()
+    #expect(!session.canChangeCostume)
+    session.setConversationCostume(other)
+    for _ in 0..<500 {
+        if !session.chatRunning { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    try #require(!session.chatRunning)
+    let requests = await inference.captured()
+    #expect(requests.count == 1)
+    let wire = String(decoding: try #require(requests.first?.httpBody), as: UTF8.self)
+    #expect(wire.contains("SELECTED-GUIDANCE"))
+    #expect(!wire.contains("UNSELECTED-GUIDANCE"))
+    #expect(!wire.contains("PRIVATE-AUTHOR"))
+    #expect(session.costume == selected)
+    var edited = selected
+    edited.instructions = "Edited guidance for new conversations only."
+    storage.rejectWrites = true
+    await #expect(throws: (any Error).self) { try await session.saveCostume(edited, id: savedID) }
+    #expect(session.wardrobe.last?.definition == selected)
+    storage.rejectWrites = false
+    try await session.saveCostume(edited, id: savedID)
+    try await session.removeCostume(savedID)
+    #expect(session.costume == selected)
+    await session.flushConversations()
+    let restored = HabibiSession(store: HabibiStore(persistence: storage))
+    await restored.start()
+    restored.openConversation(conversationID)
+    #expect(restored.costume == selected)
+    #expect(!restored.cloudConsent)
+    restored.newConversation()
+    #expect(restored.costume == nil)
+    restored.openConversation(conversationID)
+    restored.setConversationCostume(nil)
+    #expect(restored.costume == nil)
+}
+
+@MainActor
 private final class VoiceCapture: HabibiVoiceCapturing {
     var updates: [(@MainActor (HabibiVoiceCaptureUpdate) -> Void)] = []
     func start(update: @escaping @MainActor (HabibiVoiceCaptureUpdate) -> Void) throws { updates.append(update) }

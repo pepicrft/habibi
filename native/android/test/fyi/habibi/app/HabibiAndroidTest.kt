@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
 import org.json.JSONObject
@@ -43,6 +44,10 @@ class HabibiAndroidTest {
         assertTrue(activity.text().contains("Choose at least one intention."))
         (activity.tagged("goal_creativity") as MaterialCheckBox).isChecked = true
         activity.tagged("goals_continue").performClick()
+        assertTrue(activity.text().contains("Connect with ChatGPT"))
+        assertTrue(activity.text().contains("Skip for now"))
+        assertFalse(activity.text().contains("Default model"))
+        activity.tagged("provider_continue").performClick()
         assertTrue(activity.text().contains("256-bit symmetric"))
         activity.tagged("create_vault").performClick()
         assertTrue(activity.text().contains("Hello, Sam.")); assertNotNull(session.state)
@@ -60,6 +65,78 @@ class HabibiAndroidTest {
         assertFalse(activity.text().contains("fixture-content-key"))
         controller.pause().stop().destroy()
     }
+    @Test fun profileDefaultAndConversationMenuKeepOverridesLocalAndPreserveTheComposer() {
+        val session = inject(); session.start(); session.create(profile())
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val activity = controller.get()
+        val tabs = activity.window.decorView.walk().filterIsInstance<BottomNavigationView>().single()
+        tabs.selectedItemId = R.id.profile; activity.tagged("profile_provider").performClick()
+        activity.tagged("default_model").performClick()
+        (ShadowDialog.getLatestDialog() as AlertDialog).listView.performItemClick(null, 2, 2)
+        assertEquals("gpt-6-luna", session.defaultModel)
+        activity.onBackPressedDispatcher.onBackPressed(); tabs.selectedItemId = R.id.conversations
+        activity.tagged("conversation_${session.conversation.id}").performClick()
+        val editor = activity.tagged("conversation_message") as TextInputEditText
+        editor.setText("Keep this draft"); editor.setSelection(4)
+        assertNull(activity.window.decorView.findViewWithTag<View>("conversation_model"))
+        for ((choice, expected) in listOf(1 to "gpt-6.1-sol", 0 to "gpt-6-luna")) {
+            val toolbar = activity.tagged("conversation_toolbar") as MaterialToolbar
+            assertTrue(toolbar.menu.getItem(0).title.toString().contains("Model"))
+            toolbar.menu.performIdentifierAction(android.view.Menu.FIRST, 0)
+            (ShadowDialog.getLatestDialog() as AlertDialog).listView.performItemClick(null, choice, choice.toLong())
+            assertEquals(expected, session.conversationModel)
+            assertEquals("gpt-6-luna", session.defaultModel)
+            assertSame(editor, activity.tagged("conversation_message"))
+            assertEquals("Keep this draft", editor.text.toString()); assertEquals(4, editor.selectionStart)
+        }
+        assertNull(session.conversation.modelOverride)
+        controller.pause().stop().destroy()
+    }
+
+    @Test fun costumeReviewTryOnAndTakingItOffStayLocalUntilSend() {
+        val store = MemoryVault(); val core = FixtureCore(); val session = inject(store, core)
+        session.start(); session.create(profile())
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val activity = controller.get()
+        val tabs = activity.window.decorView.walk().filterIsInstance<BottomNavigationView>().single()
+        tabs.selectedItemId = R.id.profile; activity.tagged("profile_costumes").performClick()
+        assertTrue(activity.text().contains("Your wardrobe is ready"))
+        assertEquals(View.GONE, tabs.visibility)
+        activity.tagged("costumes_bundled_Coach").performClick()
+        var dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        dialog.findViewById<View>(android.R.id.content)!!.findViewWithTag<View>("costumes_try").performClick()
+        val trialID = session.conversation.id
+        assertEquals("Coach", session.conversation.costume!!.getString("name"))
+        assertTrue(activity.text().contains("Take one step at a time."))
+        assertEquals("Help me find a first step.", (activity.tagged("conversation_message") as TextInputEditText).text.toString())
+        assertTrue(session.wardrobe.isEmpty()); assertTrue(session.lines.isEmpty())
+        activity.onBackPressedDispatcher.onBackPressed(); tabs.selectedItemId = R.id.profile
+        activity.tagged("profile_costumes").performClick(); activity.tagged("costumes_bundled_Coach").performClick()
+        dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        dialog.findViewById<View>(android.R.id.content)!!.findViewWithTag<View>("costumes_add").performClick()
+        dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        assertTrue(session.wardrobe.isEmpty()) // Opening review never installs.
+        store.failSave = true
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertTrue(session.wardrobe.isEmpty()); assertTrue(dialog.isShowing)
+        store.failSave = false
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertEquals(1, session.wardrobe.size)
+        activity.onBackPressedDispatcher.onBackPressed(); tabs.selectedItemId = R.id.conversations
+        activity.tagged("conversation_$trialID").performClick()
+        val editor = activity.tagged("conversation_message") as TextInputEditText
+        activity.tagged("conversation_costume").performClick()
+        dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        dialog.listView.performItemClick(null, 0, 0)
+        assertNull(session.conversation.costume)
+        assertFalse(activity.text().contains("Take one step at a time."))
+        assertSame(editor, activity.tagged("conversation_message"))
+        assertEquals("Help me find a first step.", editor.text.toString())
+        session.flushConversations()
+        val restored = fixtureSession(store, core); restored.start(); restored.selectConversation(trialID)
+        assertNull(restored.conversation.costume); assertEquals(1, restored.wardrobe.size)
+        assertEquals("Help me find a first step.", restored.conversationDraft)
+        controller.pause().stop().destroy()
+    }
+
     @Test fun rotationKeepsOnboardingDraftAndRestoredVaultKeepsNavigation() {
         val store = MemoryVault(); val core = FixtureCore(); inject(store, core)
         val first = Robolectric.buildActivity(MainActivity::class.java).setup()

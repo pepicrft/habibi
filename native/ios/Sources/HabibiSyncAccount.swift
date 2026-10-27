@@ -41,8 +41,9 @@ protocol HabibiSyncSecretStorage {
 }
 
 struct HabibiSyncKeychain: HabibiSyncSecretStorage {
+    var service = "fyi.habibi.sync"
     private var query: [CFString: Any] {
-        [kSecClass: kSecClassGenericPassword, kSecAttrService: "fyi.habibi.sync", kSecAttrAccount: "oauth", kSecAttrSynchronizable: false]
+        [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: "oauth", kSecAttrSynchronizable: false]
     }
     func load() throws -> Data? {
         var query = query
@@ -83,13 +84,13 @@ private final class HabibiSyncRedirectPolicy: NSObject, URLSessionTaskDelegate {
 
 final class HabibiSyncURLSession: HabibiSyncHTTP {
     private let session: URLSession
-    init() {
+    init(resourceTimeout: TimeInterval = 60) {
         let config = URLSessionConfiguration.ephemeral
         config.urlCache = nil
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false
         config.timeoutIntervalForRequest = 20
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForResource = resourceTimeout
         session = URLSession(configuration: config, delegate: HabibiSyncRedirectPolicy(), delegateQueue: nil)
     }
     func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
@@ -313,7 +314,7 @@ actor HabibiSyncAccount {
         }
         return result
     }
-    private static func form(_ values: [String: String]) -> Data {
+    static func form(_ values: [String: String]) -> Data {
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
         return Data(values.sorted { $0.key < $1.key }.map { "\($0.key.addingPercentEncoding(withAllowedCharacters: allowed)!)=\($0.value.addingPercentEncoding(withAllowedCharacters: allowed)!)" }.joined(separator: "&").utf8)
     }

@@ -91,13 +91,15 @@ struct HabibiOnboardingView: View {
             Form {
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("\(step + 1) of 3").font(.subheadline).foregroundStyle(.secondary)
-                        Text(["What should I call you?", "What matters to you?", "Yours. And only yours."][step])
+                        Text("\(step + 1) of 4").font(.subheadline)
+                            .foregroundStyle(step == 2 ? palette.muted : Color.secondary)
+                        Text(["What should I call you?", "What matters to you?", "Connect ChatGPT", "Yours. And only yours."][step])
                             .font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                         Text(["A first name or nickname is perfect. This stays in your encrypted space.",
                               "Pick a few interests. You can change these any time in your profile.",
+                              "Optional. You can connect later in Profile.",
                               "Habibi creates your private encryption key here, on this device."][step])
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(step == 2 ? palette.muted : Color.secondary)
                     }.padding(.vertical, 8)
                 }
                 if step == 0 {
@@ -109,6 +111,8 @@ struct HabibiOnboardingView: View {
                     }
                 } else if step == 1 {
                     HabibiInterestFields(profile: $profile)
+                } else if step == 2 {
+                    HabibiChatGPTFields(session: session)
                 } else {
                     Section {
                         Label("Generated with secure device randomness", systemImage: "key")
@@ -131,18 +135,28 @@ struct HabibiOnboardingView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    if step < 2 { step += 1 }
-                    else { Task { if await session.create(profile) { dismiss() } } }
-                } label: {
-                    HStack {
-                        if session.busy { ProgressView().tint(palette.onPrimary) }
-                        Text(step < 2 ? "Continue" : "Create my private space")
-                    }.frame(maxWidth: .infinity, minHeight: 36).foregroundStyle(palette.onPrimary)
+                Group {
+                    if step == 2 && !session.chatGPTConnected {
+                        Button { step += 1 } label: {
+                            Text("Skip for now").frame(maxWidth: .infinity, minHeight: 36)
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button {
+                            if step < 3 { step += 1 }
+                            else { Task { if await session.create(profile) { dismiss() } } }
+                        } label: {
+                            HStack {
+                                if session.busy { ProgressView().tint(palette.onPrimary) }
+                                Text(step < 3 ? "Continue" : "Create my private space")
+                            }.frame(maxWidth: .infinity, minHeight: 36).foregroundStyle(palette.onPrimary)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large)
-                .disabled(session.busy || (step == 0 && profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                          || (step == 1 && profile.goals.isEmpty) || (step == 2 && !understood))
+                .controlSize(.large)
+                .disabled(session.busy || session.connectingChatGPT || (step == 0 && profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                          || (step == 1 && profile.goals.isEmpty) || (step == 3 && !understood))
                 .accessibilityIdentifier("habibi.continue")
                 .padding().background(.bar)
             }

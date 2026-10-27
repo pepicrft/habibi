@@ -60,6 +60,8 @@ pub struct State {
     pub connections: Vec<crate::connections::Connection>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub drafts: Vec<crate::drafts::Draft>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub costumes: Vec<crate::costumes::Costume>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -256,6 +258,7 @@ impl State {
             conversations: vec![],
             connections: vec![],
             drafts: vec![],
+            costumes: vec![],
         })
     }
 
@@ -295,6 +298,7 @@ impl State {
         crate::conversations::validate(&mut self.conversations)?;
         crate::connections::validate(&self.connections)?;
         crate::drafts::validate(&self.drafts)?;
+        crate::costumes::validate(&mut self.costumes)?;
         Ok(())
     }
 
@@ -510,6 +514,7 @@ mod tests {
             style: "warm".into(),
             theme: None,
             appearance: None,
+            default_model: None,
         })
         .unwrap();
         let initial = state.sealed(&identity, None).unwrap();
@@ -624,6 +629,7 @@ mod tests {
             style: "warm".into(),
             theme: None,
             appearance: None,
+            default_model: None,
         })
         .unwrap();
         state.kits.push(kit);

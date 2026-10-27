@@ -43,6 +43,7 @@ internal class ConversationScreen(
     private val messages = context.column(0)
     private val tools = context.column(0)
     private val emptyHeartling = context.heartling("conversation_heartling")
+    private val welcome = context.label("", 14f, true)
     private val workingHeartling = HeartlingView(context, interactive = false).apply {
         tag = "working_heartling"; working = true
     }
@@ -100,6 +101,32 @@ internal class ConversationScreen(
                 session.selectDraftVersion(versions[index]); render()
             }.setNegativeButton("Keep writing", null).show()
     }
+    private val costume = context.button("Wear a costume", "conversation_costume") {
+        if (session.canChangeCostume && costumeDialog == null) {
+            val wardrobe = session.wardrobe
+            val choices = listOf("Just Habibi · No costume") + wardrobe.map { it.getJSONObject("definition").getString("name") }
+            costumeDialog = MaterialAlertDialogBuilder(context).setTitle("Wear a costume")
+                .setItems(choices.toTypedArray()) { dialog, index ->
+                    dialog.dismiss(); session.setConversationCostume(if (index == 0) null else wardrobe[index - 1].getJSONObject("definition"))
+                }
+                .setNegativeButton("Cancel", null).create().also { dialog ->
+                    dialog.setOnDismissListener { costumeDialog = null }; dialog.show()
+                }
+        }
+    }
+    fun showModelPicker() {
+        if (!session.canChangeModel || modelDialog != null) return
+        val models = session.chatGPTModels.toMutableList()
+        chat.modelOverride?.let { id -> if (models.none { it.first == id }) models.add(0, id to session.modelName(id)) }
+        val choices = listOf("Use default · ${session.modelName(session.defaultModel)}") + models.map { it.second }
+        val selected = chat.modelOverride?.let { id -> models.indexOfFirst { it.first == id } + 1 } ?: 0
+        modelDialog = MaterialAlertDialogBuilder(context).setTitle("Conversation model")
+            .setSingleChoiceItems(choices.toTypedArray(), selected) { dialog, index ->
+                dialog.dismiss(); session.setConversationModel(if (index == 0) null else models[index - 1].first)
+            }.setNegativeButton("Cancel", null).create().also { dialog ->
+                dialog.setOnDismissListener { modelDialog = null }; dialog.show()
+            }
+    }
     private val status = context.label("", 13f, true).apply {
         tag = "voice_status"; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         setPadding(context.dp(8), context.dp(4), context.dp(8), context.dp(4))
@@ -129,7 +156,7 @@ internal class ConversationScreen(
             addView(prompts); addView(latest)
         })
         addView(stop)
-        addView(context.column(12).apply { addView(draftSyncStatus); addView(draftVersions); addView(composer); addView(status) })
+        addView(context.column(12).apply { addView(costume); addView(draftSyncStatus); addView(draftVersions); addView(composer); addView(status) })
     }
     private val voice: OnDeviceVoiceInput = OnDeviceVoiceInput(
         (activity.application as HabibiApplication).voiceRecognizerFactory?.invoke() ?: AndroidDeviceRecognizer(context),
@@ -155,6 +182,8 @@ internal class ConversationScreen(
     private val entryCards = mutableMapOf<String, KitEntryCard>()
     private var promptDialog: AlertDialog? = null
     private var sourceDialog: AlertDialog? = null
+    private var modelDialog: AlertDialog? = null
+    private var costumeDialog: AlertDialog? = null
     private var scrollRevision = 0L
     private var restoring = true
     private var holding = false
@@ -170,7 +199,7 @@ internal class ConversationScreen(
     init {
         transcript.addView(emptyHeartling)
         transcript.addView(context.heading("Room to think", 24f))
-        transcript.addView(context.label("Design a kit, try synthetic examples, and review every Kit change. Conversations, cards and drafts save locally in your encrypted vault. Unsent edits save after a short pause.", 14f, true))
+        transcript.addView(welcome)
         transcript.addView(messages); transcript.addView(tools); transcript.addView(working)
         field.doAfterTextChanged {
             if (!syncing && !closed && session.conversation.id == id) session.conversationDraft = it.toString()
@@ -235,8 +264,14 @@ internal class ConversationScreen(
         if (closed) return
         emptyHeartling.visibility = if (chat.lines.isEmpty() && !session.chatting) View.VISIBLE else View.GONE
         working.visibility = if (session.chatting) View.VISIBLE else View.GONE
-        connection.text = if (session.connected) "Host inference · Messages, kit definitions and synthetic tests go to the host harness/model provider. Keys, profile and saved entries stay here."
-        else "Not connected · Connect an inference bridge to send. You can still write a draft or dictate on this device."
+        welcome.text = chat.costume?.getString("description")
+            ?: "Design a kit, try synthetic examples, and review every Kit change. Conversations, cards and drafts save locally in your encrypted vault. Unsent edits save after a short pause."
+        costume.text = chat.costume?.let { "Wearing ${it.getString("name")}" } ?: "Wear a costume"
+        costume.contentDescription = costume.text
+        costume.isEnabled = session.canChangeCostume
+        connection.text = if (session.connected) "${session.inferenceName} · Messages and requested tool results go to your provider. Keys, profile and saved entries stay here."
+        else if (session.usesAppleModel) "Apple’s on-device model is available only on supported Apple devices. Choose a ChatGPT model from the conversation menu."
+        else "Not connected · Connect ChatGPT in Profile → AI provider. You can still write a draft or dictate on this device."
         if (field.text.toString() != chat.draft) {
             // Only canonical clears/recovery can differ: state updates never replace the editor.
             syncing = true; field.setText(chat.draft); field.setSelection(field.text!!.length); syncing = false
@@ -359,6 +394,8 @@ internal class ConversationScreen(
         cancelGesture()
         if (voice.active) voice.discard("Dictation discarded when leaving the screen. Your typed draft is unchanged.")
         sourceDialog?.dismiss(); sourceDialog = null
+        modelDialog?.dismiss(); modelDialog = null
+        costumeDialog?.dismiss(); costumeDialog = null
         rememberEditor()
         cards.forEach { it.pause() }
     }
