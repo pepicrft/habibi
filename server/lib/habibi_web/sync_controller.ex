@@ -3,17 +3,20 @@ defmodule HabibiWeb.SyncController do
 
   import Plug.Conn
 
+  alias Habibi.Locks
   alias Habibi.Sync
 
-  plug :authenticate_account when action in [:create, :put, :list, :get]
-  plug :authorize when action in [:put, :list, :get]
+  plug :authenticate_account
+       when action in [:create, :put, :list, :get, :acquire_lock, :renew_lock, :release_lock]
+
+  plug :authorize when action in [:put, :list, :get, :acquire_lock, :renew_lock, :release_lock]
 
   def health(conn, _params), do: json(conn, %{status: "ok"})
 
   def ready(conn, _params) do
     case Ecto.Adapters.SQL.query(
            Habibi.Repo,
-           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL",
+           "SELECT to_regclass('public.vaults') IS NOT NULL AND to_regclass('public.records') IS NOT NULL AND to_regclass('public.vault_locks') IS NOT NULL AND to_regclass('public.passkeys') IS NOT NULL AND to_regclass('public.oauth_grants') IS NOT NULL",
            [],
            timeout: 2_000
          ) do
@@ -45,7 +48,7 @@ defmodule HabibiWeb.SyncController do
           conn |> put_status(413) |> json(%{error: "record_too_large"})
 
         {:ok, body, conn} ->
-          case Sync.put(conn.assigns.vault, id, body) do
+          case put_record(conn, id, body) do
             {:ok, {record, mode}} ->
               conn
               |> put_status(if(mode == :created, do: 201, else: 200))
@@ -88,6 +91,54 @@ defmodule HabibiWeb.SyncController do
     end
   end
 
+  def acquire_lock(conn, %{"id" => id}) do
+    lock_response(conn, Locks.acquire(conn.assigns.vault, id, conn.body_params))
+  end
+
+  def renew_lock(conn, %{"id" => id}) do
+    lock_response(conn, Locks.renew(conn.assigns.vault, id, conn.body_params))
+  end
+
+  def release_lock(conn, %{"id" => id}) do
+    lock_response(conn, Locks.release(conn.assigns.vault, id, conn.body_params))
+  end
+
+  defp lock_response(conn, {:ok, lease}), do: json(conn, lease)
+
+  defp lock_response(conn, {:error, {:locked, retry_after}}) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(retry_after))
+    |> put_status(423)
+    |> json(%{error: "locked", retry_after: retry_after})
+  end
+
+  defp lock_response(conn, {:error, reason}), do: error(conn, reason)
+
+  defp put_record(conn, id, body) do
+    with {:ok, fence} <- record_fence(conn) do
+      Sync.put(conn.assigns.vault, id, body, fence)
+    end
+  end
+
+  defp record_fence(conn) do
+    case {get_req_header(conn, "x-habibi-lock-id"), get_req_header(conn, "x-habibi-lock-token"),
+          get_req_header(conn, "x-habibi-lock-generation")} do
+      {[], [], []} ->
+        {:ok, nil}
+
+      {[id], [token], [generation]} ->
+        with {value, ""} <- Integer.parse(generation),
+             true <- Integer.to_string(value) == generation do
+          Locks.fence(id, token, value)
+        else
+          _ -> {:error, :invalid_lock}
+        end
+
+      _ ->
+        {:error, :invalid_lock}
+    end
+  end
+
   defp authorize(conn, _opts) do
     with [token] <- get_req_header(conn, "x-habibi-vault-token"),
          {:ok, vault} <- Sync.authorize(conn.path_params["vault_id"], token) do
@@ -119,7 +170,10 @@ defmodule HabibiWeb.SyncController do
     status =
       case reason do
         :conflict -> 409
+        :stale_lock -> 409
+        :lock_exhausted -> 409
         :quota_exceeded -> 413
+        :lock_quota_exceeded -> 413
         :not_found -> 404
         :storage_unavailable -> 503
         _ -> 400

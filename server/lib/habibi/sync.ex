@@ -35,7 +35,7 @@ defmodule Habibi.Sync do
     end
   end
 
-  def put(vault, id, ciphertext) do
+  def put(vault, id, ciphertext, fence \\ nil) do
     with {:ok, id} <- uuid(id), :ok <- validate_envelope(ciphertext) do
       digest = :crypto.hash(:sha256, ciphertext) |> Base.encode16(case: :lower)
 
@@ -51,7 +51,8 @@ defmodule Habibi.Sync do
             Repo.rollback(:conflict)
 
           nil ->
-            insert_record(current, id, ciphertext, digest)
+            Habibi.Locks.validate_fence!(current, fence)
+            insert_record(current, id, ciphertext, digest, fence)
         end
       end)
     end
@@ -76,7 +77,7 @@ defmodule Habibi.Sync do
     end
   end
 
-  defp insert_record(vault, id, ciphertext, digest) do
+  defp insert_record(vault, id, ciphertext, digest, fence) do
     size = byte_size(ciphertext)
 
     if vault.bytes + size > Application.fetch_env!(:habibi, :max_vault_bytes) or
@@ -97,6 +98,9 @@ defmodule Habibi.Sync do
       {:error, reason} -> Repo.rollback(reason)
     end
 
+    # Object storage may take longer than the lease. Never publish after expiry.
+    # The vault row remains locked, excluding successor leases until commit.
+    Habibi.Locks.validate_fence!(vault, fence)
     record = Repo.insert!(record)
 
     vault

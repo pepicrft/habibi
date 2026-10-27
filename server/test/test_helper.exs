@@ -3,6 +3,8 @@ Ecto.Adapters.SQL.Sandbox.mode(Habibi.Repo, :manual)
 
 defmodule Habibi.TestStorage do
   def put(key, bytes) do
+    if callback = Process.get(:storage_put_callback), do: callback.()
+
     if Process.get(:storage_unavailable) do
       {:error, :storage_unavailable}
     else

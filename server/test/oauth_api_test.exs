@@ -31,7 +31,16 @@ defmodule Habibi.OAuthAPITest do
           "accountRegistration" => registration
         },
         "oauth" => %{"dynamicClientRegistration" => registration},
-        "sync" => %{"encryptedSnapshots" => true, "vaultCreation" => registration},
+        "sync" => %{
+          "encryptedSnapshots" => true,
+          "vaultCreation" => registration,
+          "locks" => %{
+            "version" => 1,
+            "leaseSeconds" => 30,
+            "maxPerVault" => 32,
+            "fencedRecordPut" => true
+          }
+        },
         "themes" => %{"catalog" => "/assets/themes.json"}
       }
 
@@ -318,7 +327,13 @@ defmodule Habibi.OAuthAPITest do
 
     assert body(request(:get, "/v1/capabilities"))["sync"] == %{
              "encryptedSnapshots" => true,
-             "vaultCreation" => false
+             "vaultCreation" => false,
+             "locks" => %{
+               "version" => 1,
+               "leaseSeconds" => 30,
+               "maxPerVault" => 32,
+               "fencedRecordPut" => true
+             }
            }
 
     assert request(:get, "/.well-known/oauth-authorization-server") |> body() == metadata
