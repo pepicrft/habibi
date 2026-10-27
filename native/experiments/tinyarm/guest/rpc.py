@@ -26,6 +26,11 @@ OUTPUT_LIMIT = 32 * 1024
 FILE_LIMIT = 32 * 1024
 ARTIFACT_LIMIT = 128 * 1024
 FILE_COUNT = 128
+ADDRESS_SPACE_LIMIT = 192 * 1024 * 1024
+CHILD_FILE_LIMIT = 8 * 1024 * 1024
+DESCRIPTOR_LIMIT = 64
+EXEC_TIMEOUT_LIMIT = 20000
+TRACE_AVAILABLE = False
 ENV = {"PATH": "/usr/bin:/bin", "HOME": "/workspace/home", "LANG": "C.UTF-8",
        "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
        "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -45,20 +50,21 @@ def prctl(option, value):
         raise OSError(ctypes.get_errno(), "prctl failed")
 
 
-def child_setup(timeout_ms):
+def child_setup(timeout_ms, trace=False):
     os.umask(0o022)
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     cpu = max(1, math.ceil(timeout_ms / 1000))
     resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 1))
-    resource.setrlimit(resource.RLIMIT_AS, (192 * 1024 * 1024,) * 2)
-    resource.setrlimit(resource.RLIMIT_FSIZE, (8 * 1024 * 1024,) * 2)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+    resource.setrlimit(resource.RLIMIT_AS, (ADDRESS_SPACE_LIMIT,) * 2)
+    resource.setrlimit(resource.RLIMIT_FSIZE, (CHILD_FILE_LIMIT,) * 2)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (DESCRIPTOR_LIMIT,) * 2)
     resource.setrlimit(resource.RLIMIT_NPROC, (32, 32))
-    if os.geteuid() == 0:
+    if os.geteuid() == 0 and not trace:
         os.setgroups([])
         os.setgid(GID)
         os.setuid(UID)
-    require(os.getuid() == UID and os.getgid() == GID, "child must be uid/gid 1000")
+    require((trace and os.geteuid() == 0) or (os.getuid() == UID and os.getgid() == GID),
+            "child must be uid/gid 1000 (or the root tracer)")
     prctl(38, 1)  # PR_SET_NO_NEW_PRIVS, inherited by every descendant.
 
 
@@ -89,12 +95,18 @@ def cleanup_children():
         time.sleep(0.01)
 
 
-def capture(argv, cwd, timeout_ms, stdin=b"", limit=OUTPUT_LIMIT, drop=True):
+def capture(argv, cwd, timeout_ms, stdin=b"", limit=OUTPUT_LIMIT, drop=True, trace=False):
     """Drain pipes without buffering unbounded output or blocking on stdin."""
+    if trace:
+        require(drop and TRACE_AVAILABLE, "file tracing requires the coding guest")
+        # Root tracer owns the log; strace drops the actual command to kit.
+        # The process/file/time limits still apply, and cleanup kills tracees.
+        argv = ["/usr/bin/strace", "-f", "-qq", "-u", "kit", "-e", "trace=%file",
+                "-o", "/run/habibi-files.trace", "--"] + argv
     process = subprocess.Popen(argv, cwd=cwd, env=ENV, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                start_new_session=True, close_fds=True,
-                               preexec_fn=(lambda: child_setup(timeout_ms)) if drop else None)
+                               preexec_fn=(lambda: child_setup(timeout_ms, trace)) if drop else None)
     output = [bytearray(), bytearray()]
     truncated, timed_out, sent = False, False, 0
     deadline = time.monotonic() + timeout_ms / 1000
@@ -321,12 +333,26 @@ class Service:
                 and argv[0] and sum(len(arg.encode("utf-8")) + 1 for arg in argv) <= 16384,
                 "argv must be a bounded nonempty string array")
         timeout = request.get("timeoutMs")
-        require(type(timeout) is int and 1 <= timeout <= 20000, "timeoutMs must be 1..20000")
+        require(type(timeout) is int and 1 <= timeout <= EXEC_TIMEOUT_LIMIT,
+                "timeoutMs must be 1..%s" % EXEC_TIMEOUT_LIMIT)
         stdin = request.get("stdin", "")
         require(isinstance(stdin, str) and len(stdin.encode("utf-8")) <= ARTIFACT_LIMIT, "stdin exceeds 128KiB or is not a string")
-        code, out, err, clipped = capture(argv, self.kit, timeout, stdin.encode("utf-8"))
+        trace = request.get("traceFiles", False)
+        require(type(trace) is bool and (not trace or TRACE_AVAILABLE), "file tracing is unavailable")
+        log = Path("/run/habibi-files.trace")
+        try:
+            code, out, err, clipped = capture(argv, self.kit, timeout, stdin.encode("utf-8"), trace=trace)
+            audit = {}
+            if trace:
+                with log.open("rb") as file:
+                    recorded = file.read(256 * 1024 + 1)
+                audit = {"fileTrace": recorded[:256 * 1024].decode("utf-8", "replace"),
+                         "fileTraceTruncated": len(recorded) > 256 * 1024}
+        finally:
+            if trace:
+                log.unlink(missing_ok=True)
         out, err, clipped = utf8_output(out, err, clipped)
-        return {"exitCode": code, "stdout": out, "stderr": err, "truncated": clipped}
+        return {"exitCode": code, "stdout": out, "stderr": err, "truncated": clipped, **audit}
 
     def export(self):
         code, out, err, clipped = capture([sys.executable, "-I", "-B", str(Path(__file__).resolve()),
@@ -423,10 +449,24 @@ def serve(workspace):
 
 
 def main():
+    global ADDRESS_SPACE_LIMIT, CHILD_FILE_LIMIT, DESCRIPTOR_LIMIT, EXEC_TIMEOUT_LIMIT, TRACE_AVAILABLE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", type=Path, default=Path("/workspace"))
     parser.add_argument("--export-worker", action="store_true")
+    parser.add_argument("--coding", action="store_true", help="opt-in Node/Ruby research limits")
     args = parser.parse_args()
+    if args.coding:
+        # V8 reserves large *virtual* regions even with JIT disabled. This is
+        # not an 8GiB physical-memory allowance or a hard host memory boundary.
+        ADDRESS_SPACE_LIMIT = 8 * 1024 * 1024 * 1024
+        # BEAM's JIT ftruncates a 64MiB memfd even for `elixir --version`.
+        # Workspace/tmp byte and inode quotas remain independently enforced.
+        CHILD_FILE_LIMIT = 64 * 1024 * 1024
+        DESCRIPTOR_LIMIT = 128  # PostgreSQL needs more than 64 usable descriptors.
+        EXEC_TIMEOUT_LIMIT = 120000
+        TRACE_AVAILABLE = True
+        ENV["NODE_OPTIONS"] = "--jitless --max-old-space-size=64"
+        ENV["ERL_FLAGS"] = "+S 1:1 +SDcpu 1 +SDio 1 +A 1 +IOt 1"
     workspace = args.workspace.resolve()
     # Startup arguments are trusted host/init parameters, never RPC fields.
     ENV["HOME"] = str(workspace / "home")

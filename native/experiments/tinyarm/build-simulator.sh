@@ -25,6 +25,11 @@ if [[ ! -d "$scratch/zig-lib" ]]; then
 fi
 (cd "$upstream" && ZIG_LIB_DIR="$scratch/zig-lib" mise exec zig@0.17.0 -- zig build lib \
     -Dtarget=aarch64-ios.17.0-simulator --sysroot "$sdk" --prefix "$scratch/runtime-simulator" -j4)
+if [[ ${1:-} == --coding ]]; then
+    python3 "$experiment/guest/prepare.py" --coding
+    echo "Coding runtime prepared; run guest/coding_smoke.py with a booted simulator"
+    exit 0
+fi
 python3 "$experiment/guest/prepare.py"
 [[ -f "$scratch/bridge.json" ]] || { echo "Start bridge.mjs before building the app" >&2; exit 1; }
 app="$scratch/HabibiLab.app"

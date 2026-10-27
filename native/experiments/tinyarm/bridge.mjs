@@ -8,7 +8,9 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
-const scratch = resolve(root, ".amp/in/tinyarm-sim");
+const coding = process.argv.includes("--coding");
+const port = coding ? 8085 : 8084;
+const scratch = resolve(root, coding ? ".amp/in/tinyarm-coding" : ".amp/in/tinyarm-sim");
 await mkdir(scratch, { recursive: true });
 const token = randomBytes(32).toString("hex");
 await writeFile(resolve(scratch, "bridge.json"), JSON.stringify({ token }), { mode: 0o600 });
@@ -21,7 +23,7 @@ const schema = {
   },
 };
 let active = false;
-let sequence = 0;
+let sequence = coding ? Date.now() : 0;
 const server = createServer(async (request, response) => {
   response.setHeader("content-type", "application/json");
   response.setHeader("cache-control", "no-store");
@@ -73,4 +75,4 @@ const server = createServer(async (request, response) => {
   } finally { active = false; }
 });
 server.requestTimeout = 110000;
-server.listen(8084, "127.0.0.1", () => console.log("TinyARM Lab inference on loopback8084. Coding conversation goes to the model provider; use synthetic information."));
+server.listen(port, "127.0.0.1", () => console.log(`TinyARM Lab inference on loopback${port}. Coding conversation goes to the model provider; use synthetic information.`));

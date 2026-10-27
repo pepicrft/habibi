@@ -17,12 +17,13 @@ PACK = ROOT / ".amp/in/tinyarm-sim/pack"
 
 
 class Vm:
-    def __init__(self, command, label):
+    def __init__(self, command, label, network=None, boot_timeout=120):
+        self.network = network
         self.log = (BUILD / (label + ".log")).open("wb")
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log)
         self.pending = b""
         try:
-            self.ready = self.receive(120)
+            self.ready = self.receive(boot_timeout)
         except Exception:
             self.close()
             raise
@@ -31,28 +32,40 @@ class Vm:
 
     def receive(self, timeout=60):
         deadline = time.monotonic() + timeout
-        while b"\n" not in self.pending:
+        while True:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or not select.select([self.process.stdout], [], [], remaining)[0]:
+            if remaining <= 0:
                 raise RuntimeError("native RPC deadline; inspect guest-build/*.log")
-            data = os.read(self.process.stdout.fileno(), 65536)
-            if not data:
-                raise RuntimeError("native host exited; inspect guest-build/*.log")
-            self.pending += data
-        line, self.pending = self.pending.split(b"\n", 1)
-        return json.loads(line)
+            if b"\n" not in self.pending:
+                if not select.select([self.process.stdout], [], [], remaining)[0]:
+                    raise RuntimeError("native RPC deadline; inspect guest-build/*.log")
+                data = os.read(self.process.stdout.fileno(), 65536)
+                if not data:
+                    raise RuntimeError("native host exited; inspect guest-build/*.log")
+                self.pending += data
+                if len(self.pending) > 1024 * 1024:
+                    raise RuntimeError("Guest exceeded host transport output budget")
+                continue
+            line, self.pending = self.pending.split(b"\n", 1)
+            value = json.loads(line)
+            if value.get("event") != "network":
+                return value
+            result = self.network.handle(value) if self.network else {"ok": False, "error": "Network disabled"}
+            self.process.stdin.write(b"@" + json.dumps(result).encode() + b"\n")
+            self.process.stdin.flush()
 
-    def call(self, op, **kwargs):
+    def call(self, op, receive_timeout=60, **kwargs):
         request_id = str(uuid.uuid4())
         self.process.stdin.write(json.dumps({"id": request_id, "op": op, **kwargs}).encode() + b"\n")
         self.process.stdin.flush()
-        response = self.receive()
+        response = self.receive(receive_timeout)
         assert response["id"] == request_id, response
         assert isinstance(response["ok"], bool), response
         return response
 
     def execute(self, argv, stdin="", timeout=20000):
-        response = self.call("exec", argv=argv, stdin=stdin, timeoutMs=timeout)
+        response = self.call("exec", argv=argv, stdin=stdin, timeoutMs=timeout,
+                             receive_timeout=max(60, timeout / 1000 + 15))
         assert response["ok"], response
         return response
 
@@ -65,6 +78,19 @@ class Vm:
             self.process.wait()
         self.process.stdout.close()
         self.log.close()
+
+
+def check_user_namespaces(vm):
+    result = vm.execute(["python3", "-c",
+        "import ctypes,json,os; lib=ctypes.CDLL(None,use_errno=True); "
+        "before=os.getuid(); attempt=lib.unshare(0x10000000); "
+        "print(json.dumps({'uid':before,'result':attempt,'errno':ctypes.get_errno(),"
+        "'limit':int(open('/proc/sys/user/max_user_namespaces').read())}))"])
+    assert result["exitCode"] == 0, result
+    probe = json.loads(result["stdout"])
+    assert probe["uid"] == 1000 and probe["limit"] == 0 and probe["result"] == -1, probe
+    assert probe["errno"] in (1, 28), probe  # EPERM or ENOSPC, never successful creation.
+    print("uid1000 user namespace creation denied:", probe, flush=True)
 
 
 def main():
@@ -81,6 +107,7 @@ def main():
     command = ["xcrun", "simctl", "spawn", args.device, str(binary), str(PACK / "config")]
     vm = Vm(command, "native-authoring")
     try:
+        check_user_namespaces(vm)
         result = vm.execute(["python3", "-c", "import os,sys,ssl,sqlite3,ctypes; print(os.getuid(),os.getgid(),os.getcwd()); print(sys.stdin.read())"], "x" * 12000)
         assert result["exitCode"] == 0 and result["stdout"].startswith("1000 1000 /workspace/kit\n"), result
         assert "x" * 12000 in result["stdout"], result

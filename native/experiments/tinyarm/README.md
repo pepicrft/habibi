@@ -6,6 +6,13 @@ the guest runs real Git, Python and shell. It does not compile a Kit to Wasm.
 No workout implementation is preinstalled: the model writes, tests and commits
 source through the simulator app's JSON `exec` interface.
 
+There is also a separate [coding-agent pack](guest/README.md#coding-agent-pack)
+with Node, Ruby, Elixir and mise, a guest-resident checkpointed Node harness,
+host-brokered read-only Git access, byte/inode quotas, and optional request/body
+and file-syscall recordings. Its driver and policy broker run on the Mac, using
+the iOS simulator library. They are **not integrated into the Swift app**.
+Inference remains outside the VM; the model returns commands as data.
+
 ## Run locally
 
 Requires Apple Silicon, an installed iOS simulator, Xcode, Node, Python3, an
@@ -67,15 +74,18 @@ only, never local entries, credentials, Git history containing secrets or VM RAM
 
 The pinned TinyARM source is `bac69aa0253b10fce6a93b3d2eccf134911ed231`.
 `tinyarm-no-host-fs.patch` removes **all three** 9p devices and corrects the device
-tree count; stock native TinyARM exports the actual host root. This pack has no
-drives, networking or snapshots. A separate copy of Zig's stdlib gets the small
-iOS process-replacement availability fix; the installed toolchain is unchanged.
+tree count; stock native TinyARM exports the actual host root. Both packs have no
+drives, NICs or snapshots. The coding pack has a loopback-only HTTP adapter whose
+external requests require the Mac policy broker. A separate copy of Zig's stdlib
+gets the small iOS process-replacement availability fix; the installed toolchain
+is unchanged.
 
 The C ABI is process-global and serialized. A dedicated 16 MiB native thread
 avoids the observed default-stack crash. Guest limits bound command time,
 output, child address space and temporary files; the host has boot/RPC deadlines
 and a step allowance. Cancellation is **cooperative**, not an OS-enforced kill
-boundary. Guest RAM of 512 MiB is not a bound on the emulator's total allocation.
+boundary. Guest RAM (512 MiB for Kits, 1 GiB for coding) is not a bound on the
+emulator's total allocation.
 The output callback's queue is not a production-grade hostile-output limiter.
 
 Removing devices closes intended filesystem/network routes, not emulator bugs.
@@ -91,7 +101,8 @@ separate approval for publish/destructive operations. A credential helper that
 returns a token to Git does not keep that token outside the guest; hidden tokens
 also do not stop misuse of an authorized operation. A Habibi-operated plaintext
 credential proxy would expand the server trust boundary. No such broker or
-credential transport is implemented here.
+credential transport is implemented here; the coding broker handles only public,
+explicitly granted resources without credentials.
 
 ## Checks
 

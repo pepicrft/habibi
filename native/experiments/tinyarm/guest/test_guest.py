@@ -12,9 +12,17 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
+import network_policy
 import prepare
 import rpc
+
+
+CODING = "--coding" in sys.argv
+if CODING:
+    sys.argv.remove("--coding")
+    prepare.PACK = prepare.PACK.with_name("coding-pack")
 
 
 def artifact():
@@ -134,6 +142,45 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(code, 124)
 
 
+class NetworkPolicyTests(unittest.TestCase):
+    repository = "https://github.com/octocat/Hello-World.git"
+
+    def test_default_deny_exact_repository_and_read_only_operations(self):
+        policy = network_policy.NetworkPolicy(repositories=[self.repository])
+        valid = {"url": self.repository + "/info/refs?service=git-upload-pack", "method": "GET"}
+        self.assertFalse(network_policy.NetworkPolicy().handle(valid)["ok"])
+        self.assertEqual(policy.authorize(valid)[1], b"")
+        self.assertEqual(policy.authorize({"url": self.repository + "/git-upload-pack", "method": "POST"})[1], b"")
+        for url, method in ((self.repository + "/git-receive-pack", "POST"),
+                            (self.repository + "/info/refs?service=git-receive-pack", "GET"),
+                            (valid["url"] + "&extra=data", "GET"),
+                            (valid["url"].replace("Hello-World", "Hello-World-extra"), "GET"),
+                            (valid["url"].replace("github.com", "github.com.evil.invalid"), "GET"),
+                            (valid["url"].replace("https:", "http:"), "GET"),
+                            (valid["url"].replace("github.com", "user:secret@github.com"), "GET")):
+            with self.subTest(url=url):
+                self.assertFalse(policy.handle({"url": url, "method": method})["ok"])
+
+    def test_private_and_mixed_dns_answers_are_denied_even_when_url_is_approved(self):
+        url = "https://example.com/tool"
+        for addresses in (["127.0.0.1"], ["169.254.169.254"], ["::1"], ["10.0.0.1"],
+                          ["93.184.216.34", "192.168.1.1"]):
+            with self.subTest(addresses=addresses), patch("network_policy.socket.getaddrinfo", return_value=[
+                    (2, 1, 6, "", (address, 443)) for address in addresses]):
+                result = network_policy.NetworkPolicy(downloads={url: "a" * 64}).handle({"url": url, "method": "GET"})
+                self.assertFalse(result["ok"])
+                self.assertIn("Non-public", result["error"])
+
+    def test_request_budget_includes_denials_and_audit_is_bounded(self):
+        policy = network_policy.NetworkPolicy()
+        for _ in range(70):
+            result = policy.handle({"url": "https://example.com/", "method": "GET"})
+            self.assertFalse(result["ok"])
+        self.assertEqual(policy.requests, 64)
+        self.assertEqual(len(policy.audit), 64)
+        self.assertIn("budget exhausted", result["error"])
+
+
 def read_newc(data):
     offset, entries = 0, {}
     while True:
@@ -169,6 +216,8 @@ class PreparedPackTests(unittest.TestCase):
 
     def test_manifest_checksums_and_arm64_image(self):
         manifest = json.loads((prepare.PACK / "guest-manifest.json").read_text())
+        lock_path = prepare.HERE / ("coding-apk-lock.json" if CODING else "apk-lock.json")
+        self.assertEqual(manifest["apkLockSha256"], hashlib.sha256(lock_path.read_bytes()).hexdigest())
         for name, value in manifest["files"].items():
             data = (prepare.PACK / name).read_bytes()
             self.assertEqual(len(data), value["bytes"])
@@ -177,12 +226,22 @@ class PreparedPackTests(unittest.TestCase):
 
     def test_config_has_only_offline_diskless_devices(self):
         config = json.loads((prepare.PACK / "config").read_text())
-        self.assertEqual((config["memory_size"], config["consoles"], config["ports"]), (512, 2, 0))
+        self.assertEqual((config["memory_size"], config["consoles"], config["ports"]),
+                         (1024 if CODING else 512, 3 if CODING else 2, 0))
         self.assertEqual((config["kernel"], config["initrd"]), ("bzImage", "initramfs.cpio.gz"))
         self.assertFalse(any(key.startswith(("drive", "eth", "fs")) for key in config))
 
     def test_custom_init_module_and_empty_workspace(self):
-        self.assertEqual(self.entries["init"][1], (prepare.HERE / "init").read_bytes())
+        init = (prepare.HERE / "init").read_bytes()
+        if CODING:
+            self.assertEqual(self.entries["opt/habibi/coding-harness.mjs"][1],
+                             (prepare.HERE / "coding-harness.mjs").read_bytes())
+            self.assertEqual(self.entries["opt/habibi/network_guest.py"][1],
+                             (prepare.HERE / "network_guest.py").read_bytes())
+        else:
+            self.assertNotIn("opt/habibi/coding-harness.mjs", self.entries)
+            self.assertNotIn("opt/habibi/network_guest.py", self.entries)
+        self.assertEqual(self.entries["init"][1], init)
         self.assertEqual(self.entries["opt/habibi/rpc.py"][1], (prepare.HERE / "rpc.py").read_bytes())
         module = gzip.decompress(self.entries["lib/modules/virtio_mmio.ko.gz"][1])
         self.assertIn(b"virtio_mmio", module)
@@ -229,6 +288,13 @@ class PreparedPackTests(unittest.TestCase):
         self.assertTrue(self.resolve("usr/bin/python3")[1].startswith(b"\x7fELF"))
         self.assertTrue(self.resolve("usr/bin/git")[1].startswith(b"\x7fELF"))
         self.assertTrue(self.resolve("bin/sh")[1].startswith(b"\x7fELF"))
+        self.assertTrue(self.resolve("usr/bin/env")[1].startswith(b"\x7fELF"))
+        if CODING:
+            self.assertTrue(self.resolve("usr/bin/node")[1].startswith(b"\x7fELF"))
+            self.assertTrue(self.resolve("usr/bin/ruby")[1].startswith(b"\x7fELF"))
+        else:
+            self.assertNotIn("usr/bin/node", self.entries)
+            self.assertNotIn("usr/bin/ruby", self.entries)
 
 
 if __name__ == "__main__":
