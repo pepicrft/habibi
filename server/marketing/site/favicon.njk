@@ -1,12 +1,20 @@
 ---
-permalink: /assets/favicon.svg
+permalink: /assets/heartling.svg
 eleventyExcludeFromCollections: true
 ---
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 110">
-  <path
-    d="M15 76C9 62 18 48 23 33C28 17 36 6 49 8C65 10 71 28 78 43C84 57 97 75 86 90C80 99 69 96 61 90C57 87 53 88 48 93C36 105 21 101 20 90C20 85 17 81 15 76Z"
-    fill="{{ theme.colors.primary }}"
-  />
-  <ellipse cx="42" cy="63" rx="3.4" ry="5" fill="{{ theme.colors.background }}" />
-  <ellipse cx="61" cy="61" rx="3.4" ry="5" fill="{{ theme.colors.background }}" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384">
+  <style>
+    @media (prefers-color-scheme: dark) {
+      feFlood { flood-color: {{ theme.colors.accent }}; }
+    }
+  </style>
+  <defs>
+    <filter id="tint" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feFlood flood-color="{{ theme.colors.primary }}" result="color" />
+      <feBlend in="SourceGraphic" in2="color" mode="hard-light" />
+      <feComposite in2="SourceAlpha" operator="in" />
+    </filter>
+  </defs>
+  {# Favicon SVGs cannot load external images: embed the same neutral poster used on the page. #}
+  <image width="384" height="384" href="data:image/png;base64,{{ heartlingPoster }}" filter="url(#tint)" />
 </svg>

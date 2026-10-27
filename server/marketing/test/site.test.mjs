@@ -71,6 +71,8 @@ test("the public marketing build localizes routes and metadata, escapes translat
     const localized = readFileSync(join(output, "es/index.html"), "utf8");
     assert.match(english, /<html lang="en" dir="ltr">/);
     assert.match(localized, /<html lang="es" dir="ltr">/);
+    assert.ok(english.includes('rel="icon" href="/assets/heartling.svg"'));
+    assert.ok(localized.includes('rel="icon" href="/assets/heartling.svg"'));
     assert.ok(
       localized.includes("Acerca &lt;script&gt;alert(1)&lt;/script&gt;"),
     );
@@ -168,6 +170,7 @@ test("the public marketing build localizes routes and metadata, escapes translat
     theme.colors.primary = "#a13265";
     theme.colors.secondary = "#1e5460";
     theme.colors.background = "#ecf5e1";
+    theme.colors.accent = "#bacfe8";
     theme.fonts.body = "system-ui";
     theme.space[6] = 27;
     theme.lineHeights.body = 1.73;
@@ -186,9 +189,13 @@ test("the public marketing build localizes routes and metadata, escapes translat
       /\.button-primary\{[^}]*background-color:#a13265;[^}]*font-weight:625;/,
     );
     assert.match(css, /\.button-primary:hover\{[^}]*background-color:#1e5460;/);
-    const favicon = readFileSync(join(output, "assets/favicon.svg"), "utf8");
-    assert.match(favicon, /fill="#a13265"/);
-    assert.match(favicon, /fill="#ecf5e1"/);
+    const favicon = readFileSync(join(output, "assets/heartling.svg"), "utf8");
+    assert.match(favicon, /flood-color="#a13265"/);
+    assert.match(favicon, /flood-color: #bacfe8;/);
+    assert.deepEqual(
+      Buffer.from(favicon.match(/href="data:image\/png;base64,([^"]+)"/)[1], "base64"),
+      poster,
+    );
     const social = readFileSync(join(output, "assets/social.svg"), "utf8");
     assert.match(social, /fill="#ecf5e1"/);
     assert.match(social, /font-family="system-ui"/);

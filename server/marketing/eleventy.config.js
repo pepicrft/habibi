@@ -1,5 +1,5 @@
 import nunjucks from "nunjucks";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readCatalogues, translate } from "./gettext.mjs";
 import {
   readTheme,
@@ -41,6 +41,9 @@ export default function (eleventyConfig) {
   eleventyConfig.setLibrary("njk", environment);
   eleventyConfig.addGlobalData("theme", () => theme);
   eleventyConfig.addGlobalData("locales", () => Object.keys(catalogues).sort());
+  eleventyConfig.addGlobalData("heartlingPoster", () =>
+    readFileSync(new URL("./site/assets/mascot/heartling-idle.png", import.meta.url)).toString("base64"),
+  );
   eleventyConfig.addFilter("homePath", homePath);
   eleventyConfig.addFilter(
     "notFoundPath",
