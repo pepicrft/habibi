@@ -31,7 +31,19 @@ run = "once test HabibiIOSTests"
 
 [tasks."test:ios-ui"]
 depends = ["prepare:rust", "prepare:themes"]
-run = "once test HabibiIOSUITests"
+run = '''
+set -eu
+# iOS 26.3 cannot present alternate-icon alerts. Keep destructive UI-test installs
+# on a dedicated, verified runtime rather than Once's first booted simulator.
+if [ -z "${ONCE_APPLE_SIMULATOR_UDID:-}" ]; then
+  simulator_id=$(xcrun simctl list devices available -j | jq -r '.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"][]? | select(.name == "Habibi UI Tests") | .udid' | head -n 1)
+  if [ -z "$simulator_id" ]; then
+    simulator_id=$(xcrun simctl create "Habibi UI Tests" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+  fi
+  export ONCE_APPLE_SIMULATOR_UDID="$simulator_id"
+fi
+once test HabibiIOSUITests
+'''
 
 [tasks."build:android"]
 depends = ["prepare:rust", "prepare:themes"]

@@ -26,6 +26,15 @@ configure distribution signing or install on a physical device. Tests use a
 dedicated simulator when `ONCE_APPLE_SIMULATOR_UDID` is set. Use a disposable
 simulator: Once's UI-test runner reinstalls the app and removes its local files.
 
+`mise run test:ios-ui` creates or reuses **Habibi UI Tests**, an iPhone 17 Pro
+running iOS 26.5, unless `ONCE_APPLE_SIMULATOR_UDID` is set. Install that runtime
+in Xcode before running the task. iOS 26.3's simulator cannot load the system
+alternate-icon alert handler; the first icon change returns an I/O error and
+later changes report a busy resource. Apple's alternate-icon sample reproduces
+the failure, while the complete Habibi UI suite passes on 26.5 without skipped
+assertions. A bare `once test HabibiIOSUITests` still uses Once's first booted
+or available simulator unless you supply the environment variable.
+
 For Android, install SDK 35, build-tools 35.0.0 and NDK 27.3.13750724. Set
 `ANDROID_HOME` to your SDK and `ANDROID_NDK_HOME` to that NDK directory, then:
 
