@@ -21,7 +21,16 @@ OUTPUT=${3:-$ROOT/native/.once/distribution/Habibi.ipa}
 
 temporary=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/habibi-ios.XXXXXX")
 keychain="$temporary/signing.keychain-db"
+original_keychains=()
+while IFS= read -r path; do
+  original_keychains+=("$path")
+done < <(security list-keychains -d user | sed -E 's/^[[:space:]]*"(.*)"$/\1/')
 cleanup() {
+  if [[ ${#original_keychains[@]} -gt 0 ]]; then
+    security list-keychains -d user -s "${original_keychains[@]}" >/dev/null 2>&1 || true
+  else
+    security list-keychains -d user -s >/dev/null 2>&1 || true
+  fi
   security delete-keychain "$keychain" >/dev/null 2>&1 || true
   rm -rf "$temporary"
 }
@@ -85,6 +94,13 @@ plutil -replace keychain-access-groups -json "[\"$team.$bundle_id\"]" "$temporar
 
 keychain_password=$(openssl rand -hex 32)
 security create-keychain -p "$keychain_password" "$keychain"
+# codesign also uses the search list for certificate-chain resolution. Creating
+# a keychain does not reliably add it on runners with an explicit search list.
+if [[ ${#original_keychains[@]} -gt 0 ]]; then
+  security list-keychains -d user -s "$keychain" "${original_keychains[@]}"
+else
+  security list-keychains -d user -s "$keychain"
+fi
 security set-keychain-settings -lut 21600 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
 security import "$temporary/distribution.p12" -k "$keychain" -P "$IOS_DISTRIBUTION_P12_PASSWORD" -T /usr/bin/codesign
