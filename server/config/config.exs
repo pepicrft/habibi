@@ -33,6 +33,12 @@ if config_env() == :test do
   config :habibi, :storage, Habibi.TestStorage
   config :habibi, :max_vault_bytes, 1024 * 1024
 
+  config :habibi, Habibi.Subscriptions,
+    secret_key: "test-secret",
+    apple_key: "test-apple",
+    google_key: "test-google",
+    request_options: [plug: {Req.Test, Habibi.Subscriptions}]
+
   config :habibi, Habibi.Repo,
     pool: Ecto.Adapters.SQL.Sandbox,
     pool_size: 10

@@ -7,6 +7,8 @@ defmodule Habibi.LocksAPITest do
   alias Ecto.Adapters.SQL.Sandbox
 
   setup context do
+    Habibi.AuthTestHelpers.stub_subscription()
+
     if context[:unboxed] do
       :ok = Sandbox.checkout(Repo, sandbox: false)
       {exchange, account} = Habibi.AuthTestHelpers.authorize_client()

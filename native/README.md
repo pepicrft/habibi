@@ -48,6 +48,69 @@ The current Once target builds ARM64. Gradle packages the JNI library, real
 Android resources and locked Android dependencies. See [android/README.md](android/README.md)
 for its packaging contract and standalone JVM tests. Both apps use `fyi.habibi.app`.
 
+## Habibi Plus subscriptions
+
+**Profile → Habibi Plus** offers monthly and yearly subscriptions for hosted
+encrypted snapshot uploads and automatic composer-draft handoff. Local
+conversations, supported local AI, Kits, costumes, encryption and recovery
+exports/imports remain free. AI-provider subscriptions and usage are separate.
+Signing in is free and does not recover a vault key. After expiration, hosted
+writes pause with HTTP 402; local data, pending snapshots, existing downloads,
+and lease renewal/release remain available. Cancellation never deletes data.
+
+Checkout uses StoreKit 2 or Google Play Billing. Both show the store's localized
+recurring price, handle pending payments, offer restore and link to subscription
+management. There are no hardcoded prices, trials, discounts or lifetime grants.
+The native client verifies the signed-in account before checkout, binds the
+purchase to it, and submits the store proof to the authenticated server before
+finishing/acknowledging it. Use the same Habibi passkey account on both platforms;
+manage payment in the original store. Apple and Google accounts are not Habibi
+accounts, and changing Habibi accounts does not transfer a subscription.
+
+The server uses RevenueCat REST v1 as its purchase verifier. It sends a
+pseudonymous Habibi account UUID, platform, product ID and store receipt/token,
+never vault content, encryption keys, AI-provider credentials or waitlist email.
+RevenueCat and the stores process billing metadata under their own policies.
+No receipt is stored in Habibi's database. `GET /v1/subscription` and
+`POST /v1/subscription/receipt` require OAuth. Every hosted write checks current
+verified access; client-supplied customer IDs or entitlement flags cannot grant
+it. Renewals, cancellation, grace periods and refunds come from RevenueCat's
+subscriber response. Missing configuration or a provider failure returns 503
+and leaves local data untouched. There is no entitlement cache or webhook
+receiver: RevenueCat availability and request limits affect hosted writes.
+
+### External billing setup required before launch
+
+This repository does **not** create store products, configure a RevenueCat
+project, set prices or enable live payments. Before distribution:
+
+1. Create `habibi_plus_monthly` and `habibi_plus_yearly` in App Store Connect
+   in the same subscription group, with one-month and one-year renewal periods.
+   Disable Family Sharing: access is for one Habibi account.
+2. Create those same subscription IDs in Google Play, each with one ordinary
+   auto-renewing base plan, respectively `P1M` and `P1Y`. Do not add prepaid or
+   trial offers expecting this checkout to display them. Publish through a Play
+   test track to test billing; a sideloaded APK cannot prove checkout works.
+3. Connect both store apps in one RevenueCat project, attach all four products
+   to entitlement **`plus`**, configure store credentials and Apple server
+   notifications/Google real-time developer notifications for renewals/refunds.
+   Set RevenueCat restore behavior to **Keep with original App User ID**. This
+   is required to prevent a receipt being moved to another Habibi account.
+4. Supply `REVENUECAT_SECRET_KEY` (server-side REST v1 read key),
+   `REVENUECAT_APPLE_KEY` and `REVENUECAT_GOOGLE_KEY` (respective public app keys)
+   using your server's secret manager. No billing keys belong in native source.
+   Allow outbound HTTPS to `api.revenuecat.com`. Billing availability requires
+   all three keys. No new database migration is needed for subscriptions.
+5. Use a separate nonproduction server with `BILLING_ALLOW_SANDBOX=true` for
+   store sandbox testing. Production rejects sandbox entitlements even if that
+   variable is set. Test success, pending/canceled payment, renewal, grace,
+   refund, expiry, restore after interruption and cross-platform sign-in. Also
+   test that a different Habibi account cannot claim an existing receipt.
+6. Publish billing privacy/retention disclosures and store subscription terms,
+   set the approved localized prices and tax details, and complete store review.
+   Apple sandbox review needs the nonproduction verification path. Store
+   approval and live transactions have not been verified by local tests.
+
 ## App icons
 
 Profile → Appearance offers Forest (the default/GitHub logo), Midnight and

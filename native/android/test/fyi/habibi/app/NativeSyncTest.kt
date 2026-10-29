@@ -392,6 +392,46 @@ class SyncSessionTest {
             if (request.getString("operation").startsWith("sync_")) JSONObject().put("ok", sync(request)).toString() else fixture.execute(input)
         }, Executor { it.run() }, { it() }, oauth = NativeOAuth(oauthStore, wire), syncTransport = http)
 
+    @Test fun subscriptionsUseAuthenticatedReceiptsFailClosedAndNeverChangeTheLocalVault() {
+        val vault = MemoryVault()
+        var active = false
+        var offline = false
+        val subject = "d88f59d8-75ca-4e01-aadf-3e020a15bbc4"
+        val session = session(vault, FixtureCore(), sync = { syncStatus() }, http = SyncTransport { _, method, path, headers, body ->
+            assertEquals("Bearer access-one", headers["Authorization"])
+            if (offline) SyncResponse(503, ByteArray(0))
+            else if (path == "/v1/me") jsonResponse(JSONObject().put("sub", subject))
+            else {
+                if (method == "POST") {
+                    assertEquals("/v1/subscription/receipt", path)
+                    val receipt = JSONObject(String(body!!))
+                    assertEquals("android", receipt.getString("platform"))
+                    assertEquals("habibi_plus_monthly", receipt.getString("product_id"))
+                    assertEquals("play-purchase-token", receipt.getString("fetch_token"))
+                    assertFalse(receipt.has("active")); assertFalse(receipt.has("app_user_id"))
+                    active = true
+                }
+                jsonResponse(JSONObject().put("plan", if (active) "plus" else "free").put("active", active).put("available", true)
+                    .put("expires_at", if (active) "2099-06-14T12:00:00Z" else JSONObject.NULL))
+            }
+        })
+        session.start(); session.create(profile())
+        session.beginSyncAuthorization { session.syncCallback(callback(it)) }
+        val original = vault.durable
+        session.refreshSubscription(); assertFalse(session.plusActive); assertTrue(session.billingAvailable)
+        session.subscriptionAccount { assertEquals(subject, it.getOrThrow()) }
+        session.submitSubscriptionReceipt(JSONObject().put("platform", "android").put("product_id", "habibi_plus_monthly").put("fetch_token", "play-purchase-token")) {
+            assertTrue(it.isSuccess)
+        }
+        assertTrue(session.plusActive)
+        active = false; session.refreshSubscription(); assertFalse(session.plusActive)
+        offline = true; session.refreshSubscription()
+        assertFalse(session.plusActive); assertFalse(session.billingAvailable)
+        assertTrue(session.subscriptionMessage!!.contains("without paying again"))
+        assertEquals(original, vault.durable)
+        session.disconnectSync(); assertFalse(session.plusActive); assertEquals(original, vault.durable)
+    }
+
     @Test fun pollingAnEmptyVaultDoesNotCreateConversationsOrClaimPendingEdits() {
         val session = session(MemoryVault(), FixtureCore(), sync = { request ->
             if (request.getString("operation") == "sync_status") syncStatus()
@@ -573,6 +613,14 @@ class SyncSessionTest {
         fun walk(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { walk(view.getChildAt(it)) } else emptyList()
         fun tagged(tag: String) = activity.window.decorView.findViewWithTag<View>(tag) ?: error("Missing view $tag")
         walk(activity.window.decorView).filterIsInstance<BottomNavigationView>().single().selectedItemId = R.id.profile
+        tagged("profile_plus").performClick()
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(16))
+        assertTrue(tagged("plus_refresh").isEnabled)
+        assertFalse(tagged("plus_restore").isEnabled)
+        assertTrue(tagged("plus_sign_in").isEnabled)
+        assertNull(activity.window.decorView.findViewWithTag<View>("plus_subscribe"))
+        assertEquals(original, store.durable)
+        activity.onBackPressedDispatcher.onBackPressed()
         tagged("profile_sync").performClick(); assertTrue(wire.requests.isEmpty())
         tagged("sync_sign_in").performClick()
         val browser = shadowOf(activity).nextStartedActivity

@@ -38,7 +38,10 @@ internal data class SyncResponse(val code: Int, val body: ByteArray, val etag: S
         check(body.size <= 256 * 1024) { "Sync metadata is too large." }
         return try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { error("Invalid sync response.") }
     }
-    fun success(): SyncResponse { check(code in 200..299) { "Sync request failed ($code). Retry Sync now; saved data is retained." }; return this }
+    fun success(): SyncResponse {
+        check(code != 402) { "Sync uploads need Habibi Plus. Open Habibi Plus in Profile to subscribe or restore. Your local data and pending uploads are kept." }
+        check(code in 200..299) { "Sync request failed ($code). Retry Sync now; saved data is retained." }; return this
+    }
 }
 
 internal fun base64url(value: ByteArray): String = Base64.encodeToString(value, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)

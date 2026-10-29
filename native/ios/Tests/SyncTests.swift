@@ -26,6 +26,8 @@ private actor SyncServer: HabibiSyncHTTP {
     var badIssuer = false
     var refreshConsumed = false
     var revoked = false
+    var plus = true
+    var billingOffline = false
     let clientID = "37eb736a-a2da-47a3-8c07-9fa07dd8bcc5"
 
     func loseNextUpload() { dropUpload = true }
@@ -33,6 +35,7 @@ private actor SyncServer: HabibiSyncHTTP {
     func corruptDigest() { badDigest = true }
     func corruptIssuer() { badIssuer = true }
     func count() -> Int { records.count }
+    func subscription(active: Bool, offline: Bool = false) { plus = active; billingOffline = offline }
 
     func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
         let url = request.url!
@@ -67,6 +70,12 @@ private actor SyncServer: HabibiSyncHTTP {
         if url.path == "/oauth/revoke" { revoked = true; return try response(200, [:]) }
         guard request.value(forHTTPHeaderField: "Authorization") == "Bearer fictional-access-token", !revoked else { return try response(401, [:]) }
         if url.path == "/v1/me" { return try response(200, ["sub": "18af5843-6b1f-46cd-b3fa-829e215c5d16"]) }
+        if url.path == "/v1/subscription" {
+            return try response(billingOffline ? 503 : 200, ["plan": plus ? "plus" : "free", "active": plus, "available": true, "expires_at": plus ? "2099-01-01T00:00:00Z" : NSNull()])
+        }
+        if !plus, ["POST", "PUT"].contains(request.httpMethod), url.path.hasPrefix("/v1/vaults") {
+            return try response(402, ["error": "subscription_required"])
+        }
         if url.path == "/v1/vaults" {
             let value = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: String]
             if vaultToken != nil { return try response(409, [:]) }
@@ -278,4 +287,32 @@ private func connect(_ server: SyncServer, secrets: SyncSecrets = SyncSecrets())
     await #expect(throws: (any Error).self) { _ = try await HabibiSynchronizer(store: second, account: account).run() }
     #expect(secondStorage.document == oldDocument)
     #expect(try await second.restore()?.profile.name == "Keep this safe")
+}
+
+@Test @MainActor func plusExpiryPausesUploadsWithoutLosingVaultOrRecoveryAndStatusFailsClosed() async throws {
+    let server = SyncServer()
+    let account = try await connect(server)
+    let subscription = HabibiSubscription(account: account)
+    await subscription.refresh()
+    #expect(subscription.status?.active == true)
+    let store = HabibiStore(persistence: MemoryPersistence())
+    _ = try await store.create(profile: .init(name: "Still mine", goals: ["health"], style: "warm"))
+    let synchronizer = HabibiSynchronizer(store: store, account: account)
+    _ = try await synchronizer.run()
+    _ = try await store.call("profile", arguments: ["profile": ["name": "Offline edits", "goals": ["health"], "style": "warm"]], persist: true)
+    await server.subscription(active: false)
+    await subscription.refresh()
+    #expect(subscription.status?.active == false)
+    await #expect(throws: (any Error).self) { _ = try await synchronizer.run() }
+    #expect(try await store.restore()?.profile.name == "Offline edits")
+    #expect(try await synchronizer.status().pending != nil)
+    #expect(try await store.call("export_recovery")["backup"] != nil)
+    #expect(await server.count() == 1)
+    await server.subscription(active: true, offline: true)
+    await subscription.refresh()
+    #expect(subscription.status == nil)
+    await server.subscription(active: true)
+    _ = try await synchronizer.run()
+    #expect(await server.count() == 2)
+    #expect(try await synchronizer.status().pending == nil)
 }

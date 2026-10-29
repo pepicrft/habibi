@@ -31,6 +31,8 @@ defmodule HabibiWeb.SyncController do
               :release_lock
             ]
 
+  plug :require_plus when action in [:create, :put, :put_drafts, :acquire_lock]
+
   def health(conn, _params), do: json(conn, %{status: "ok"})
 
   def ready(conn, _params) do
@@ -238,6 +240,19 @@ defmodule HabibiWeb.SyncController do
 
   defp metadata(record) do
     %{id: record.id, sequence: record.sequence, bytes: record.bytes, sha256: record.digest}
+  end
+
+  defp require_plus(conn, _) do
+    case Habibi.Subscriptions.status(conn.assigns.account.sub) do
+      {:ok, %{active: true}} ->
+        conn
+
+      {:ok, _} ->
+        conn |> put_status(402) |> json(%{error: "subscription_required", plan: "plus"}) |> halt()
+
+      {:error, _} ->
+        conn |> put_status(503) |> json(%{error: "billing_unavailable"}) |> halt()
+    end
   end
 
   defp error(conn, reason) do

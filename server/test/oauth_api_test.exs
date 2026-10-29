@@ -13,6 +13,7 @@ defmodule Habibi.OAuthAPITest do
       on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     end
 
+    stub_subscription()
     :ok
   end
 
@@ -31,6 +32,12 @@ defmodule Habibi.OAuthAPITest do
           "accountRegistration" => registration
         },
         "oauth" => %{"dynamicClientRegistration" => registration},
+        "subscriptions" => %{
+          "available" => true,
+          "entitlement" => "plus",
+          "products" => ["habibi_plus_monthly", "habibi_plus_yearly"],
+          "requiredFor" => ["syncWrites", "draftHandoff"]
+        },
         "sync" => %{
           "encryptedSnapshots" => true,
           "vaultCreation" => registration,

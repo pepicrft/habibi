@@ -23,6 +23,8 @@ defmodule HabibiWeb.Endpoint do
     same_site: "Lax",
     max_age: 900
 
+  plug :parse_receipt
+
   plug Plug.Parsers,
     parsers: [:urlencoded, :json],
     pass: ["application/octet-stream"],
@@ -30,6 +32,15 @@ defmodule HabibiWeb.Endpoint do
     length: 8192
 
   plug HabibiWeb.Router
+
+  defp parse_receipt(%{request_path: "/v1/subscription/receipt", method: "POST"} = conn, _) do
+    Plug.Parsers.call(
+      conn,
+      Plug.Parsers.init(parsers: [:json], json_decoder: Jason, length: 72 * 1024)
+    )
+  end
+
+  defp parse_receipt(conn, _), do: conn
 
   defp private_response(conn, _opts) do
     conn

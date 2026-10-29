@@ -47,11 +47,11 @@ private struct HabibiRootView: View {
                     palette.canvas.ignoresSafeArea().overlay { HabibiMark() }.accessibilityHidden(true)
                 }
             }
-            .task { await session.start(); session.setDraftSyncActive(scenePhase == .active); await appearance.refresh() }
+            .task { await session.start(); session.setDraftSyncActive(scenePhase == .active); await appearance.refresh(); await session.subscription.resume() }
             .onChange(of: scenePhase) { _, phase in
                 session.setDraftSyncActive(phase == .active)
                 if phase == .background { session.stop(); session.finishDraftHandoff() }
-                if phase == .active { session.refreshOnDeviceAvailability() }
+                if phase == .active { session.refreshOnDeviceAvailability(); Task { await session.subscription.resume() } }
             }
             .sheet(item: $session.review, onDismiss: { session.resolveReview(false) }) { review in
                 HabibiReviewView(session: session, review: review)

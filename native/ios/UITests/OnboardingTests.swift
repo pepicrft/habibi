@@ -1,6 +1,26 @@
 import XCTest
 
 final class OnboardingTests: XCTestCase {
+    func testPlusExplainsTheBoundaryWithoutBlockingLocalUse() {
+        let app = launchHabibi()
+        app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch.tap()
+        app.buttons["habibi.profile.plus"].tap()
+        XCTAssertTrue(app.navigationBars["Habibi Plus"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Encrypted sync across your devices"].exists)
+        XCTAssertTrue(app.staticTexts["Conversations, on-device AI, local Kits, costumes, encryption and recovery backups. No subscription needed."].exists)
+        XCTAssertEqual(app.tabBars.count, 0)
+        capture(app, "Plus-Free-Overview")
+        app.swipeUp()
+        let signIn = app.buttons["habibi.plus.sign-in"]
+        XCTAssertTrue(signIn.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["habibi.plus.subscribe"].exists)
+        XCTAssertFalse(app.buttons["habibi.plus.restore"].isEnabled)
+        capture(app, "Plus-Unavailable-Plans")
+        app.navigationBars.buttons["Profile"].tap()
+        app.buttons["habibi.profile.kits"].tap()
+        XCTAssertTrue(app.navigationBars["Kits"].waitForExistence(timeout: 5))
+    }
+
     func testNativeOnboardingAndProfileKits() {
         let app = launchHabibi()
         let home = app.buttons.matching(NSPredicate(format: "identifier == 'house' OR label == 'Home'")).firstMatch

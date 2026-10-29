@@ -29,6 +29,14 @@ config :habibi, Habibi.WaitlistEmail,
   from: System.get_env("WAITLIST_EMAIL_FROM"),
   mailbox: if(config_env() != :prod, do: System.get_env("WAITLIST_EMAIL_DIR"))
 
+if config_env() != :test do
+  config :habibi, Habibi.Subscriptions,
+    secret_key: System.get_env("REVENUECAT_SECRET_KEY"),
+    apple_key: System.get_env("REVENUECAT_APPLE_KEY"),
+    google_key: System.get_env("REVENUECAT_GOOGLE_KEY"),
+    allow_sandbox: config_env() != :prod and System.get_env("BILLING_ALLOW_SANDBOX") == "true"
+end
+
 {:ok, bind_ip} =
   System.get_env("BIND_IP", if(config_env() == :prod, do: "0.0.0.0", else: "127.0.0.1"))
   |> String.to_charlist()

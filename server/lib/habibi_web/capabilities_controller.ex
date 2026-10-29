@@ -8,6 +8,12 @@ defmodule HabibiWeb.CapabilitiesController do
       version: 1,
       authentication: %{passkeys: true, phone: false, accountRegistration: registration},
       oauth: %{dynamicClientRegistration: registration},
+      subscriptions: %{
+        available: Habibi.Subscriptions.available?(),
+        entitlement: "plus",
+        products: Habibi.Subscriptions.products(),
+        requiredFor: ["syncWrites", "draftHandoff"]
+      },
       sync: %{
         encryptedSnapshots: true,
         vaultCreation: registration,

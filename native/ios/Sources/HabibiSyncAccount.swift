@@ -267,14 +267,16 @@ actor HabibiSyncAccount {
         return next.accessToken!
     }
 
-    func verifyAccount() async throws {
+    @discardableResult
+    func verifyAccount() async throws -> UUID {
         var (data, response) = try await authorized("/v1/me")
         if response.statusCode == 401 {
             let token = try await accessToken(forceRefresh: true)
             (data, response) = try await request("/v1/me", headers: ["Authorization": "Bearer \(token)"])
         }
         let value = try object(data, status: response.statusCode, expected: [200])
-        guard let sub = value["sub"] as? String, UUID(uuidString: sub) != nil else { throw signedOut }
+        guard let sub = value["sub"] as? String, let subject = UUID(uuidString: sub) else { throw signedOut }
+        return subject
     }
 
     func authorized(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil,

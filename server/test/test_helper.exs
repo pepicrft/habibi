@@ -107,10 +107,27 @@ defmodule Habibi.AuthTestHelpers do
   end
 
   def access_token do
+    stub_subscription()
     {exchange, _} = authorize_client()
     response = request(:post, "/oauth/token", exchange)
     assert response.status == 200, response.resp_body
     Jason.decode!(response.resp_body)["access_token"]
+  end
+
+  def stub_subscription do
+    Req.Test.stub(Habibi.Subscriptions, fn conn ->
+      Req.Test.json(conn, %{
+        subscriber: %{
+          entitlements: %{
+            plus: %{
+              product_identifier: "habibi_plus_monthly",
+              expires_date: "2099-01-01T00:00:00Z"
+            }
+          },
+          subscriptions: %{habibi_plus_monthly: %{is_sandbox: false, refunded_at: nil}}
+        }
+      })
+    end)
   end
 
   def request(method, path, params \\ nil, headers \\ []) do

@@ -75,6 +75,7 @@ internal class EncryptedSync(
                 check(me.optString("sub").isNotBlank()) { "Sign in to sync again." }
                 val body = JSONObject().put("id", id(status.getString("vaultId"))).put("token", status.getString("token"))
                 val created = http.request(origin, "POST", "/v1/vaults", mapOf("Authorization" to "Bearer ${access()}", "Content-Type" to "application/json"), body.toString().toByteArray())
+                if (created.code == 402) created.success()
                 check(created.code == 201 || created.code == 409) { "The vault could not be registered (${created.code}). No remote vault was replaced." }
                 // 409 is never permission to change the existing capability.
                 response = request(status, "GET", root(status) + "/records?after=$cursor")
@@ -134,6 +135,7 @@ internal class EncryptedSync(
         check(me.optString("sub").isNotBlank()) { "Sign in to sync again." }
         val body = JSONObject().put("id", id(status.getString("vaultId"))).put("token", status.getString("token"))
         val created = http.request(origin, "POST", "/v1/vaults", mapOf("Authorization" to "Bearer ${access()}", "Content-Type" to "application/json"), body.toString().toByteArray())
+        if (created.code == 402) created.success()
         check(created.code == 201 || created.code == 409) { "The vault could not be registered (${created.code})." }
         request(status, "GET", root(status) + "/records?after=${status.getLong("cursor")}").success()
     }

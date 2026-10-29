@@ -18,6 +18,13 @@ under **Other draft versions**; choosing a version never sends it. Full-vault sy
 still uses explicit snapshot conflict choices. See [automatic drafts](native/README.md#automatic-composer-drafts)
 for setup, timing and limits.
 
+**Habibi Plus** puts hosted encrypted sync uploads and draft handoff behind a
+monthly/yearly native-store subscription. Local conversations, Kits, costumes,
+encryption and recovery stay free; expiration never blocks existing downloads
+or deletes local data. StoreKit/Google Play checkout and server-side RevenueCat
+verification are implemented, but live payments require external store products,
+prices and billing configuration. See [subscription setup](native/README.md#habibi-plus-subscriptions).
+
 Kits can present native input cards directly inside a conversation, such as asking for exercise repetitions. Fields come from the installed Kit schema. An explicit Save seals the entry and card receipt together; retries do not duplicate it, and saved cards restore after restart. Editing or saving does not call inference or disclose the entered values to the model. Unsaved inline inputs remain ephemeral. Read-only result tables still use the reviewed bundled Atlas Native Shell renderer.
 
 Simulator/debug launch flags connect to a loopback host inference bridge using authenticated Amp, Claude or Pi. The host CLI returns tool requests as data; the app validates, executes and approves them. Messages and requested definitions reach the selected provider, but tools never send saved entries or keys. Profile → Encrypted sync connects native apps through system-browser OAuth/PKCE and immutable encrypted snapshots, with explicit conflict choices. Account sign-in does not recover encryption keys. See the [build, inference and privacy instructions](native/README.md). Production inference, public sharing and migrations are not connected. The browser workbench below remains a separate reference client with different local key storage.

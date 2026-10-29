@@ -163,6 +163,12 @@ internal class HabibiSession(
     @Volatile var syncConflict = false; private set
     @Volatile var syncPending = false; private set
     @Volatile var syncDecision = ""; private set
+    @Volatile private var subscription: JSONObject? = null
+    @Volatile var subscriptionMessage: String? = null; private set
+    val plusActive get() = subscription?.optBoolean("active") == true && runCatching {
+        Instant.parse(subscription!!.getString("expires_at")).isAfter(Instant.now())
+    }.getOrDefault(false)
+    val billingAvailable get() = subscription?.optBoolean("available") == true
     @Volatile var draftSyncMessage = "Draft sync connects through Encrypted sync in Profile."; private set
     @Volatile private var draftSyncActive = false
     @Volatile private var draftSyncDeparture = false
@@ -554,6 +560,10 @@ internal class HabibiSession(
                         check(syncTransport.request(syncOrigin, "GET", "/v1/me", mapOf("Authorization" to "Bearer $token"), null).success().json().optString("sub").isNotBlank())
                         val body = JSONObject().put("id", status.getString("vaultId")).put("token", status.getString("token")).toString().toByteArray()
                         val registered = syncTransport.request(syncOrigin, "POST", "/v1/vaults", mapOf("Authorization" to "Bearer $token", "Content-Type" to "application/json"), body)
+                        if (registered.code == 402) {
+                            draftSyncMessage = "Draft sync needs Habibi Plus. Your local drafts are safe. Open Habibi Plus in Profile."
+                            return@work
+                        }
                         check(registered.code == 201 || registered.code == 409)
                         return@repeat
                     }
@@ -588,6 +598,10 @@ internal class HabibiSession(
                         if (!draftSyncActive && !finishing) return@work
                         val uploaded = request("PUT", body = decodeEnvelope(candidate.getString("envelope")), condition = condition)
                         if (uploaded.code == 412) return@repeat // Fetch the winner and preserve its branches too.
+                        if (uploaded.code == 402) {
+                            draftSyncMessage = "Draft sync needs Habibi Plus. Your local drafts are safe. Open Habibi Plus in Profile."
+                            return@work
+                        }
                         check(uploaded.code == 204)
                     }
                     synchronized(archiveLock) {
@@ -696,10 +710,43 @@ internal class HabibiSession(
     fun configureSync(origin: SyncOrigin) = work {
         check(!syncing && !authorizing) { "Cancel authorization before changing sync origin." }
         syncOrigin = origin
+        subscription = null; subscriptionMessage = null
         syncRemovalFailed = false
         syncHeads = emptyList(); syncConflict = false; syncPending = false; syncDecision = ""
         syncConnected = oauth?.connected(origin) == true
         syncMessage = if (syncConnected) "Connected · Tap Sync now to check encrypted versions." else "Not connected · Sign in to enable manual encrypted sync."
+    }
+
+    private fun subscriptionRequest(path: String = "/v1/subscription", receipt: JSONObject? = null): JSONObject {
+        val token = (oauth ?: error("Sign in to your Habibi account first.")).access(syncOrigin)
+        val response = syncTransport.request(syncOrigin, if (receipt == null) "GET" else "POST", path,
+            mapOf("Authorization" to "Bearer $token", "Content-Type" to "application/json"), receipt?.toString()?.toByteArray(Charsets.UTF_8))
+        check(response.code == 200) { "Subscription verification is unavailable. If payment completed, restore purchases to retry without paying again." }
+        return response.json()
+    }
+    fun refreshSubscription() = work {
+        if (oauth?.connected(syncOrigin) != true) { subscription = null; return@work }
+        try { subscription = subscriptionRequest(); subscriptionMessage = null }
+        catch (cause: Exception) { subscription = null; subscriptionMessage = cause.message }
+    }
+    fun subscriptionAccount(done: (Result<String>) -> Unit) = work {
+        val result = runCatching {
+            val token = (oauth ?: error("Sign in first.")).access(syncOrigin)
+            val sub = syncTransport.request(syncOrigin, "GET", "/v1/me", mapOf("Authorization" to "Bearer $token"), null).success().json().getString("sub")
+            check(UUID.fromString(sub).toString() == sub) { "Invalid Habibi account." }
+            subscription = subscriptionRequest()
+            check(billingAvailable) { "Subscriptions aren’t available on this server yet. Nothing has been charged." }
+            sub
+        }
+        publish { done(result) }
+    }
+    fun submitSubscriptionReceipt(receipt: JSONObject, done: (Result<Unit>) -> Unit) = work {
+        val result = runCatching {
+            subscription = subscriptionRequest("/v1/subscription/receipt", receipt)
+            check(plusActive) { "No active Plus subscription was verified. Restore using the original Habibi account." }
+            subscriptionMessage = null
+        }
+        publish { done(result) }
     }
     private fun coordinator() = EncryptedSync(syncTransport, { (oauth ?: error("OAuth is unavailable in this build.")).access(syncOrigin) }, syncOrigin,
         { operation, arguments ->
@@ -771,6 +818,7 @@ internal class HabibiSession(
         oauth?.cancel()
         work {
             syncConnected = false
+            subscription = null; subscriptionMessage = null
             try {
                 val revoked = (oauth ?: error("OAuth is unavailable in this build.")).disconnect(syncOrigin)
                 syncRemovalFailed = false

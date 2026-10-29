@@ -53,6 +53,8 @@ class MainActivity : AppCompatActivity() {
     private var reviewDialog: AlertDialog? = null
     private var shownReview: Long? = null
     private var destroying = false
+    private val billingDelegate = lazy { PlusBilling(this, session) { if (!destroying && !isDestroyed) render() } }
+    private val billing by billingDelegate
     private var previousState: JSONObject? = null
     private var conversationScreen: ConversationScreen? = null
     private var kitsScreen: KitsCatalogScreen? = null
@@ -92,7 +94,10 @@ class MainActivity : AppCompatActivity() {
     private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val callback = voicePermissionResult; voicePermissionResult = null; callback?.invoke(granted)
     }
-    private val observer: () -> Unit = { render() }
+    private val observer: () -> Unit = {
+        render()
+        if (resumed && session.syncConnected && !billingDelegate.isInitialized()) billing.load()
+    }
     private val goals = linkedMapOf("health" to "Health", "learning" to "Learning", "planning" to "Planning", "creativity" to "Creativity", "wellbeing" to "Wellbeing")
 
     private fun appearanceNightMode() = when (session.state?.optJSONObject("profile")?.optString("appearance", "system")) {
@@ -179,6 +184,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume(); resumed = true; conversationScreen?.resume()
         session.setDraftSyncActive(true)
+        if (route == "plus" || session.syncConnected) billing.load()
+        if (session.syncConnected) { billing.restore(); session.refreshSubscription() }
         if (route == "kits") render() // Re-evaluate expiry, without replacing search or dismissing the sheet.
     }
     override fun onPause() {
@@ -188,6 +195,7 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onDestroy() {
         destroying = true; conversationScreen?.close(); voicePermissionResult = null
+        if (billingDelegate.isInitialized()) billing.close()
         screen.removeCallbacks(kitsExpiryRefresh)
         pendingBackupExport = null; selectedBackupImport = null
         pendingCostumeExport = null; costumesScreen?.close(); costumesScreen = null
@@ -210,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         if (route == "costumes" && next != route) { costumesScreen?.close(); costumesScreen = null }
         if (next != "kits") githubSheet?.dismiss()
         route = next; render()
+        if (next == "plus") { billing.load(); session.refreshSubscription() }
         if (next == "sync") session.inspectSync()
         if (next == "kits") session.inspectBundledKits()
     }
@@ -222,7 +231,7 @@ class MainActivity : AppCompatActivity() {
             "goals" -> "name"
             "provider" -> if (session.state == null) "goals" else "profile"
             "privacy" -> "provider"
-            "kits", "costumes", "personalization", "appearance", "recovery", "sync" -> "profile"
+            "kits", "costumes", "personalization", "appearance", "recovery", "sync", "plus" -> "profile"
             "kit" -> "kits"
             "entry" -> "kit"
             "profile", "conversations" -> { tab = R.id.home; "home" }
@@ -239,7 +248,7 @@ class MainActivity : AppCompatActivity() {
         isEnabled = !session.busy && session.loaded
     }
     private fun updateNavigationVisibility() {
-        navigation.visibility = if (session.state != null && !keyboard && route !in setOf("conversation", "kits", "costumes")) View.VISIBLE else View.GONE
+        navigation.visibility = if (session.state != null && !keyboard && route !in setOf("conversation", "kits", "costumes", "plus")) View.VISIBLE else View.GONE
     }
     private fun render() {
         if (isDestroyed || destroying) return
@@ -332,6 +341,7 @@ class MainActivity : AppCompatActivity() {
             "privacy" -> privacyPage()
             "restore" -> restorePage()
             "profile" -> profilePage()
+            "plus" -> plusPage()
             "sync" -> syncPage()
             "personalization" -> personalizationPage()
             "appearance" -> appearancePage()
@@ -492,6 +502,7 @@ class MainActivity : AppCompatActivity() {
     private fun profilePage(): View {
         val profile = session.state?.getJSONObject("profile") ?: JSONObject()
         return page(profile.optString("name", "Your profile"), "Your Habibi, on your terms.") {
+            addView(action("Habibi Plus", "profile_plus") { go("plus") })
             addView(action("AI provider", "profile_provider") { go("provider") })
             addView(action("Kits", "profile_kits", true) { go("kits") })
             addView(action("Costumes", "profile_costumes") { go("costumes") })
@@ -508,6 +519,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun syncPage() = page("Encrypted sync", "Manual snapshots, encrypted on this device. No background delivery is promised.") {
+        addView(action("Sync with Habibi Plus", "sync_plus", true) { go("plus") })
+        addView(label("Plus includes snapshot uploads and automatic draft handoff. Local use, recovery backups and existing server downloads stay free.", 14f, true))
         addView(label(session.syncOrigin.issuer, 14f, true))
         addView(label(session.syncMessage).apply { tag = "sync_status"; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE })
         addView(label("Account sign-in is separate from your vault key. On another device, import your existing encrypted recovery bundle and its separate recovery key first. The server cannot recover either."))
@@ -545,6 +558,53 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton("Cancel", null).setPositiveButton("Disconnect") { _, _ -> session.disconnectSync() }.show()
         })
         addView(action("Recovery and backups", "sync_recovery") { go("recovery") })
+    }
+
+    private fun plusPage() = page("Habibi Plus", "A little closer, on every device.") {
+        addView(HeartlingView(this@MainActivity, interactive = false).apply { layoutParams = LinearLayout.LayoutParams(dp(80), dp(80)) })
+        addView(card().apply {
+            addView(heading("Your private space, together", 22f))
+            addView(label("Encrypted sync across your devices"))
+            addView(label("Pick up unsent drafts on another device"))
+            addView(label("Snapshots sync when you tap Sync now. Drafts hand off automatically while Habibi is open. Your encryption key stays with you.", 14f, true))
+        })
+        addView(card().apply {
+            addView(heading("The essentials stay free", 22f))
+            addView(label("Conversations, local Kits, costumes, encryption and recovery backups. No subscription needed."))
+            addView(label("AI provider subscriptions and usage charges are separate.", 14f, true))
+        })
+        if (session.plusActive) {
+            addView(heading("Plus is active", 22f).apply { tag = "plus_active" })
+            addView(action("Manage subscription in Google Play", "plus_manage") {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/account/subscriptions")))
+            })
+            addView(label("Bought on the App Store? Manage or cancel it in App Store settings.", 14f, true))
+        } else {
+            addView(heading("Choose your plan", 22f))
+            if (billing.plans.isEmpty()) addView(label("Google Play plans unavailable", 14f, true))
+            billing.plans.forEach { plan ->
+                val monthly = plan.product.productId == PlusBilling.productIds[0]
+                addView(action("${if (billing.selected == plan.product.productId) "✓ " else ""}${if (monthly) "Monthly" else "Yearly"} · ${plan.price} / ${if (monthly) "month" else "year"}", "plus_${plan.product.productId}") {
+                    billing.selected = plan.product.productId; render()
+                }.apply { isEnabled = isEnabled && !billing.busy; isSelected = billing.selected == plan.product.productId })
+            }
+            if (!session.syncConnected) {
+                addView(action("Sign in before subscribing", "plus_sign_in", true) { go("sync") })
+                addView(label("Use the same passkey account on every device. Signing in is free and does not recover your vault key.", 14f, true))
+            } else {
+                addView(action("Subscribe to Plus", "plus_subscribe", true) { billing.purchase() }.apply {
+                    isEnabled = isEnabled && !billing.busy && session.billingAvailable && billing.plans.any { it.product.productId == billing.selected }
+                })
+            }
+            addView(label("Auto-renews monthly or yearly at the displayed price until canceled. Payment is charged to your Google Play account. Manage or cancel in Google Play before renewal. Cancellation keeps access until the paid period ends.", 13f, true))
+        }
+        addView(action("Restore purchases", "plus_restore") { billing.restore() }.apply { isEnabled = isEnabled && !billing.busy && session.syncConnected })
+        addView(action("Refresh availability", "plus_refresh") { billing.load(); session.refreshSubscription() }.apply { isEnabled = isEnabled && !billing.busy })
+        if (billing.busy) addView(label("Checking subscription…", 14f, true))
+        (billing.message ?: session.subscriptionMessage)?.let { addView(label(it).apply { tag = "plus_message"; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }) }
+        addView(label("If Plus expires, uploads pause. Your local vault and recovery exports still work, and existing server downloads remain available. No data is deleted by cancellation.", 14f, true))
+        addView(label("RevenueCat verifies purchases using your pseudonymous account ID and store receipt. It never receives your vault content or encryption key.", 14f, true))
+        addView(action("Privacy", "plus_privacy") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://habibi.fyi/#privacy"))) })
     }
     private fun personalizationPage(): View {
         val profile = session.state?.getJSONObject("profile") ?: JSONObject()

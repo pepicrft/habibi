@@ -194,6 +194,7 @@ final class HabibiSession: ObservableObject {
     var cloudConsent = false
     let store: HabibiStore
     let syncAccount: HabibiSyncAccount
+    let subscription: HabibiSubscription
     let syncBrowser = HabibiSyncBrowser()
     var syncMutationsLocked = false
     let inferenceURL: URL?
@@ -217,6 +218,7 @@ final class HabibiSession: ObservableObject {
          onDevice: HabibiFoundationModels? = nil) {
         self.store = store
         self.syncAccount = syncAccount
+        self.subscription = HabibiSubscription(account: syncAccount)
         // This random replica identifier is not a credential or user content.
         let localID = UserDefaults.standard.string(forKey: "habibi.draftDeviceID") ?? UUID().uuidString.lowercased()
         UserDefaults.standard.set(localID, forKey: "habibi.draftDeviceID")

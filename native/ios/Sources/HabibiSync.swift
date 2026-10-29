@@ -145,6 +145,9 @@ struct HabibiSynchronizer {
         return data
     }
     private func check(_ response: HTTPURLResponse, expected: Set<Int>) throws {
+        if response.statusCode == 402 {
+            throw HabibiFailure(message: "Sync uploads need Habibi Plus. Open Habibi Plus in Profile to subscribe or restore. Your local data and pending uploads are kept.")
+        }
         guard expected.contains(response.statusCode) else {
             throw HabibiFailure(message: "Sync stopped (HTTP \(response.statusCode)). Local edits and any pending encrypted upload are kept. Reconnect if authorization expired.")
         }
@@ -207,6 +210,7 @@ extension HabibiSession {
                     try await syncAccount.verifyAccount()
                     let body = try JSONSerialization.data(withJSONObject: ["id": current.vaultId, "token": current.token])
                     let (_, registered) = try await syncAccount.authorized("/v1/vaults", method: "POST", body: body, contentType: "application/json")
+                    if registered.statusCode == 402 { draftSyncMessage = "Draft handoff needs Habibi Plus. Local drafts are saved."; return }
                     guard [201, 409].contains(registered.statusCode) else { throw HabibiFailure(message: "Vault registration failed.") }
                     continue
                 }
@@ -227,6 +231,7 @@ extension HabibiSession {
                     let bytes = try Data(habibiBase64URL: merged["envelope"] as? String ?? "")
                     let (_, uploaded) = try await syncAccount.authorized(path, method: "PUT", body: bytes,
                         contentType: "application/octet-stream", vaultToken: current.token, headers: condition)
+                    if uploaded.statusCode == 402 { draftSyncMessage = "Draft handoff needs Habibi Plus. Local drafts are saved."; return }
                     if uploaded.statusCode == 412 { continue } // Rescan and merge; never overwrite an unseen fork.
                     guard uploaded.statusCode == 204 else { throw HabibiFailure(message: "Draft upload unavailable.") }
                 }
@@ -294,6 +299,7 @@ extension HabibiSession {
         do { try await syncAccount.disconnect() }
         catch { syncError = "Disconnected locally, but server revocation could not be confirmed. The old grant may remain active until expiry." }
         syncConnected = (try? await syncAccount.connected()) == true
+        if !syncConnected { subscription.signedOut() }
     }
 }
 
@@ -310,6 +316,13 @@ struct HabibiSyncView: View {
                     .accessibilityIdentifier("habibi.sync.connection")
                 Text(session.syncAccount.origin.value).font(.footnote).foregroundStyle(.secondary)
                 Text("Your device encrypts your profile, Kits and conversations before upload. The server receives ciphertext, opaque IDs and storage metadata, never your content key.")
+            }
+            Section {
+                NavigationLink { HabibiPlusView(session: session, subscription: session.subscription) } label: {
+                    Label("Sync with Habibi Plus", systemImage: "heart.circle")
+                }.accessibilityIdentifier("habibi.sync.plus")
+                Text("Plus includes snapshot uploads and automatic draft handoff. Local use, recovery backups and existing server downloads stay free.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section {
                 if session.syncConnected {

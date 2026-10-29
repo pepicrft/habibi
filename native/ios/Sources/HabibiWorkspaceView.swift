@@ -73,6 +73,9 @@ struct HabibiWorkspaceView: View {
                 }
             }
             Section {
+                NavigationLink { HabibiPlusView(session: session, subscription: session.subscription) } label: {
+                    Label("Habibi Plus", systemImage: "heart.circle")
+                }.accessibilityIdentifier("habibi.profile.plus")
                 NavigationLink { HabibiChatGPTView(session: session) } label: {
                     Label("AI provider", systemImage: "sparkles")
                 }.accessibilityIdentifier("habibi.profile.provider")
