@@ -151,7 +151,7 @@ struct HabibiPlusView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("The essentials stay free") {
-                Text("Conversations, on-device AI, local Kits, costumes, encryption and recovery backups. No subscription needed.")
+                Text("Conversations, on-device AI, local Kits, skins, encryption and recovery backups. No subscription needed.")
                 Text("AI provider subscriptions and usage charges are separate.").font(.footnote).foregroundStyle(.secondary)
             }
             if subscription.status?.active == true {

@@ -1,0 +1,31 @@
+{
+  "name": "Habibi Bot",
+  "subtitle": "A little help. A space for you",
+  "promotionalText": "Make a little space for your ideas, routines and everyday life. Meet Habibi: a personal companion with encrypted local storage and a style you can make your own.",
+  "description": "A little help with life. A space that’s entirely yours.\n\nHabibi brings conversations, personal tools and a little personality together in one place. Start a private space on your device without an email address or password.\n\nMAKE ROOM FOR YOUR EVERYDAY\nKeep conversations together and return to them when you need them. Explore Kits for the things you want to track, collect or reflect on, with native forms for adding your own entries.\n\nFIND AN APPROACH THAT FITS\nTry a Coach, Socratic Tutor or Gentle Planner skin, or write your own instructions. Skins change the tone and approach of a conversation, not the app’s permissions.\n\nMAKE IT FEEL LIKE YOU\nChoose your theme, switch between light and dark, and pick an app icon. Your personal space should feel personal.\n\nYOUR SPACE STARTS ON YOUR DEVICE\nHabibi encrypts your local vault. Export an encrypted recovery backup and keep its recovery key separately. You need both to restore your space; Habibi cannot reset your encryption key.\n\nON-DEVICE AI, WHEN AVAILABLE\nOn supported devices running iOS 26 or later, choose Apple’s on-device model. Apple Intelligence must be supported, enabled and ready. Availability depends on your device, language and region.\n\nAI can make mistakes. Review suggestions and changes before relying on them. Habibi is not a substitute for professional advice.",
+  "keywords": "personal,companion,journal,routines,organize,conversation,encrypted,planner,notes,kits",
+  "marketingUrl": "https://habibi.fyi/",
+  "supportUrl": "https://github.com/pepicrft/habibi/issues",
+  "betaDescription": "An early build of Habibi, a personal companion with an encrypted local vault, conversations, personal Kits, skins and appearance options. Start locally without an email address or password. Apple on-device AI requires supported hardware, iOS 26 or later and an available Apple Intelligence model. Use fictional data while testing: this prototype has not been independently security-audited.",
+  "betaWhatsNew": "0.1.0 (1.0.1) — Meet Skins\n\n• Costumes are now called Skins throughout the app.\n• Your saved wardrobe, conversations and imported definitions still work.\n• Try Coach, Socratic Tutor and Gentle Planner skins.\n\nWHAT TO TEST\nOpen Profile → Skins, try one on, add it to your wardrobe and switch skins in a conversation. Check that existing conversations and recovery backups still restore correctly. Nothing is sent until you tap Send. Keep the recovery key separate from the backup. Report issues using TestFlight feedback.\n\nKNOWN LIMITATIONS\nUse fictional data: this prototype has not been independently security-audited. Production ChatGPT-provider approval, hosted sync and subscription setup are not ready; do not purchase or rely on these flows.",
+  "screenshots": [
+    {
+      "id": "welcome",
+      "eyebrow": "MEET HABIBI",
+      "headline": "A little help.\nA space for you.",
+      "caption": "Start your own private space on your device."
+    },
+    {
+      "id": "costumes",
+      "eyebrow": "YOUR COMPANION, YOUR WAY",
+      "headline": "Find your\nkind of guidance.",
+      "caption": "Try a Coach, Tutor or Gentle Planner."
+    },
+    {
+      "id": "appearance",
+      "eyebrow": "MAKE YOURSELF AT HOME",
+      "headline": "A little more\nlike you.",
+      "caption": "Choose a theme, a mood and an app icon."
+    }
+  ]
+}

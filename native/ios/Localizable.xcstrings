@@ -1,0 +1,849 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "1. Encrypted backup" : {
+
+    },
+    "2. Separate recovery key" : {
+
+    },
+    "A little closer, on every device." : {
+
+    },
+    "A little help with life.\nA space that’s entirely yours." : {
+
+    },
+    "A little introduction" : {
+
+    },
+    "A place for the little things that make life feel more like yours." : {
+
+    },
+    "A starting prompt" : {
+
+    },
+    "A workout log, a reading journal, an idea of your own. Describe it to Habibi and review your Kit before saving." : {
+
+    },
+    "AI provider" : {
+
+    },
+    "AI provider subscriptions and usage charges are separate." : {
+
+    },
+    "AI settings" : {
+
+    },
+    "Account" : {
+
+    },
+    "Add entry" : {
+
+    },
+    "Add to wardrobe" : {
+
+    },
+    "Allow for this session" : {
+
+    },
+    "Another device" : {
+
+    },
+    "App Store plans unavailable" : {
+
+    },
+    "App icon" : {
+
+    },
+    "Appearance" : {
+
+    },
+    "Apple Foundation Models" : {
+
+    },
+    "Applies to future replies in this conversation. Skins change the approach, not permissions. The selected name and instructions go to your chosen model when you send a message." : {
+
+    },
+    "Ask Habibi" : {
+
+    },
+    "Ask Habibi to update this Kit" : {
+
+    },
+    "At a glance" : {
+
+    },
+    "Authentication" : {
+
+    },
+    "Author (not verified)" : {
+
+    },
+    "Authorize on GitHub" : {
+
+    },
+    "Auto-renews monthly or yearly at the displayed price until canceled. Payment is charged to your Apple account. Manage or cancel in App Store settings before renewal." : {
+
+    },
+    "Best for short conversations. Choose ChatGPT for complex Kit creation. Connected service tools still use the network." : {
+
+    },
+    "Bought on Google Play? Manage or cancel it in Google Play." : {
+
+    },
+    "Bundled connections are unavailable. Reopen Kits to try again." : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Cancel authorization" : {
+
+    },
+    "Cancel sign-in" : {
+
+    },
+    "Canceling or closing discards this attempt. If you already approved on GitHub, revoke that grant there if you do not want it retained." : {
+
+    },
+    "Changing app icon…" : {
+
+    },
+    "ChatGPT · Experimental" : {
+
+    },
+    "Check connection" : {
+
+    },
+    "Checking subscription…" : {
+
+    },
+    "Choose a model or view conversation details" : {
+
+    },
+    "Choose a version" : {
+
+    },
+    "Choose backup file" : {
+
+    },
+    "Choose this version?" : {
+
+    },
+    "Choose your plan" : {
+
+    },
+    "Clear & direct" : {
+
+    },
+    "Clear search" : {
+
+    },
+    "Close GitHub" : {
+
+    },
+    "Code expires" : {
+
+    },
+    "Component data" : {
+
+    },
+    "Connect encrypted sync" : {
+
+    },
+    "Connect with ChatGPT" : {
+
+    },
+    "Connect your apps. Make something your own." : {
+
+    },
+    "Connect, then approve Habibi on GitHub in your browser. Review the app name and read:user permission before approving." : {
+
+    },
+    "Connected to ChatGPT" : {
+
+    },
+    "Connecting securely…" : {
+
+    },
+    "Conversation details" : {
+
+    },
+    "Conversation options" : {
+
+    },
+    "Conversation prompts" : {
+
+    },
+    "Conversation style" : {
+
+    },
+    "Conversations" : {
+
+    },
+    "Conversations, on-device AI, local Kits, skins, encryption and recovery backups. No subscription needed." : {
+
+    },
+    "Copy code & open ChatGPT" : {
+
+    },
+    "Copy recovery key for 60 seconds" : {
+
+    },
+    "Could not open the browser. Open github.com/login/device yourself and enter the code." : {
+
+    },
+    "Create a calorie journal" : {
+
+    },
+    "Create my Habibi" : {
+
+    },
+    "Dark" : {
+
+    },
+    "Default model" : {
+
+    },
+    "Describe its approach, questions and habits. Up to 4,000 characters. No code, tools or permissions." : {
+
+    },
+    "Devices changed independently. Nothing will be silently overwritten. Save a recovery backup first; the version you choose replaces this device’s profile, Kits and conversations. Older encrypted branches remain on the server." : {
+
+    },
+    "Dictation runs on this device. Audio is never uploaded, and transcription never sends a message automatically." : {
+
+    },
+    "Different ways to help. Try on a skin, then keep the ones that feel like you." : {
+
+    },
+    "Discard dictation" : {
+
+    },
+    "Discard key & restart setup" : {
+
+    },
+    "Discard orphaned key" : {
+
+    },
+    "Discard this device’s orphaned key?" : {
+
+    },
+    "Disconnect" : {
+
+    },
+    "Disconnect ChatGPT" : {
+
+    },
+    "Disconnect GitHub" : {
+
+    },
+    "Disconnect GitHub on this device?" : {
+
+    },
+    "Disconnect encrypted sync?" : {
+
+    },
+    "Disconnect removes this device’s saved connection. It reaches other devices only after manual sync and conflict resolution. Older backups or devices may still hold a working token." : {
+
+    },
+    "Disconnects this device only. Your vault and other ChatGPT sessions stay unchanged." : {
+
+    },
+    "Done" : {
+
+    },
+    "Edit skin" : {
+
+    },
+    "Encrypted backup JSON" : {
+
+    },
+    "Encrypted local storage" : {
+
+    },
+    "Encrypted on this device" : {
+
+    },
+    "Encrypted sync" : {
+
+    },
+    "Encrypted sync across your devices" : {
+
+    },
+    "Enter this code at github.com/login/device. Check the app name and read:user permission, approve, then return here." : {
+
+    },
+    "Enter this code in ChatGPT:" : {
+
+    },
+    "Example to try on" : {
+
+    },
+    "Experimental connection. Your ChatGPT plan’s limits apply. Encrypted sync is separate." : {
+
+    },
+    "Expiring or revoked tokens require reconnecting, even when no expiry is shown. Habibi does not save or use refresh tokens. Your existing connection is replaced only after successful authorization and a durable encrypted save." : {
+
+    },
+    "Export skin" : {
+
+    },
+    "Exports the definition only, not conversations or memories. Review its text for personal information before sharing." : {
+
+    },
+    "Fields & JavaScript" : {
+
+    },
+    "For actual revocation, open GitHub Settings → Applications → Authorized OAuth Apps and revoke the app. This also stops access from old backups and other devices." : {
+
+    },
+    "Generated with secure device randomness" : {
+
+    },
+    "GitHub /user returned" : {
+
+    },
+    "Give it a try" : {
+
+    },
+    "Habibi" : {
+
+    },
+    "Habibi Plus" : {
+
+    },
+    "Habibi is working…" : {
+
+    },
+    "Heartling" : {
+
+    },
+    "Heartling wears your colors. Tap to say hello." : {
+
+    },
+    "Home" : {
+
+    },
+    "How Habibi should help" : {
+
+    },
+    "How Habibi will help" : {
+
+    },
+    "How should Habibi sound?" : {
+
+    },
+    "I understand how recovery works" : {
+
+    },
+    "If Plus expires, uploads pause. Your local vault and recovery exports still work, and existing server downloads remain available. No data is deleted by cancellation." : {
+
+    },
+    "Import a skin" : {
+
+    },
+    "Inference" : {
+
+    },
+    "I’d like help with" : {
+
+    },
+    "JavaScript · Isolated Wasm" : {
+
+    },
+    "Jump to this message" : {
+
+    },
+    "Just Habibi · No skin" : {
+
+    },
+    "Keep this device’s version" : {
+
+    },
+    "Keep your message under 4,000 characters." : {
+
+    },
+    "Keeps your existing typed draft unchanged." : {
+
+    },
+    "Kits" : {
+
+    },
+    "Last sync" : {
+
+    },
+    "Latest messages" : {
+
+    },
+    "Light" : {
+
+    },
+    "Loading bundled Kits…" : {
+
+    },
+    "Made by you" : {
+
+    },
+    "Made for your everyday" : {
+
+    },
+    "Make a Kit" : {
+
+    },
+    "Make a recovery backup from Profile. Keep its recovery key separately. Without both, losing this device can mean losing your data. Habibi cannot reset your key." : {
+
+    },
+    "Make a recovery backup in Profile. Connect encrypted sync there to copy ciphertext between devices." : {
+
+    },
+    "Make a skin" : {
+
+    },
+    "Make a workout tracker" : {
+
+    },
+    "Make something yours" : {
+
+    },
+    "Manage subscription" : {
+
+    },
+    "Manage usage" : {
+
+    },
+    "Messages, cards and drafts are encrypted in your local vault and included in encrypted recovery backups." : {
+
+    },
+    "Messages, tool results, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation uses its text context with the selected model; tools and pending approvals are never replayed. Cloud inference requires approval." : {
+
+    },
+    "Model" : {
+
+    },
+    "Name" : {
+
+    },
+    "Name or nickname" : {
+
+    },
+    "New conversation" : {
+
+    },
+    "No email. No password. Your private key stays on your device." : {
+
+    },
+    "No metrics yet" : {
+
+    },
+    "No network, files or access to other Kits. Only this app can save entries. Updates preserve your existing entries and cannot change these fields." : {
+
+    },
+    "On-device AI" : {
+
+    },
+    "Only in memory. Ask Habibi to evaluate and save it." : {
+
+    },
+    "Only the selected skin’s name and instructions join your model request. It cannot grant tools or data access. Existing conversations keep their own copy when you edit or remove a skin." : {
+
+    },
+    "Open GitHub in browser" : {
+
+    },
+    "Open wardrobe" : {
+
+    },
+    "Opening Kit page…" : {
+
+    },
+    "Opening your private space…" : {
+
+    },
+    "Opens a separate conversation with an editable example. Nothing is sent until you tap Send; trying on does not add it to your wardrobe." : {
+
+    },
+    "Permission" : {
+
+    },
+    "Personal" : {
+
+    },
+    "Personal Kits run privately on your device, without network or credential access. Connections let Habibi use authorized tools when you ask; requested results reach your inference provider, never credentials." : {
+
+    },
+    "Personal details and Kits are encrypted" : {
+
+    },
+    "Personalization" : {
+
+    },
+    "Pick up unsent drafts on another device" : {
+
+    },
+    "Plus includes snapshot uploads and automatic draft handoff. Local use, recovery backups and existing server downloads stay free." : {
+
+    },
+    "Plus is active" : {
+
+    },
+    "Preparing encrypted backup…" : {
+
+    },
+    "Privacy" : {
+
+    },
+    "Privacy & storage" : {
+
+    },
+    "Privacy, recovery & revocation" : {
+
+    },
+    "Private by design" : {
+
+    },
+    "Private on this device" : {
+
+    },
+    "Private · You and Habibi" : {
+
+    },
+    "Profile" : {
+
+    },
+    "Prompts" : {
+
+    },
+    "Protected by your device’s Keychain" : {
+
+    },
+    "Recording on this device" : {
+
+    },
+    "Recovery backup" : {
+
+    },
+    "Recovery key" : {
+
+    },
+    "Refresh availability" : {
+
+    },
+    "Refresh server themes" : {
+
+    },
+    "Refreshing themes…" : {
+
+    },
+    "Release the microphone or tap stop to add editable text. Nothing is sent automatically." : {
+
+    },
+    "Remove Kit" : {
+
+    },
+    "Remove from wardrobe" : {
+
+    },
+    "Remove this skin? Conversations keep their own copy." : {
+
+    },
+    "Requesting a code…" : {
+
+    },
+    "Restore a backup" : {
+
+    },
+    "Restore my private space" : {
+
+    },
+    "Restore purchases" : {
+
+    },
+    "Restore the encrypted recovery backup and its separate key on the other device, connect to the same server, then sync. A passkey account alone cannot decrypt or discover your vault." : {
+
+    },
+    "Restoring replaces any inaccessible local vault with this backup’s contents. Changes made after the backup will not be recovered." : {
+
+    },
+    "Retry saving" : {
+
+    },
+    "Return here after approving sign-in. This code expires in 15 minutes." : {
+
+    },
+    "RevenueCat verifies purchases using your pseudonymous account ID and store receipt. It never receives your vault content or encryption key." : {
+
+    },
+    "Review JavaScript" : {
+
+    },
+    "Review every field before adding an imported skin. Author names are not verified. Its selected name and instructions are sent to your chosen model when you send a message. Never put secrets here." : {
+
+    },
+    "Revoke this sign-in and remove its local credentials. Your vault, recovery key and encrypted server records are not deleted." : {
+
+    },
+    "Runs locally in isolated Wasm" : {
+
+    },
+    "Rust generates a random 256-bit encryption key on your device. The key is stored in this device’s Keychain, separately from a distinct sync token. Neither is an account password." : {
+
+    },
+    "Save" : {
+
+    },
+    "Save backup file" : {
+
+    },
+    "Save the encrypted backup file and keep its recovery key in a different safe place, such as your password manager. Anyone with both can read your vault." : {
+
+    },
+    "Saved conversations" : {
+
+    },
+    "Saved only when you tap. Your inputs are not sent to the model. Unsaved inputs are not backed up." : {
+
+    },
+    "Saved privately" : {
+
+    },
+    "Search Kits" : {
+
+    },
+    "Send message" : {
+
+    },
+    "Separate recovery key" : {
+
+    },
+    "Short description" : {
+
+    },
+    "Show Kits" : {
+
+    },
+    "Sign in before subscribing" : {
+
+    },
+    "Sign in with a passkey in your system browser. Signing in does not recover your encryption key." : {
+
+    },
+    "Skin instructions" : {
+
+    },
+    "Skins" : {
+
+    },
+    "Skins change Habibi’s approach, never its permissions. Your wardrobe is encrypted with your vault." : {
+
+    },
+    "Skip for now" : {
+
+    },
+    "Snapshots sync when you tap Sync now. Drafts hand off automatically while Habibi is open. Your encryption key stays with you." : {
+
+    },
+    "Start a conversation using the compose button above." : {
+
+    },
+    "Start with your own idea" : {
+
+    },
+    "Still your Habibi." : {
+
+    },
+    "Stop reply" : {
+
+    },
+    "Subscribe to Plus" : {
+
+    },
+    "Support the private space you bring with you." : {
+
+    },
+    "Switch drafts without sending. Both versions stay saved." : {
+
+    },
+    "Sync is manual in this version. Tap Sync now after changes or when moving between devices. Keep a separate recovery backup and key." : {
+
+    },
+    "Sync now" : {
+
+    },
+    "Sync with Habibi Plus" : {
+
+    },
+    "System" : {
+
+    },
+    "Tap to say hello. This does not send a message." : {
+
+    },
+    "Terms of use" : {
+
+    },
+    "The access token is saved inside your encrypted vault, not in chat. To use it on another device, restore the same encrypted recovery backup with its separate key, connect encrypted sync, then manually sync both devices. Signing into Habibi alone does not recover your keys or this connection." : {
+
+    },
+    "The essentials stay free" : {
+
+    },
+    "The key is not inside the backup file. Do not store or share them together." : {
+
+    },
+    "The selected skin’s name and instructions also go to your chosen model. The rest of your wardrobe is not included." : {
+
+    },
+    "The skin" : {
+
+    },
+    "Theme" : {
+
+    },
+    "Themes come from your Habibi server. Your selection stays in your encrypted profile, recovery backups and optional sync. Native typography follows your accessibility settings." : {
+
+    },
+    "There is a private key but no local vault file. This deletes that key permanently. Restore a backup instead if you have one. Any previous vault still requires its own backup and recovery key." : {
+
+    },
+    "These preferences stay in your encrypted vault. They are not automatically sent to an inference provider." : {
+
+    },
+    "This Kit was removed" : {
+
+    },
+    "This card’s Kit is unavailable or its suggested values no longer match. Ask for a new card." : {
+
+    },
+    "This check stays in the native app, outside your conversations." : {
+
+    },
+    "This entry is encrypted and saved locally. The inference provider does not receive it." : {
+
+    },
+    "This is a local encrypted-vault change until you sync. It does not revoke the token on GitHub. Old backups and devices may retain access; revoke the app on GitHub to stop it everywhere." : {
+
+    },
+    "This is a point-in-time backup. Create a new one after important changes. Habibi cannot reset a lost key." : {
+
+    },
+    "This prototype has not had an independent security audit. Use fictional data for now. Device compromise and malicious app updates are outside the encryption boundary." : {
+
+    },
+    "This replaces this device’s current data with the chosen version and publishes an encrypted resolution. It does not merge conflicting edits. Keep your recovery backup." : {
+
+    },
+    "Token expires" : {
+
+    },
+    "Try again" : {
+
+    },
+    "Try on" : {
+
+    },
+    "Try something on" : {
+
+    },
+    "Two things to keep safe" : {
+
+    },
+    "Unsaved draft" : {
+
+    },
+    "Use the same passkey account on every device. Signing in is free and does not recover your vault key." : {
+
+    },
+    "Use this version" : {
+
+    },
+    "Use your ChatGPT plan with Habibi. No API key needed." : {
+
+    },
+    "Used unless you choose another model from a conversation’s title menu. Apple’s model requires Apple Intelligence. ChatGPT models use your plan." : {
+
+    },
+    "Version" : {
+
+    },
+    "Waiting for GitHub approval…" : {
+
+    },
+    "Waiting for permission…" : {
+
+    },
+    "Warm & encouraging" : {
+
+    },
+    "Wear" : {
+
+    },
+    "Wear a skin" : {
+
+    },
+    "Welcome to Habibi" : {
+
+    },
+    "What it stores" : {
+
+    },
+    "What’s on your mind?" : {
+
+    },
+    "When you ask a cloud model" : {
+
+    },
+    "When you ask, these read-only tools share sanitized profile and public repository results with your conversation’s inference provider and save them in encrypted history. Credentials stay in your vault. Connecting or checking alone does not share account data with the provider." : {
+
+    },
+    "With your approval, messages and tool results go to OpenAI. Vault keys, saved Kit entries and credentials stay private." : {
+
+    },
+    "Working securely…" : {
+
+    },
+    "You need your encrypted backup and its separate recovery key. Neither one is enough by itself." : {
+
+    },
+    "Your Kits" : {
+
+    },
+    "Your conversations with Habibi" : {
+
+    },
+    "Your device encrypts your profile, Kits and conversations before upload. The server receives ciphertext, opaque IDs and storage metadata, never your content key." : {
+
+    },
+    "Your first entry starts here." : {
+
+    },
+    "Your messages, requested Kit definitions and synthetic test results are shared with the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with the conversation’s provider and saved in encrypted conversation history. Connecting or checking GitHub alone does not share account data with the provider. Saved Kit entries, vault keys and connection credentials are never included by tools. Personal information you type in a message is still disclosed." : {
+
+    },
+    "Your name" : {
+
+    },
+    "Your name, interests, Kit code, entries and conversations are inside an authenticated AES-256-GCM/HKDF encrypted vault. Optional sync sends only encrypted snapshots to Habibi’s server, plus opaque IDs, sizes, digests and sequence numbers. Your content key never leaves this device except inside your separately encrypted recovery backup." : {
+
+    },
+    "Your private key" : {
+
+    },
+    "Your private space" : {
+
+    },
+    "Your private space starts on this device. You can connect encrypted sync separately in Profile. Habibi’s server stores ciphertext and account metadata, never your vault key or readable personal details." : {
+
+    },
+    "Your saved theme is not in this server’s catalog. Showing its default without changing your preference." : {
+
+    },
+    "Your wardrobe" : {
+
+    },
+    "Your wardrobe is ready for its first skin." : {
+
+    }
+  },
+  "version" : "1.2"
+}

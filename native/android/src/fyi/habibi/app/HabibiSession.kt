@@ -266,11 +266,11 @@ internal class HabibiSession(
     }
     fun readCostumeFile(open: () -> InputStream?, complete: (JSONObject) -> Unit) {
         work {
-            val bytes = (open() ?: error("Could not open the costume file.")).use { input ->
+            val bytes = (open() ?: error("Could not open the skin file.")).use { input ->
                 val output = ByteArrayOutputStream(); val buffer = ByteArray(4096)
                 while (true) {
                     val count = input.read(buffer); if (count < 0) break
-                    check(output.size() + count <= 32 * 1024) { "Costume files must be smaller than 32 KiB." }
+                    check(output.size() + count <= 32 * 1024) { "Skin files must be smaller than 32 KiB." }
                     output.write(buffer, 0, count)
                 }
                 output.toByteArray()
@@ -282,7 +282,7 @@ internal class HabibiSession(
     fun writeCostumeFile(definition: String, open: () -> OutputStream?) {
         work {
             val checked = validateCostume(JSONObject(definition))
-            (open() ?: error("Could not open the costume destination.")).use { it.write(checked.toString(2).toByteArray(Charsets.UTF_8)) }
+            (open() ?: error("Could not open the skin destination.")).use { it.write(checked.toString(2).toByteArray(Charsets.UTF_8)) }
         }
     }
     fun setConversationModel(model: String?) {

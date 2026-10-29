@@ -272,7 +272,7 @@ fn dispatch(command: Command) -> Result<Value> {
                     .costumes
                     .iter_mut()
                     .find(|item| item.id == id)
-                    .ok_or_else(|| Error::invalid("Costume not found."))?;
+                    .ok_or_else(|| Error::invalid("Skin not found."))?;
                 costume.definition = definition;
             } else {
                 state.costumes.push(costumes::Costume {
@@ -290,7 +290,7 @@ fn dispatch(command: Command) -> Result<Value> {
         } => {
             let mut state = State::open(&identity, &document)?;
             if !state.costumes.iter().any(|item| item.id == id) {
-                return Err(Error::invalid("Costume not found."));
+                return Err(Error::invalid("Skin not found."));
             }
             state.costumes.retain(|item| item.id != id);
             state.sealed(&identity, Some(&document))

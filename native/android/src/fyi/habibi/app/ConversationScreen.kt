@@ -101,11 +101,11 @@ internal class ConversationScreen(
                 session.selectDraftVersion(versions[index]); render()
             }.setNegativeButton("Keep writing", null).show()
     }
-    private val costume = context.button("Wear a costume", "conversation_costume") {
+    private val costume = context.button("Wear a skin", "conversation_costume") {
         if (session.canChangeCostume && costumeDialog == null) {
             val wardrobe = session.wardrobe
-            val choices = listOf("Just Habibi · No costume") + wardrobe.map { it.getJSONObject("definition").getString("name") }
-            costumeDialog = MaterialAlertDialogBuilder(context).setTitle("Wear a costume")
+            val choices = listOf("Just Habibi · No skin") + wardrobe.map { it.getJSONObject("definition").getString("name") }
+            costumeDialog = MaterialAlertDialogBuilder(context).setTitle("Wear a skin")
                 .setItems(choices.toTypedArray()) { dialog, index ->
                     dialog.dismiss(); session.setConversationCostume(if (index == 0) null else wardrobe[index - 1].getJSONObject("definition"))
                 }
@@ -266,7 +266,7 @@ internal class ConversationScreen(
         working.visibility = if (session.chatting) View.VISIBLE else View.GONE
         welcome.text = chat.costume?.getString("description")
             ?: "Design a kit, try synthetic examples, and review every Kit change. Conversations, cards and drafts save locally in your encrypted vault. Unsent edits save after a short pause."
-        costume.text = chat.costume?.let { "Wearing ${it.getString("name")}" } ?: "Wear a costume"
+        costume.text = chat.costume?.let { "Wearing ${it.getString("name")}" } ?: "Wear a skin"
         costume.contentDescription = costume.text
         costume.isEnabled = session.canChangeCostume
         connection.text = if (session.connected) "${session.inferenceName} · Messages and requested tool results go to your provider. Keys, profile and saved entries stay here."

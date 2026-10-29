@@ -13,12 +13,16 @@ git -C "$FIXTURE" config user.name "Habibi release tests"
 git -C "$FIXTURE" config user.email "release-tests@example.invalid"
 git -C "$FIXTURE" config commit.gpgsign false
 git -C "$FIXTURE" config core.hooksPath /dev/null
-mkdir -p "$FIXTURE/mise/tasks/release" "$FIXTURE/server/marketing" "$FIXTURE/client" "$FIXTURE/deploy"
+mkdir -p "$FIXTURE/mise/tasks/release" "$FIXTURE/mise/tasks/ios" "$FIXTURE/native" \
+  "$FIXTURE/server/marketing" "$FIXTURE/client" "$FIXTURE/deploy"
 cp "$SOURCE/cliff.toml" "$FIXTURE/cliff.toml"
 cp "$SOURCE/mise/tasks/release/check.sh" "$FIXTURE/mise/tasks/release/check.sh"
+cp "$SOURCE/mise/tasks/ios/check.sh" "$FIXTURE/mise/tasks/ios/check.sh"
 CHECK="$FIXTURE/mise/tasks/release/check.sh"
+IOS_CHECK="$FIXTURE/mise/tasks/ios/check.sh"
 
 if bash "$CHECK" > /dev/null 2>&1; then echo "Unborn HEAD was accepted" >&2; exit 1; fi
+if bash "$IOS_CHECK" > /dev/null 2>&1; then echo "iOS unborn HEAD was accepted" >&2; exit 1; fi
 git -C "$FIXTURE" add .
 git -C "$FIXTURE" commit -qm 'feat(server): introduce the server and marketing site'
 
@@ -75,11 +79,60 @@ git -C "$FIXTURE" checkout -q main
 git -C "$FIXTURE" merge -q --no-ff maintenance -m 'Merge pull request #2 from maintenance'
 expect false 1.1.0
 
+expect_ios() {
+  local output
+  output=$(GITHUB_RUN_NUMBER=37 GITHUB_RUN_ATTEMPT=2 bash "$IOS_CHECK")
+  grep -qx "should-release=$1" <<< "$output"
+  grep -qx "next-version=ios@$2" <<< "$output"
+  grep -qx "next-version-number=$2" <<< "$output"
+  grep -qx 'build-number=37.2' <<< "$output"
+}
+
+# Server tags, including unreachable high versions, must not bootstrap iOS.
+expect_ios true 0.1.0
+git -C "$FIXTURE" tag ios@0.1.0
+expect_ios false 0.1.0
+change server/config.txt 'feat(server): unrelated server feature'
+expect_ios false 0.1.0
+change native/app.txt 'chore(ios): native maintenance'
+expect_ios false 0.1.0
+change native/app.txt 'fix(ios): correct device startup'
+expect_ios true 0.1.1
+bash "$IOS_CHECK" notes | grep -q 'correct device startup'
+git -C "$FIXTURE" tag ios@0.1.1
+git -C "$FIXTURE" tag ios@0.0.9
+expect_ios false 0.1.1
+change native/app.txt 'feat(ios): add an iPhone feature'
+expect_ios true 0.2.0
+git -C "$FIXTURE" tag ios@0.2.0
+change native/app.txt 'feat(ios)!: change the native vault format'
+git -C "$FIXTURE" tag ios@99.0.0-rc.1
+expect_ios true 1.0.0
+git -C "$FIXTURE" checkout -qb unrelated-ios
+change native/app.txt 'feat(ios): only on another branch'
+git -C "$FIXTURE" tag ios@99.0.0
+git -C "$FIXTURE" checkout -q main
+expect_ios true 1.0.0
+GITHUB_RUN_NUMBER=37 GITHUB_RUN_ATTEMPT=3 bash "$IOS_CHECK" | grep -qx 'build-number=37.3'
+if GITHUB_RUN_NUMBER=0 bash "$IOS_CHECK" >/dev/null 2>&1; then
+  echo "Invalid iOS build number was accepted" >&2; exit 1
+fi
+git -C "$FIXTURE" tag ios@1.0.0
+git -C "$FIXTURE" checkout -qb ios-feature
+change native/app.txt 'feat(ios): release a merged feature'
+git -C "$FIXTURE" checkout -q main
+git -C "$FIXTURE" merge -q --no-ff ios-feature -m 'Merge pull request #3 from ios-feature'
+expect_ios true 1.1.0
+# Native-only changes must not alter the server's next version.
+expect true 1.2.0
+
 touch "$FIXTURE/uncommitted"
 if bash "$CHECK" > /dev/null 2>&1; then echo "Dirty worktree was accepted" >&2; exit 1; fi
+if bash "$IOS_CHECK" > /dev/null 2>&1; then echo "iOS dirty worktree was accepted" >&2; exit 1; fi
 rm "$FIXTURE/uncommitted"
 printf '\ninvalid = [\n' >> "$FIXTURE/cliff.toml"
 git -C "$FIXTURE" add .
 git -C "$FIXTURE" commit -qm 'ci: invalid configuration fixture'
 if bash "$CHECK" > /dev/null 2>&1; then echo "Broken cliff configuration was accepted" >&2; exit 1; fi
-echo "Release fixtures passed: bootstrap, prefix migration, merges, no-op, filtering, bumps, tag reachability, prereleases and failures"
+if bash "$IOS_CHECK" > /dev/null 2>&1; then echo "iOS broken cliff configuration was accepted" >&2; exit 1; fi
+echo "Server and iOS release fixtures passed: independent tags/paths, bootstrap, merges, no-op, bumps, retries and failures"

@@ -7,7 +7,7 @@ final class OnboardingTests: XCTestCase {
         app.buttons["habibi.profile.plus"].tap()
         XCTAssertTrue(app.navigationBars["Habibi Plus"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Encrypted sync across your devices"].exists)
-        XCTAssertTrue(app.staticTexts["Conversations, on-device AI, local Kits, costumes, encryption and recovery backups. No subscription needed."].exists)
+        XCTAssertTrue(app.staticTexts["Conversations, on-device AI, local Kits, skins, encryption and recovery backups. No subscription needed."].exists)
         XCTAssertEqual(app.tabBars.count, 0)
         capture(app, "Plus-Free-Overview")
         app.swipeUp()
@@ -169,7 +169,8 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(home.waitForExistence(timeout: 10))
         profile.tap()
         app.buttons["habibi.profile.costumes"].tap()
-        XCTAssertTrue(app.staticTexts["Your wardrobe is ready for its first costume."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Skins"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Your wardrobe is ready for its first skin."].exists)
         XCTAssertEqual(app.tabBars.count, 0)
         capture(app, "Costumes-Empty-Wardrobe")
         app.buttons["habibi.costumes.bundled.Socratic Tutor"].tap()
@@ -184,8 +185,8 @@ final class OnboardingTests: XCTestCase {
         capture(app, "Costumes-Tutor-Conversation")
         app.navigationBars.buttons["Conversations"].tap()
         profile.tap()
-        app.navigationBars.buttons["Costumes"].tap()
-        XCTAssertTrue(app.staticTexts["Your wardrobe is ready for its first costume."].exists)
+        app.navigationBars.buttons["Skins"].tap()
+        XCTAssertTrue(app.staticTexts["Your wardrobe is ready for its first skin."].exists)
         app.buttons["habibi.costumes.bundled.Socratic Tutor"].tap()
         let addCostume = app.buttons["habibi.costumes.add"]
         for _ in 0..<3 where !addCostume.isHittable { app.swipeUp() }
@@ -194,7 +195,7 @@ final class OnboardingTests: XCTestCase {
         capture(app, "Costumes-Review")
         app.buttons["habibi.costumes.save"].tap()
         XCTAssertTrue(app.navigationBars["Socratic Tutor"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Costumes"].tap()
+        app.navigationBars.buttons["Skins"].tap()
         let savedCostume = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'habibi.costumes.saved.'")).firstMatch
         XCTAssertTrue(savedCostume.waitForExistence(timeout: 5))
         app.swipeDown()
@@ -217,7 +218,7 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(app.buttons["habibi.costumes.take-off"].waitForExistence(timeout: 5))
         capture(app, "Costumes-Chooser")
         app.buttons["habibi.costumes.take-off"].tap()
-        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wear a costume")
+        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wear a skin")
         XCTAssertEqual(composer.value as? String, "A costume draft to keep")
     }
 

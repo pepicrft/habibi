@@ -287,6 +287,7 @@ class MainActivity : AppCompatActivity() {
             "name", "goals", "privacy" -> "Make it yours"
             "kit", "entry" -> "Your kit"
             "conversation" -> session.conversation.title
+            "costumes" -> "Skins"
             else -> route.replaceFirstChar { it.uppercase() }
         }
         toolbar.navigationIcon = if (route in setOf("home", "conversations", "profile")) null else androidx.core.content.ContextCompat.getDrawable(this, R.drawable.ic_back)
@@ -309,7 +310,7 @@ class MainActivity : AppCompatActivity() {
             val wardrobe = costumesScreen ?: CostumesScreen(this, session, { definition, prompt ->
                 if (session.newConversation(definition, prompt)) { tab = R.id.conversations; go("conversation") }
             }, { costumeSource.launch(arrayOf("application/json")) }, { definition ->
-                pendingCostumeExport = definition.toString(); costumeDestination.launch("habibi-costume.json")
+                pendingCostumeExport = definition.toString(); costumeDestination.launch("habibi-skin.json")
             }).also { costumesScreen = it }
             if (screen.getChildAt(0) !== wardrobe.view) { screen.removeAllViews(); screen.addView(wardrobe.view) }
             wardrobe.render(); return
@@ -505,7 +506,7 @@ class MainActivity : AppCompatActivity() {
             addView(action("Habibi Plus", "profile_plus") { go("plus") })
             addView(action("AI provider", "profile_provider") { go("provider") })
             addView(action("Kits", "profile_kits", true) { go("kits") })
-            addView(action("Costumes", "profile_costumes") { go("costumes") })
+            addView(action("Skins", "profile_costumes") { go("costumes") })
             addView(action("Personalization", "profile_personalization") { go("personalization") })
             addView(action("Appearance", "profile_appearance") { go("appearance") })
             addView(action("Recovery", "profile_recovery") { go("recovery") })
@@ -570,7 +571,7 @@ class MainActivity : AppCompatActivity() {
         })
         addView(card().apply {
             addView(heading("The essentials stay free", 22f))
-            addView(label("Conversations, local Kits, costumes, encryption and recovery backups. No subscription needed."))
+            addView(label("Conversations, local Kits, skins, encryption and recovery backups. No subscription needed."))
             addView(label("AI provider subscriptions and usage charges are separate.", 14f, true))
         })
         if (session.plusActive) {
@@ -782,7 +783,7 @@ class MainActivity : AppCompatActivity() {
             val chatId = session.conversation.id
             MaterialAlertDialogBuilder(this)
                 .setTitle(if (session.chatGPTConnected) "Use your ChatGPT plan?" else "Use host inference?")
-                .setMessage("${if (session.chatGPTConnected) "Habibi sends requests directly to OpenAI using your ChatGPT plan." else "The development proxy uses the host’s configured harness and inference provider."} Messages, the selected costume’s name and instructions, kit definitions and synthetic tests are sent. If GitHub is connected, the agent can also send read-only profile and public repository tool results to that provider. Credentials, saved local Kit entries and vault keys stay private. Provider retention, terms and usage limits apply.")
+                .setMessage("${if (session.chatGPTConnected) "Habibi sends requests directly to OpenAI using your ChatGPT plan." else "The development proxy uses the host’s configured harness and inference provider."} Messages, the selected skin’s name and instructions, kit definitions and synthetic tests are sent. If GitHub is connected, the agent can also send read-only profile and public repository tool results to that provider. Credentials, saved local Kit entries and vault keys stay private. Provider retention, terms and usage limits apply.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Allow for this session") { _, _ ->
                     if (route == "conversation" && session.conversation.id == chatId) {

@@ -98,7 +98,8 @@ class HabibiAndroidTest {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val activity = controller.get()
         val tabs = activity.window.decorView.walk().filterIsInstance<BottomNavigationView>().single()
         tabs.selectedItemId = R.id.profile; activity.tagged("profile_costumes").performClick()
-        assertTrue(activity.text().contains("Your wardrobe is ready"))
+        assertEquals("Skins", (activity.tagged("conversation_toolbar") as MaterialToolbar).title)
+        assertTrue(activity.text().contains("Your wardrobe is ready for its first skin."))
         assertEquals(View.GONE, tabs.visibility)
         activity.tagged("costumes_bundled_Coach").performClick()
         var dialog = ShadowDialog.getLatestDialog() as AlertDialog
@@ -128,6 +129,7 @@ class HabibiAndroidTest {
         dialog.listView.performItemClick(null, 0, 0)
         assertNull(session.conversation.costume)
         assertFalse(activity.text().contains("Take one step at a time."))
+        assertEquals("Wear a skin", (activity.tagged("conversation_costume") as TextView).text)
         assertSame(editor, activity.tagged("conversation_message"))
         assertEquals("Help me find a first step.", editor.text.toString())
         session.flushConversations()

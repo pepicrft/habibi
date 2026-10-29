@@ -1,0 +1,111 @@
+name: iOS release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'mise/tasks/ios/**'
+      - '.github/workflows/ios-release.yml'
+      - 'cliff.toml'
+      - 'package*.json'
+      - 'server/marketing/theme.mjs'
+      - 'server/priv/theme.json'
+      - 'server/priv/theme-variants.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep version selection, App Store upload and tagging in the same queue.
+concurrency:
+  group: habibi-ios-release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.version.outputs.should-release }}
+      version: ${{ steps.version.outputs.next-version-number }}
+      tag: ${{ steps.version.outputs.next-version }}
+      build: ${{ steps.version.outputs.build-number }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: '2026.9.1'
+          install_args: 'git-cliff jq'
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+      - name: Test release calculations
+        run: bash mise/tasks/release/test.sh
+      - id: version
+        run: bash mise/tasks/ios/check.sh
+
+  upload:
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      BUILD: ${{ needs.version.outputs.build }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: '2026.9.1'
+          install_args: 'node git-cliff jq'
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: '2026.9.1'
+          working_directory: native
+          install_args: 'rust github:tuist/once'
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+      - name: Prepare release notes
+        run: bash mise/tasks/ios/check.sh notes > "$RUNNER_TEMP/ios-release-notes.md"
+      # Dependency installers and build scripts must not inherit private keys.
+      - name: Build device app before loading credentials
+        run: |
+          npm ci
+          mise -C native exec -- rustup target add aarch64-apple-ios
+          mise -C native run build:ios-device
+      - name: Load personal Infisical signing and upload credentials
+        uses: Infisical/secrets-action@8a06c1bdcd5b8635d510c52d4b57a92c1ccef785 # v1.0.9
+        with:
+          method: oidc
+          identity-id: e452e43b-5fc3-494f-94e3-82cf76838f35
+          oidc-audience: https://github.com/pepicrft
+          project-slug: habibi
+          env-slug: prod
+          secret-path: /
+          include-imports: false
+          domain: https://eu.infisical.com
+      - name: Check upload credentials
+        run: bash mise/tasks/ios/upload.sh check
+      - name: Sign and package
+        run: bash mise/tasks/ios/bundle.sh "$VERSION" "$BUILD" "$RUNNER_TEMP/Habibi.ipa"
+      - name: Validate with App Store Connect
+        run: bash mise/tasks/ios/upload.sh validate "$RUNNER_TEMP/Habibi.ipa"
+      - name: Upload to App Store Connect
+        run: bash mise/tasks/ios/upload.sh upload "$RUNNER_TEMP/Habibi.ipa"
+      - name: Record the uploaded release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '\nApp Store Connect upload: Habibi %s (%s).\n' "$VERSION" "$BUILD" >> "$RUNNER_TEMP/ios-release-notes.md"
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Habibi iOS $VERSION" \
+            --notes-file "$RUNNER_TEMP/ios-release-notes.md" --latest=false

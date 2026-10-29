@@ -15,14 +15,14 @@ struct HabibiCostumesView: View {
                     HabibiHeartling().frame(width: 72, height: 72)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Still your Habibi.").font(.headline)
-                        Text("Different ways to help. Try on a costume, then keep the ones that feel like you.")
+                        Text("Different ways to help. Try on a skin, then keep the ones that feel like you.")
                             .foregroundStyle(.secondary)
                     }
                 }.padding(.vertical, 8)
             }
             Section("Your wardrobe") {
                 if session.wardrobe.isEmpty {
-                    Text("Your wardrobe is ready for its first costume.").foregroundStyle(.secondary)
+                    Text("Your wardrobe is ready for its first skin.").foregroundStyle(.secondary)
                 }
                 ForEach(session.wardrobe) { costume in
                     NavigationLink {
@@ -38,17 +38,17 @@ struct HabibiCostumesView: View {
                 }
             }
             Section {
-                Button("Make a costume", systemImage: "plus") {
+                Button("Make a skin", systemImage: "plus") {
                     draft = HabibiCostumeDefinition(author: session.snapshot?.profile.name ?? "Me")
                 }.accessibilityIdentifier("habibi.costumes.create")
-                Button("Import a costume", systemImage: "square.and.arrow.down") { importing = true }
+                Button("Import a skin", systemImage: "square.and.arrow.down") { importing = true }
                     .accessibilityIdentifier("habibi.costumes.import")
-                Text("Costumes change Habibi’s approach, never its permissions. Your wardrobe is encrypted with your vault.")
+                Text("Skins change Habibi’s approach, never its permissions. Your wardrobe is encrypted with your vault.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             if let error { Section { Text(error).foregroundStyle(.red) } }
         }
-        .navigationTitle("Costumes")
+        .navigationTitle("Skins")
         .toolbar(.hidden, for: .tabBar)
         .task { do { catalog = try HabibiCostumeDefinition.catalog() } catch { self.error = error.localizedDescription } }
         .sheet(item: $draft) { definition in
@@ -62,7 +62,7 @@ struct HabibiCostumesView: View {
                 let handle = try FileHandle(forReadingFrom: url)
                 defer { try? handle.close() }
                 let data = try handle.read(upToCount: 32 * 1024 + 1) ?? Data()
-                guard data.count <= 32 * 1024 else { throw HabibiFailure(message: "Costume files must be smaller than 32 KiB.") }
+                guard data.count <= 32 * 1024 else { throw HabibiFailure(message: "Skin files must be smaller than 32 KiB.") }
                 // Validate raw JSON first; Codable alone would discard unknown capability fields.
                 let object = try JSONSerialization.jsonObject(with: data)
                 let checked = try HabibiCore.execute(["operation": "validate_costume", "definition": object])
@@ -115,8 +115,8 @@ private struct HabibiCostumeDetail: View {
                 if costumeID != nil {
                     Button("Wear", systemImage: "tshirt") { session.newConversation(costume: current) }
                         .accessibilityIdentifier("habibi.costumes.wear")
-                    Button("Edit costume", systemImage: "pencil") { editing = true }
-                    Button("Export costume", systemImage: "square.and.arrow.up") {
+                    Button("Edit skin", systemImage: "pencil") { editing = true }
+                    Button("Export skin", systemImage: "square.and.arrow.up") {
                         do { exportData = try JSONEncoder().encode(current); exporting = true }
                         catch { self.error = error.localizedDescription }
                     }
@@ -127,7 +127,7 @@ private struct HabibiCostumeDetail: View {
                     Button("Add to wardrobe", systemImage: "plus") { editing = true }
                         .accessibilityIdentifier("habibi.costumes.add")
                 }
-                Text("Only the selected costume’s name and instructions join your model request. It cannot grant tools or data access. Existing conversations keep their own copy when you edit or remove a costume.")
+                Text("Only the selected skin’s name and instructions join your model request. It cannot grant tools or data access. Existing conversations keep their own copy when you edit or remove a skin.")
                     .font(.footnote).foregroundStyle(.secondary)
             }.disabled(!session.canChangeCostume)
             if let error { Section { Text(error).foregroundStyle(.red) } }
@@ -136,7 +136,7 @@ private struct HabibiCostumeDetail: View {
         .sheet(isPresented: $editing) {
             NavigationStack { HabibiCostumeEditor(session: session, definition: current, costumeID: costumeID) }
         }
-        .confirmationDialog("Remove this costume? Conversations keep their own copy.", isPresented: $removing, titleVisibility: .visible) {
+        .confirmationDialog("Remove this skin? Conversations keep their own copy.", isPresented: $removing, titleVisibility: .visible) {
             Button("Remove from wardrobe", role: .destructive) {
                 guard let costumeID else { return }
                 Task {
@@ -145,7 +145,7 @@ private struct HabibiCostumeDetail: View {
                 }
             }
         }
-        .fileExporter(isPresented: $exporting, document: exportData.map(HabibiBackupFile.init), contentType: .json, defaultFilename: "habibi-costume") { result in
+        .fileExporter(isPresented: $exporting, document: exportData.map(HabibiBackupFile.init), contentType: .json, defaultFilename: "habibi-skin") { result in
             if case .failure(let failure) = result { error = failure.localizedDescription }
         }
     }
@@ -160,14 +160,14 @@ private struct HabibiCostumeEditor: View {
 
     var body: some View {
         Form {
-            Section("The costume") {
+            Section("The skin") {
                 TextField("Name", text: $definition.name).accessibilityIdentifier("habibi.costumes.name")
                 TextField("Short description", text: $definition.description, axis: .vertical).lineLimit(2...4)
                 TextField("Author (not verified)", text: $definition.author)
             }
             Section("How Habibi should help") {
                 TextEditor(text: $definition.instructions).frame(minHeight: 160)
-                    .accessibilityLabel("Costume instructions").accessibilityIdentifier("habibi.costumes.instructions")
+                    .accessibilityLabel("Skin instructions").accessibilityIdentifier("habibi.costumes.instructions")
                 Text("Describe its approach, questions and habits. Up to 4,000 characters. No code, tools or permissions.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -175,12 +175,12 @@ private struct HabibiCostumeEditor: View {
                 TextField("A starting prompt", text: $definition.examplePrompt, axis: .vertical).lineLimit(2...4)
             }
             Section {
-                Text("Review every field before adding an imported costume. Author names are not verified. Its selected name and instructions are sent to your chosen model when you send a message. Never put secrets here.")
+                Text("Review every field before adding an imported skin. Author names are not verified. Its selected name and instructions are sent to your chosen model when you send a message. Never put secrets here.")
                     .font(.footnote).foregroundStyle(.secondary)
                 if let error { Text(error).foregroundStyle(.red) }
             }
         }
-        .navigationTitle(costumeID == nil ? "Add to wardrobe" : "Edit costume").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(costumeID == nil ? "Add to wardrobe" : "Edit skin").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {

@@ -193,7 +193,7 @@ struct HabibiConversationView: View {
             NavigationStack {
                 List {
                     Section {
-                        Button("Just Habibi · No costume") { session.setConversationCostume(nil); choosingCostume = false }
+                        Button("Just Habibi · No skin") { session.setConversationCostume(nil); choosingCostume = false }
                             .accessibilityIdentifier("habibi.costumes.take-off")
                         ForEach(session.wardrobe) { costume in
                             Button {
@@ -208,11 +208,11 @@ struct HabibiConversationView: View {
                     }.disabled(!session.canChangeCostume)
                     Section {
                         NavigationLink("Open wardrobe") { HabibiCostumesView(session: session) }
-                        Text("Applies to future replies in this conversation. Costumes change the approach, not permissions. The selected name and instructions go to your chosen model when you send a message.")
+                        Text("Applies to future replies in this conversation. Skins change the approach, not permissions. The selected name and instructions go to your chosen model when you send a message.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                .navigationTitle("Wear a costume").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle("Wear a skin").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { choosingCostume = false } } }
             }
         }
@@ -224,7 +224,7 @@ struct HabibiConversationView: View {
                          ? "Apple’s model processes messages and requested tool results on this device. No inference requests go to OpenAI or Habibi’s server. Connected service tools still contact their service when you ask to use them."
                          : "Messages, requested Kit definitions and synthetic tests go to the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with that provider. Saved Kit entries, vault keys and connection credentials are never included by tools.")
                     Text("Dictation runs on this device. Audio is never uploaded, and transcription never sends a message automatically.")
-                    Text("The selected costume’s name and instructions also go to your chosen model. The rest of your wardrobe is not included.")
+                    Text("The selected skin’s name and instructions also go to your chosen model. The rest of your wardrobe is not included.")
                     Text("Messages, tool results, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation uses its text context with the selected model; tools and pending approvals are never replayed. Cloud inference requires approval.")
                     LabeledContent("Inference", value: session.inferenceName)
                 }
@@ -248,7 +248,7 @@ struct HabibiConversationView: View {
             Button("Allow for this session") { session.cloudConsent = true; send() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("\(session.chatGPTConnected ? "Habibi sends requests directly to OpenAI using your ChatGPT plan." : "The development proxy uses the host’s configured harness and inference provider.") Messages, the selected costume’s name and instructions, requested Kit definitions and synthetic tests are sent. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are shared with that provider and saved in encrypted conversation history. Saved Kit entries, vault keys and connection credentials are never included by tools. Provider retention, terms and usage limits apply.")
+            Text("\(session.chatGPTConnected ? "Habibi sends requests directly to OpenAI using your ChatGPT plan." : "The development proxy uses the host’s configured harness and inference provider.") Messages, the selected skin’s name and instructions, requested Kit definitions and synthetic tests are sent. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are shared with that provider and saved in encrypted conversation history. Saved Kit entries, vault keys and connection credentials are never included by tools. Provider retention, terms and usage limits apply.")
         }
         .onDisappear { cancelVoice(); Task { await session.flushConversations() } }
         .onChange(of: session.activeConversationID) { _, _ in choosingCostume = false }
@@ -323,7 +323,7 @@ struct HabibiConversationView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button { choosingCostume = true } label: {
-                Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a costume", systemImage: "tshirt")
+                Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a skin", systemImage: "tshirt")
                     .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 10)
                     .background(palette.surface, in: Capsule())
             }.buttonStyle(.plain).disabled(!session.canChangeCostume)

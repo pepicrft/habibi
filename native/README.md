@@ -22,8 +22,9 @@ mise run test:ios-ui
 
 Apple builds require macOS and Xcode. Simulator output is
 `.once/out/HabibiIOS/Habibi.app`; the device target compiles ARM64 but does not
-configure distribution signing or install on a physical device. Tests use a
-dedicated simulator when `ONCE_APPLE_SIMULATOR_UDID` is set. Use a disposable
+configure distribution signing itself or install on a physical device. The iOS
+release workflow below signs a separate copy. Tests use a dedicated simulator
+when `ONCE_APPLE_SIMULATOR_UDID` is set. Use a disposable
 simulator: Once's UI-test runner reinstalls the app and removes its local files.
 
 `mise run test:ios-ui` creates or reuses **Habibi UI Tests**, an iPhone 17 Pro
@@ -48,11 +49,93 @@ The current Once target builds ARM64. Gradle packages the JNI library, real
 Android resources and locked Android dependencies. See [android/README.md](android/README.md)
 for its packaging contract and standalone JVM tests. Both apps use `fyi.habibi.app`.
 
+## iOS App Store Connect releases
+
+`.github/workflows/ios-release.yml` runs on relevant changes to `main` or manual
+dispatch on `main`. Bash automation lives in `mise/tasks/ios/`. It shares the
+root git-cliff 2.6.0 conventional-commit policy, but uses independent reachable
+stable `ios@x.y.z` tags, starting at `0.1.0`. Native/shared-theme fixes bump patches,
+features bump minors, and breaking changes bump majors, including during `0.x`.
+Ordinary maintenance and server-only changes do not release iOS. The build number
+is `GITHUB_RUN_NUMBER.GITHUB_RUN_ATTEMPT`, so a retried upload gets a new number.
+Keep the workflow's run-counter history when changing its name or location.
+Local bootstrap builds use `1.0.N`, below CI's first `1.1`, to avoid collisions
+before the workflow is enabled.
+
+Personal Infisical EU organization `pepicrft`, project `habibi`, environment
+`prod`, root folder stores:
+
+| Secret | Value |
+| --- | --- |
+| `IOS_DISTRIBUTION_P12_BASE64` | Base64 certificate and private key, exported as password-protected PKCS#12 |
+| `IOS_DISTRIBUTION_P12_PASSWORD` | Password for that PKCS#12 export |
+| `IOS_APP_STORE_PROFILE_BASE64` | Base64 App Store Connect provisioning profile for `fyi.habibi.app` |
+| `ASC_API_KEY_ID` | App Store Connect **team** API key ID |
+| `ASC_API_ISSUER_ID` | That team's API issuer UUID |
+| `ASC_API_KEY_P8_BASE64` | Base64 private `.p8` API key |
+
+All six secrets are configured for the App Store Connect app `Habibi Bot`
+(`fyi.habibi.app`). For a new setup, create the app record, then generate
+a team API key under Users and Access → Integrations → App Store Connect API.
+Give it the Developer role for build uploads and store its three values above;
+do not put its private key in Git or chat. This is not the separate APNs key.
+Signing certificate/profile expiration is 29 October 2027; renew both secrets
+before then. Preserve the matching private key when renewing the certificate.
+
+The CI machine identity has read-only access to this dedicated project and
+15-minute tokens. OIDC is bound to the immutable GitHub repository/owner IDs,
+the exact release workflow, and `refs/heads/main`; pull requests cannot use it.
+No persistent Infisical token or Apple ID password is needed in GitHub.
+CI builds the device app before fetching credentials, so dependency installers
+and build scripts never inherit the signing or App Store Connect private keys.
+
+The bundle script checks profile type, app ID, expiry and certificate matching;
+stamps a copy of the built device bundle's version and SDK metadata;
+embeds the profile, scoped entitlements and Swift support; and verifies the
+distribution signature. Its temporary Keychain and private files are deleted
+on exit, without changing the default Keychain. The cached app and source plist
+remain unchanged. App extensions require separate profiles and are rejected.
+
+The upload script validates with Apple before uploading. Only a successful upload
+creates the exact-SHA GitHub release/tag. It does not submit for App Review,
+release publicly, or automatically invite TestFlight testers. Upload acceptance
+does not guarantee Apple's later processing or beta review. No IPA is published
+as a public GitHub artifact. Complete App Store Connect's encryption/export
+compliance questions for the Rust-based encrypted vault rather than claiming
+the app uses only operating-system encryption. Do not blindly retry an upload
+with an unknown outcome; inspect App Store Connect first.
+
+Run `mise exec -- bash mise/tasks/release/test.sh` from the repository root to
+exercise real disposable Git histories for both server and iOS releases.
+
+## Translation sources
+
+`app-store/locales/en-US.json` contains the English App Store listing and
+screenshot headlines. Copy it to an App Store locale such as `es-ES.json` or
+`de-DE.json`, keeping field names and screenshot IDs unchanged. Apple limits
+names/subtitles to 30 characters, promotional text to 170, descriptions to
+4,000 and keywords to 100 UTF-8 bytes. Listing translations do not change the
+languages supported inside the app.
+
+From the repository root, run `mise run ios:localize` with Xcode 26.6 or later
+to refresh `ios/Localizable.xcstrings`. Apple's extractor recognizes static
+SwiftUI strings and `String(localized:)`; its synchronizer preserves existing
+translations. Open the catalog in Xcode to add languages. The command also
+checks that the catalog compiles before replacing it.
+
+This is an initial source extraction, not complete localization support.
+Interpolations whose types cannot be inferred are reported and skipped.
+Dynamic strings, ordinary Swift/Rust model messages, Android copy and system
+permission descriptions still need localization work. Once 0.68.2 does not
+compile string catalogs as resources; packaging compiled `.lproj` resources is
+also required before shipping translated native UI. The uploaded 0.1.0 build
+remains English-only.
+
 ## Habibi Plus subscriptions
 
 **Profile → Habibi Plus** offers monthly and yearly subscriptions for hosted
 encrypted snapshot uploads and automatic composer-draft handoff. Local
-conversations, supported local AI, Kits, costumes, encryption and recovery
+conversations, supported local AI, Kits, skins, encryption and recovery
 exports/imports remain free. AI-provider subscriptions and usage are separate.
 Signing in is free and does not recover a vault key. After expiration, hosted
 writes pause with HTTP 402; local data, pending snapshots, existing downloads,
@@ -125,32 +208,34 @@ generated Android layers and iOS primary/preview/alternate PNGs. Android artwork
 the central 66dp adaptive-icon safe zone and includes Android 13+ monochrome
 layers. Neither platform bakes rounded corners into the master.
 
-## Costumes
+## Skins
 
-**Profile → Costumes** opens Habibi's local wardrobe. Coach, Socratic Tutor and
+**Profile → Skins** opens Habibi's local wardrobe. Coach, Socratic Tutor and
 Gentle Planner are bundled starting points. **Try on** opens a separate saved
-conversation with an editable example; it neither installs the costume nor sends
+conversation with an editable example; it neither installs the skin nor sends
 a message. **Add to wardrobe** opens an explicit, editable review. **Wear** starts
-a new conversation. The costume control above the composer switches future
+a new conversation. The skin control above the composer switches future
 replies in that conversation or returns to **Just Habibi**. New ordinary
-conversations have no costume, and selection is disabled during an active turn.
+conversations have no skin, and selection is disabled during an active turn.
 
-Costumes are portable JSON definitions with `apiVersion:1`, `name`, `description`,
+Skins are portable JSON definitions with `apiVersion:1`, `name`, `description`,
 `author`, `instructions` and `examplePrompt`. Make one in the native editor, or
 import a file (32 KiB maximum) and review it before adding. Exports contain only
 the definition, never conversations, entries or credentials. Any personal text
 you put in the definition is still exported; author names are self-declared,
-not verified. A wardrobe holds up to 24 costumes. Editing/removing a costume
+not verified. A wardrobe holds up to 24 skins. Editing/removing a skin
 does not rewrite existing conversations: each keeps its selected definition.
 The wardrobe and those copies are encrypted in the vault, recovery and sync.
+Stored JSON keys and core operation names retain `costume`/`costumes` for
+compatibility with existing vaults, conversations and exported definitions.
 
 Only the selected name and instructions join the model request, alongside the
 conversation's normal context and tool results. The example is sent only if you
-send it as a message. Other costumes and author metadata are not sent. Costumes
+send it as a message. Other skins and author metadata are not sent. Skins
 change conversational guidance, not tools, data access, approval requirements or
 professional qualifications. The native host still enforces those boundaries;
-prompt text is not a security boundary. There is no executable costume code,
-public catalogue, automatic update, model-generated creation flow or costume
+prompt text is not a security boundary. There is no executable skin code,
+public catalogue, automatic update, model-generated creation flow or skin
 artwork in this first version.
 
 ## Connect ChatGPT

@@ -86,7 +86,7 @@ struct HabibiWorkspaceView: View {
                     Label("Kits", systemImage: "square.stack.3d.up")
                 }.accessibilityIdentifier("habibi.profile.kits")
                 NavigationLink { HabibiCostumesView(session: session) } label: {
-                    Label("Costumes", systemImage: "tshirt")
+                    Label("Skins", systemImage: "tshirt")
                 }.accessibilityIdentifier("habibi.profile.costumes")
                 NavigationLink { HabibiRecoveryView(session: session) } label: {
                     Label("Recovery backup", systemImage: "key")
