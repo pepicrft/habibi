@@ -136,6 +136,28 @@ exercise real disposable Git histories for both server and iOS releases.
 Run `node --test mise/tasks/ios/testflight.test.mjs` for simulated Apple processing,
 distribution, review conflicts, retries and failure cases; it does not contact Apple.
 
+### In-app beta updates
+
+TestFlight installations check for updates in Profile when it opens or returns to
+the foreground (at most once per five minutes), with a manual retry. Profile shows
+the installed bundle version/build and offers **Open TestFlight** only for a newer,
+OS-compatible build. TestFlight performs installation. App Store and ordinary
+development builds do not check; simulator previews opt in with `--beta-updates`.
+
+`GET /v1/updates/ios` exposes only version, build and minimum iOS version. The
+server reads App Store Connect using `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, and
+`ASC_API_KEY_P8_BASE64`, never the client's credentials or vault. Configure these
+through a pre-created runtime Secret and Helm `testflightSecret` (or
+`external.existingSecret` for external deployments). No credentials are embedded
+in the app, chart, database migration job or public endpoint. Missing credentials
+and Apple failures return 503, not an up-to-date claim. Server reads cache for five
+minutes; failed reads cache for 30 seconds.
+
+All clients use the existing **Private Beta** group's available, nonexpired builds
+as a conservative baseline. Internally available builds still awaiting external
+approval are deliberately not advertised. Public enrollment remains disabled.
+An internal-only tester may therefore see a newer build directly in TestFlight.
+
 ## Translation sources
 
 `app-store/locales/en-US.json` contains the English App Store listing and

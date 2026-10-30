@@ -115,6 +115,12 @@
     "Check connection" : {
 
     },
+    "Check for a newer Private Beta build in TestFlight." : {
+
+    },
+    "Check for updates" : {
+
+    },
     "Checking subscription…" : {
 
     },
@@ -191,6 +197,12 @@
 
     },
     "Could not open the browser. Open github.com/login/device yourself and enter the code." : {
+
+    },
+    "Couldn’t check for updates. Try again when you’re online." : {
+
+    },
+    "Couldn’t open TestFlight. Open the TestFlight app to update Habibi." : {
 
     },
     "Create a calorie journal" : {
@@ -451,6 +463,9 @@
     "Open GitHub in browser" : {
 
     },
+    "Open TestFlight" : {
+
+    },
     "Open wardrobe" : {
 
     },
@@ -703,6 +718,9 @@
     "Themes come from your Habibi server. Your selection stays in your encrypted profile, recovery backups and optional sync. Native typography follows your accessibility settings." : {
 
     },
+    "TestFlight installs the update. Your private space stays on this device." : {
+
+    },
     "There is a private key but no local vault file. This deletes that key permanently. Restore a backup instead if you have one. Any previous vault still requires its own backup and recovery key." : {
 
     },
@@ -749,6 +767,9 @@
 
     },
     "Unsaved draft" : {
+
+    },
+    "Update available" : {
 
     },
     "Use the same passkey account on every device. Signing in is free and does not recover your vault key." : {
@@ -803,6 +824,9 @@
 
     },
     "You need your encrypted backup and its separate recovery key. Neither one is enough by itself." : {
+
+    },
+    "No newer compatible Private Beta build is available." : {
 
     },
     "Your Kits" : {

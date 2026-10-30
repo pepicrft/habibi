@@ -29,6 +29,11 @@ config :habibi, Habibi.WaitlistEmail,
   from: System.get_env("WAITLIST_EMAIL_FROM"),
   mailbox: if(config_env() != :prod, do: System.get_env("WAITLIST_EMAIL_DIR"))
 
+config :habibi, Habibi.BetaUpdates,
+  key_id: System.get_env("ASC_API_KEY_ID"),
+  issuer: System.get_env("ASC_API_ISSUER_ID"),
+  private_key: System.get_env("ASC_API_KEY_P8_BASE64")
+
 if config_env() != :test do
   config :habibi, Habibi.Subscriptions,
     secret_key: System.get_env("REVENUECAT_SECRET_KEY"),

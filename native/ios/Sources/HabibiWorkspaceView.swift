@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct HabibiWorkspaceView: View {
     @ObservedObject var session: HabibiSession
     @Environment(\.habibiPalette) private var palette
+    @StateObject private var updates = HabibiBetaUpdates()
 
     var body: some View {
         TabView(selection: $session.selectedTab) {
@@ -97,9 +98,7 @@ struct HabibiWorkspaceView: View {
                 NavigationLink { privacy } label: { Label("Privacy & storage", systemImage: "lock.shield") }
                     .accessibilityIdentifier("habibi.profile.privacy")
             }
-            Section {
-                LabeledContent("Version", value: "0.1.0 · Development")
-            }
+            HabibiBetaUpdateSection(updates: updates)
         }.background(palette.canvas).navigationTitle("Profile")
     }
 

@@ -6,6 +6,7 @@ defmodule Habibi.Application do
       Habibi.Repo,
       {Phoenix.PubSub, name: Habibi.PubSub},
       {DNSCluster, query: Application.fetch_env!(:habibi, :dns_cluster_query)},
+      {Habibi.BetaUpdates, name: Habibi.BetaUpdates},
       HabibiWeb.Endpoint
     ]
 

@@ -152,6 +152,18 @@ test("production routes only Habibi, pins web and migrations together, and keeps
     undefined,
   );
 
+  const withTestflight = render("--set", "testflightSecret=habibi-apple-read");
+  assert.deepEqual(
+    withTestflight.find((resource) => resource.kind === "Deployment").spec.template
+      .spec.containers[0].envFrom,
+    [{ secretRef: { name: "habibi-apple-read" } }],
+  );
+  assert.equal(
+    withTestflight.find((resource) => resource.kind === "Job").spec.template.spec
+      .containers[0].envFrom,
+    undefined,
+  );
+
   const isolated = render(
     "--set",
     "analytics.enabled=false,imagePullSecret.enabled=false,ingress.enabled=false,replicaCount=1",

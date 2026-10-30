@@ -37,7 +37,7 @@ spec:
         - name: web
           image: {{ include "habibi.image" . | quote }}
           imagePullPolicy: IfNotPresent
-          {{- if or (not .Values.platform.enabled) .Values.waitlistEmailSecret }}
+          {{- if or (not .Values.platform.enabled) .Values.waitlistEmailSecret .Values.testflightSecret }}
           envFrom:
             {{- if not .Values.platform.enabled }}
             - secretRef:
@@ -46,6 +46,10 @@ spec:
             {{- if .Values.waitlistEmailSecret }}
             - secretRef:
                 name: {{ .Values.waitlistEmailSecret | quote }}
+            {{- end }}
+            {{- if .Values.testflightSecret }}
+            - secretRef:
+                name: {{ .Values.testflightSecret | quote }}
             {{- end }}
           {{- end }}
           ports:

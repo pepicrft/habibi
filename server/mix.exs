@@ -31,6 +31,7 @@ defmodule Habibi.MixProject do
       {:postgrex, "~> 0.21"},
       {:dns_cluster, "~> 0.2"},
       {:jason, "~> 1.4"},
+      {:jose, "~> 1.11"},
       {:ex_aws, "~> 2.6"},
       {:ex_aws_s3, "~> 2.5"},
       {:req, "~> 0.7.5"},

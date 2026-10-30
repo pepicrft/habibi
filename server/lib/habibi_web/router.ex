@@ -14,6 +14,7 @@ defmodule HabibiWeb.Router do
   scope "/", HabibiWeb do
     get "/.well-known/oauth-authorization-server", OAuthController, :metadata
     get "/v1/capabilities", CapabilitiesController, :show
+    get "/v1/updates/ios", BetaUpdatesController, :show
     get "/v1/me", OAuthController, :me
     get "/v1/subscription", SubscriptionController, :show
     post "/v1/subscription/receipt", SubscriptionController, :receipt
