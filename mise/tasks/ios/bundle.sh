@@ -72,6 +72,10 @@ plist="$app/Info.plist"
 [[ $(plutil -extract CFBundleIdentifier raw -o - "$plist") == "$bundle_id" ]]
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$plist"
 plutil -replace CFBundleVersion -string "$BUILD" "$plist"
+# Preserve the existing private-beta export answer for standard exempt crypto,
+# including RustCrypto, not just OS encryption. Reassess encryption changes and
+# French availability before public distribution (see native/README.md).
+plutil -replace ITSAppUsesNonExemptEncryption -bool false "$plist"
 # Once copies custom plists without Xcode's SDK/platform metadata processing.
 sdk=$(xcrun --sdk iphoneos --show-sdk-version)
 sdk_build=$(xcrun --sdk iphoneos --show-sdk-build-version)

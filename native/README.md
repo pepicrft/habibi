@@ -73,12 +73,19 @@ Personal Infisical EU organization `pepicrft`, project `habibi`, environment
 | `ASC_API_KEY_ID` | App Store Connect **team** API key ID |
 | `ASC_API_ISSUER_ID` | That team's API issuer UUID |
 | `ASC_API_KEY_P8_BASE64` | Base64 private `.p8` API key |
+| `ASC_TESTFLIGHT_API_KEY_ID` | Separate **App Manager** team API key ID for private beta distribution |
+| `ASC_TESTFLIGHT_API_ISSUER_ID` | That team's API issuer UUID |
+| `ASC_TESTFLIGHT_API_KEY_P8_BASE64` | Base64 private `.p8` management API key |
 
-All six secrets are configured for the App Store Connect app `Habibi Bot`
+The original six upload/signing secrets are configured for `Habibi Bot`
 (`fyi.habibi.app`). For a new setup, create the app record, then generate
 a team API key under Users and Access → Integrations → App Store Connect API.
 Give it the Developer role for build uploads and store its three values above;
 do not put its private key in Git or chat. This is not the separate APNs key.
+The three `ASC_TESTFLIGHT_*` secrets must also be configured before enabling
+automatic external distribution. Apple requires App Manager access for external
+testing; the Developer upload key is not sufficient. Keep the upload key's role
+unchanged and use a separate management key.
 Signing certificate/profile expiration is 29 October 2027; renew both secrets
 before then. Preserve the matching private key when renewing the certificate.
 
@@ -97,16 +104,37 @@ on exit, without changing the default Keychain. The cached app and source plist
 remain unchanged. App extensions require separate profiles and are rejected.
 
 The upload script validates with Apple before uploading. Only a successful upload
-creates the exact-SHA GitHub release/tag. It does not submit for App Review,
-release publicly, or automatically invite TestFlight testers. Upload acceptance
-does not guarantee Apple's later processing or beta review. No IPA is published
-as a public GitHub artifact. Complete App Store Connect's encryption/export
-compliance questions for the Rust-based encrypted vault rather than claiming
-the app uses only operating-system encryption. Do not blindly retry an upload
-with an unknown outcome; inspect App Store Connect first.
+creates the exact-SHA GitHub release/tag. A separate TestFlight job then waits for
+that exact iOS version/build to finish processing, copies the release notes into
+English “What to Test”, enables automatic tester notifications, adds the build to
+the existing **Private Beta** external group (public links remain disabled), and
+submits it for beta review. Already-approved builds start testing without another
+review submission. The existing **Internal Beta** group has access to all builds
+automatically and does not require beta review. Group membership and invitations
+are not changed. This does not submit for public App Review or release publicly.
+
+The signed distribution plist records `ITSAppUsesNonExemptEncryption=false`,
+preserving the existing private-beta exemption answer for standard encryption,
+including the RustCrypto vault. This does **not** mean only OS encryption is used.
+Reassess that answer when cryptography changes or before French public
+availability; do not reuse it as a blanket compliance determination. The
+distribution script refuses unresolved/nonexempt compliance instead of silently
+changing Apple's answer or fabricating a declaration.
+
+Upload acceptance does not guarantee Apple's later processing or beta approval.
+Processing and a conflicting same-version beta review are polled for up to 45
+minutes; another active review is never canceled. A queued review is reported as
+queued, not as available to testers. Rejections, unresolved compliance, permission
+errors and timeouts fail the TestFlight job with an actionable error. Resolve the
+problem in App Store Connect and use **Re-run failed jobs**, not a new upload or a
+rerun of all jobs. Successful upload/version jobs and their original build number
+are reused. No IPA is published as a public GitHub artifact. Do not blindly retry
+an upload with an unknown outcome; inspect App Store Connect first.
 
 Run `mise exec -- bash mise/tasks/release/test.sh` from the repository root to
 exercise real disposable Git histories for both server and iOS releases.
+Run `node --test mise/tasks/ios/testflight.test.mjs` for simulated Apple processing,
+distribution, review conflicts, retries and failure cases; it does not contact Apple.
 
 ## Translation sources
 

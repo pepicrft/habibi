@@ -40,6 +40,7 @@ jobs:
       - run: npm run build
       - run: npm run gettext:check
       - run: npm test
+      - run: node --test mise/tasks/ios/testflight.test.mjs
       - run: node --test server/test/passkeys_browser_test.mjs
       - run: helm lint deploy/helm/habibi --values deploy/values-production.yaml
       - run: npm run test:deploy
