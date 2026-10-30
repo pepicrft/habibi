@@ -62,8 +62,12 @@ struct HabibiConversationView: View {
     @State private var choosingCostume = false
     @State private var startingVoice: Task<Void, Never>?
     @State private var evidence: HabibiComponent?
+    @State private var showingIdeas = false
+    @State private var ideasPull: CGFloat = 0
+    @State private var draggingConversation = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.habibiPalette) private var palette
 
     init(session: HabibiSession, voice: HabibiVoiceInput? = nil) {
@@ -111,8 +115,21 @@ struct HabibiConversationView: View {
                     if !scrolling.following { visibleMessageID = $0 }
                 }))
                 .modifier(HabibiScrollObserver(update: { metrics in
+                    if scrolling.userScrolling == true, metrics.bottom < metrics.viewport {
+                        if draggingConversation, !showingIdeas, voice.phase == .idle, !scrolling.editingEntry {
+                            ideasPull = metrics.viewport - metrics.bottom
+                        }
+                        // Rubber-banding past the end must not trigger an automatic scroll correction.
+                        return
+                    }
+                    if scrolling.userScrolling == true { ideasPull = 0 }
                     if !jumping, scrolling.update(metrics), !session.messages.isEmpty { latestRequest += 1 }
-                }, interaction: { scrolling.userScrolling = $0 }))
+                }, interaction: { userScrolling, dragging in
+                    scrolling.userScrolling = userScrolling
+                    draggingConversation = dragging
+                    if !dragging { ideasPull = 0 }
+                }, released: finishIdeasPull))
+                .accessibilityIdentifier("habibi.conversation.messages")
                 .task(id: latestRequest) {
                     await Task.yield()
                     guard !Task.isCancelled, scrolling.following, !scrolling.editingEntry, !jumping, !session.messages.isEmpty else { return }
@@ -126,6 +143,17 @@ struct HabibiConversationView: View {
                 .onChange(of: session.chatRunning) { _, _ in if scrolling.following { latestRequest += 1 } }
                 .onChange(of: geometry.size.height) { _, _ in if scrolling.following { latestRequest += 1 } }
                 .onChange(of: scrolling.following) { _, following in if following { visibleMessageID = nil } }
+                .overlay(alignment: .bottom) {
+                    if ideasPull > 0, !showingIdeas {
+                        Label(ideasPull >= 72 ? "Release for ideas" : "Pull up for ideas", systemImage: "chevron.up")
+                            .font(.caption.weight(.medium)).foregroundStyle(palette.muted)
+                            .padding(.vertical, 12)
+                            .offset(y: reduceMotion ? 0 : -min(ideasPull * 0.15, 12))
+                            .allowsHitTesting(false)
+                            .accessibilityIdentifier("habibi.ideas.pull")
+                    }
+                }
+                .accessibilityAction(named: "Show ideas", openIdeas)
                 .overlay(alignment: .bottomTrailing) {
                     HabibiPromptNavigation(messages: session.messages, showsLatest: !scrolling.following) { target in
                         jumping = true
@@ -140,6 +168,19 @@ struct HabibiConversationView: View {
                         }
                     }.padding()
                 }
+            }
+        }
+        .blur(radius: showingIdeas && !reduceTransparency ? 12 : 0)
+        .allowsHitTesting(!showingIdeas)
+        .accessibilityHidden(showingIdeas)
+        .overlay {
+            if showingIdeas {
+                HabibiConversationIdeas(ideas: HabibiConversationIdea.suggestions(costume: session.costume, hasMessages: !session.messages.isEmpty),
+                                        dismiss: closeIdeas) { prompt in
+                    session.composer += (session.composer.isEmpty ? "" : "\n\n") + prompt
+                    closeIdeas()
+                }
+                .transition(.opacity)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
@@ -250,11 +291,14 @@ struct HabibiConversationView: View {
         } message: {
             Text("\(session.chatGPTConnected ? "Habibi sends requests directly to OpenAI using your ChatGPT plan." : "The development proxy uses the host’s configured harness and inference provider.") Messages, the selected skin’s name and instructions, requested Kit definitions and synthetic tests are sent. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are shared with that provider and saved in encrypted conversation history. Saved Kit entries, vault keys and connection credentials are never included by tools. Provider retention, terms and usage limits apply.")
         }
-        .onDisappear { cancelVoice(); Task { await session.flushConversations() } }
-        .onChange(of: session.activeConversationID) { _, _ in choosingCostume = false }
+        .onDisappear { closeIdeas(); cancelVoice(); Task { await session.flushConversations() } }
+        .onChange(of: session.activeConversationID) { _, _ in choosingCostume = false; closeIdeas() }
+        .onChange(of: session.composer) { _, _ in if showingIdeas { closeIdeas() } }
+        .onChange(of: voice.phase) { _, phase in if phase != .idle { closeIdeas() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in closeIdeas() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { session.refreshOnDeviceAvailability() }
-            if phase == .background || (phase == .inactive && voice.phase != .requesting) { cancelVoice() }
+            if phase == .background || (phase == .inactive && voice.phase != .requesting) { closeIdeas(); cancelVoice() }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in cancelVoice() }
     }
@@ -322,29 +366,31 @@ struct HabibiConversationView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { choosingCostume = true } label: {
-                Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a skin", systemImage: "tshirt")
-                    .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 10)
-                    .background(palette.surface, in: Capsule())
-            }.buttonStyle(.plain).disabled(!session.canChangeCostume)
-                .accessibilityIdentifier("habibi.costume.conversation")
-            HabibiConversationSaveStatus(session: session)
-                .frame(maxWidth: .infinity, alignment: .leading).background(palette.canvas)
-            Text(session.draftSyncMessage).font(.caption).foregroundStyle(.secondary)
-                .accessibilityIdentifier("habibi.drafts.status")
-            if !session.otherDrafts.isEmpty {
-                Menu("Other draft versions (\(session.otherDrafts.count))") {
-                    ForEach(session.otherDrafts, id: \.self) { text in
-                        Button(String(text.prefix(80))) { Task { await session.selectDraftVersion(text) } }
+            if !showingIdeas {
+                Button { choosingCostume = true } label: {
+                    Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a skin", systemImage: "tshirt")
+                        .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(palette.surface, in: Capsule())
+                }.buttonStyle(.plain).disabled(!session.canChangeCostume)
+                    .accessibilityIdentifier("habibi.costume.conversation")
+                HabibiConversationSaveStatus(session: session)
+                    .frame(maxWidth: .infinity, alignment: .leading).background(palette.canvas)
+                Text(session.draftSyncMessage).font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("habibi.drafts.status")
+                if !session.otherDrafts.isEmpty {
+                    Menu("Other draft versions (\(session.otherDrafts.count))") {
+                        ForEach(session.otherDrafts, id: \.self) { text in
+                            Button(String(text.prefix(80))) { Task { await session.selectDraftVersion(text) } }
+                        }
                     }
+                    .accessibilityHint("Switch drafts without sending. Both versions stay saved.")
+                    .accessibilityIdentifier("habibi.drafts.versions")
                 }
-                .accessibilityHint("Switch drafts without sending. Both versions stay saved.")
-                .accessibilityIdentifier("habibi.drafts.versions")
+                if session.usesOnDeviceModel, let reason = session.onDeviceUnavailableReason {
+                    Text(reason).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.model.unavailable")
+                }
+                if let error = voice.errorMessage { Text(error).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.voice.error") }
             }
-            if session.usesOnDeviceModel, let reason = session.onDeviceUnavailableReason {
-                Text(reason).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.model.unavailable")
-            }
-            if let error = voice.errorMessage { Text(error).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("habibi.voice.error") }
             if session.composer.count > 4000 { Text("Keep your message under 4,000 characters.").font(.caption).foregroundStyle(.red) }
             HabibiComposer(draft: $session.composer, connected: session.inferenceConnected && !session.connectingChatGPT, running: session.chatRunning,
                            phase: voice.phase, levels: voice.levels, start: {
@@ -358,6 +404,22 @@ struct HabibiConversationView: View {
         }
         .frame(maxWidth: 688).padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10).frame(maxWidth: .infinity)
         .background(palette.canvas)
+    }
+
+    private func finishIdeasPull() {
+        let shouldOpen = ideasPull >= 72
+        withAnimation(reduceMotion ? nil : .snappy) { ideasPull = 0 }
+        if shouldOpen { openIdeas() }
+    }
+
+    private func openIdeas() {
+        guard voice.phase == .idle, !scrolling.editingEntry else { return }
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { showingIdeas = true }
+    }
+
+    private func closeIdeas() {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { showingIdeas = false; ideasPull = 0 }
     }
 
     private func send() { scrolling.following = true; latestRequest += 1; session.send() }
@@ -434,19 +496,26 @@ private struct HabibiScrollPreference: PreferenceKey {
 
 private struct HabibiScrollObserver: ViewModifier {
     let update: (HabibiScrollMetrics) -> Void
-    let interaction: (Bool?) -> Void
+    let interaction: (Bool?, Bool) -> Void
+    let released: () -> Void
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: HabibiScrollMetrics.self) { geometry in
-                HabibiScrollMetrics(height: geometry.contentSize.height,
-                                    bottom: geometry.contentSize.height + geometry.contentInsets.bottom - geometry.contentOffset.y,
-                                    viewport: geometry.containerSize.height, inset: geometry.contentInsets.top + geometry.contentInsets.bottom)
+                let inset = geometry.contentInsets.top + geometry.contentInsets.bottom
+                return HabibiScrollMetrics(height: geometry.contentSize.height,
+                                           bottom: geometry.contentSize.height + geometry.contentInsets.bottom - geometry.contentOffset.y,
+                                           viewport: geometry.containerSize.height + inset, inset: inset)
             } action: { _, metrics in update(metrics) }
-                .onScrollPhaseChange { _, phase in interaction(phase == .interacting || phase == .decelerating) }
-                .onAppear { interaction(false) }
+                .onScrollPhaseChange { previous, phase in
+                    if previous == .interacting && phase != .interacting { released() }
+                    interaction(phase == .interacting || phase == .decelerating, phase == .interacting)
+                }
+                .onAppear { interaction(false, false) }
         } else {
             content.onPreferenceChange(HabibiScrollPreference.self) { if let metrics = $0 { update(metrics) } }
-                .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in interaction(true) }.onEnded { _ in interaction(nil) })
+                .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in interaction(true, true) }.onEnded { _ in
+                    released(); interaction(nil, false)
+                })
         }
     }
 }

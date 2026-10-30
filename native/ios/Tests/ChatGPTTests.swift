@@ -17,8 +17,10 @@ private actor ChatGPTServer: HabibiSyncHTTP {
     var polls = 0
     var failRefresh = false
     var exchangeStarted = false
+    let codeKey: String
     private var holdExchange = false
     private var exchange: CheckedContinuation<Void, Never>?
+    init(codeKey: String = "user_code") { self.codeKey = codeKey }
     func pauseExchange() { holdExchange = true }
     func releaseExchange() { exchange?.resume(); exchange = nil }
     func exchanging() -> Bool { exchangeStarted }
@@ -37,7 +39,7 @@ private actor ChatGPTServer: HabibiSyncHTTP {
         switch url.path {
         case "/api/accounts/deviceauth/usercode":
             #expect(url.host == "auth.openai.com")
-            return try result(["device_auth_id": "device-id", "user_code": "ABCD-1234", "interval": "5"])
+            return try result(["device_auth_id": "device-id", codeKey: "ABCD-1234", "interval": "5"])
         case "/api/accounts/deviceauth/token":
             polls += 1
             if polls == 1 { return try result(["error": "slow_down"], code: 400) }
@@ -126,9 +128,10 @@ private actor ChatGPTServer: HabibiSyncHTTP {
 }
 
 @MainActor
-@Test func chatGPTConnectsRefreshesAndChatsWithoutPuttingCredentialsInTheVault() async throws {
+@Test(arguments: ["user_code", "usercode"])
+func chatGPTConnectsRefreshesAndChatsWithoutPuttingCredentialsInTheVault(_ codeKey: String) async throws {
     let secrets = ChatGPTSecrets()
-    let server = ChatGPTServer()
+    let server = ChatGPTServer(codeKey: codeKey)
     let provider = HabibiChatGPT(secrets: secrets, http: server, sleep: { _ in })
     let session = HabibiSession(store: HabibiStore(persistence: MemoryPersistence()), chatGPT: provider)
     var displayed = ""
@@ -159,6 +162,40 @@ private actor ChatGPTServer: HabibiSyncHTTP {
     #expect(!session.inferenceConnected)
     #expect(secrets.data == nil)
     #expect(session.snapshot?.profile.name == "PRIVATE-PROFILE")
+}
+
+private struct RejectedChatGPTSignIn: HabibiSyncHTTP {
+    let status: Int
+    let body: String
+    func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+        if status == 0 { throw URLError(.notConnectedToInternet) }
+        return (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+@Test func chatGPTSignInErrorsDistinguishTransportProviderAndInvalidResponses() async throws {
+    for (status, body, explanation) in [
+        (0, "", "connection"),
+        (200, "not JSON", "unexpected"),
+        (200, "{\"device_auth_id\":\"id\",\"user_code\":\"bad code!\"}", "unexpected"),
+        (403, "{\"error\":\"PRIVATE-PROVIDER-DETAIL\"}", "HTTP 403"),
+        (404, "{}", "Security settings"),
+        (429, "{}", "Too many"),
+        (503, "<html>PRIVATE-PROVIDER-DETAIL</html>", "HTTP 503")
+    ] {
+        let secrets = ChatGPTSecrets()
+        let provider = HabibiChatGPT(secrets: secrets, http: RejectedChatGPTSignIn(status: status, body: body))
+        do {
+            try await provider.authorize { _ in Issue.record("A failed code request must not display a code") }
+            Issue.record("Failed sign-in must throw")
+        } catch {
+            #expect(error.localizedDescription.contains(explanation))
+            #expect(!error.localizedDescription.contains("PRIVATE-PROVIDER-DETAIL"))
+            if status != 404 { #expect(!error.localizedDescription.contains("Security settings")) }
+        }
+        #expect(secrets.data == nil)
+        #expect(try await !provider.connected())
+    }
 }
 
 @Test func chatGPTLostOrUnsavedRotationCannotReplayTheOldRefreshToken() async throws {

@@ -21,6 +21,26 @@ struct HabibiChatGPTCatalog: Decodable {
 actor HabibiChatGPT {
     static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
     static let verificationURL = URL(string: "https://auth.openai.com/codex/device")!
+    enum SignInError: LocalizedError {
+        case network, invalidResponse, deviceLoginUnavailable, httpStatus(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .network:
+                return "Couldn’t reach OpenAI. Check your connection and try again."
+            case .invalidResponse:
+                return "OpenAI returned an unexpected sign-in response. Try again later."
+            case .deviceLoginUnavailable:
+                return "OpenAI’s device-code sign-in is unavailable. Check ChatGPT’s Security settings or try again later."
+            case .httpStatus(429):
+                return "Too many sign-in attempts. Wait a few minutes and try again."
+            case .httpStatus(let status) where status >= 500:
+                return "OpenAI sign-in is temporarily unavailable (HTTP \(status)). Try again later."
+            case .httpStatus(let status):
+                return "OpenAI declined sign-in (HTTP \(status)). This experimental connection may not be available for your account."
+            }
+        }
+    }
     private static let inferenceURL = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
     private let secrets: any HabibiSyncSecretStorage
     private let http: any HabibiSyncHTTP
@@ -49,7 +69,7 @@ actor HabibiChatGPT {
         defer { occupied = false }
         let device = try await json("/api/accounts/deviceauth/usercode", values: ["client_id": Self.clientID])
         guard let id = device["device_auth_id"] as? String, !id.isEmpty,
-              let code = device["user_code"] as? String, (4...32).contains(code.count),
+              let code = device["user_code"] as? String ?? device["usercode"] as? String, (4...32).contains(code.count),
               code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else { throw signInFailure }
         var interval = (device["interval"] as? NSNumber)?.doubleValue ?? Double(device["interval"] as? String ?? "") ?? 5
         guard interval.isFinite, interval >= 0, interval <= 900 else { throw signInFailure }
@@ -68,8 +88,8 @@ actor HabibiChatGPT {
                 if code == "deviceauth_authorization_pending" { continue }
                 if code == "slow_down" { interval += 5; continue }
             }
-            guard response.statusCode == 200,
-                  let result = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            guard response.statusCode == 200 else { throw SignInError.httpStatus(response.statusCode) }
+            guard let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
                   let code = result["authorization_code"] as? String,
                   let verifier = result["code_verifier"] as? String else { throw signInFailure }
             let tokens = try await json("/oauth/token", values: ["grant_type": "authorization_code", "client_id": Self.clientID,
@@ -138,15 +158,17 @@ actor HabibiChatGPT {
         request.httpBody = form ? HabibiSyncAccount.form(values) : try JSONSerialization.data(withJSONObject: values)
         let result: (Data, HTTPURLResponse)
         do { result = try await http.send(request, limit: 64 * 1024) }
-        catch { try Task.checkCancellation(); throw signInFailure }
+        catch { try Task.checkCancellation(); throw SignInError.network }
+        try Task.checkCancellation()
         guard result.1.url == url else { throw signInFailure }
         return result
     }
 
     private func json(_ path: String, values: [String: String], form: Bool = false) async throws -> [String: Any] {
         let (data, response) = try await post(path, values: values, form: form)
-        guard response.statusCode == 200,
-              let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw signInFailure }
+        if response.statusCode == 404 && path == "/api/accounts/deviceauth/usercode" { throw SignInError.deviceLoginUnavailable }
+        guard response.statusCode == 200 else { throw SignInError.httpStatus(response.statusCode) }
+        guard let value = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { throw signInFailure }
         return value
     }
 
@@ -161,13 +183,13 @@ actor HabibiChatGPT {
         // This claim routes inference only; it is not a verified identity or a
         // Habibi login. The credential itself came from OpenAI over HTTPS.
         guard let data = Data(base64Encoded: base64),
-              let claims = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let claims = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let auth = claims["https://api.openai.com/auth"] as? [String: Any],
               let account = auth["chatgpt_account_id"] as? String, safe(account), account.count <= 256 else { throw signInFailure }
         return ["access_token": access, "refresh_token": refresh, "accountId": account,
                 "expiresAt": Date().timeIntervalSince1970 + lifetime]
     }
 
-    private var signInFailure: HabibiFailure { HabibiFailure(message: "ChatGPT sign-in failed. Check that device-code login is enabled in your ChatGPT security settings, then connect again.") }
+    private var signInFailure: SignInError { .invalidResponse }
     private var reconnect: HabibiFailure { HabibiFailure(message: "Reconnect ChatGPT in Profile → AI provider. Your vault is unchanged.") }
 }

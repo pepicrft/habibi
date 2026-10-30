@@ -1,6 +1,106 @@
 import XCTest
 
 final class OnboardingTests: XCTestCase {
+    func testConversationIdeasPullPageDismissAndPreserveEditableDraft() {
+        let app = launchHabibi()
+        app.buttons.matching(NSPredicate(format: "identifier == 'bubble.left.and.bubble.right' OR label == 'Conversations'")).firstMatch.tap()
+        app.buttons["habibi.conversation.new"].tap()
+        let composer = app.descendants(matching: .any).matching(identifier: "habibi.composer").firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap(); composer.typeText("Keep my own words.")
+        app.buttons["habibi.keyboard.done"].tap()
+        let carousel = app.scrollViews["habibi.ideas.carousel"]
+        let cue = app.staticTexts["habibi.ideas.pull"]
+        XCTAssertFalse(app.buttons["habibi.ideas.toggle"].exists, "Ideas must not have an always-visible control")
+        XCTAssertFalse(cue.exists, "The cue stays hidden before pulling past the bottom")
+        capture(app, "Ideas-Collapsed")
+
+        // The scroll view's accessibility frame includes the dock, so start just above it.
+        let bottom = app.buttons["habibi.costume.conversation"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: -60))
+        func revealIdeas() {
+            for _ in 0..<5 where !carousel.exists {
+                bottom.press(forDuration: 0.1, thenDragTo: bottom.withOffset(CGVector(dx: 0, dy: -250)),
+                             withVelocity: .slow, thenHoldForDuration: 0.5)
+            }
+            XCTAssertTrue(carousel.waitForExistence(timeout: 5), "Pulling past the conversation's end opens ideas")
+        }
+        revealIdeas()
+        XCTAssertTrue(app.buttons["habibi.idea.0"].isHittable)
+        XCTAssertTrue(composer.isHittable, "The composer stays available beneath the ideas")
+        capture(app, "Ideas-Expanded")
+        carousel.swipeLeft()
+        let secondPage = app.buttons["Idea 2 of 4"]
+        expectation(for: NSPredicate(format: "selected == true"), evaluatedWith: secondPage)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.buttons["habibi.idea.1"].isHittable)
+        capture(app, "Ideas-Second-Page")
+        carousel.swipeDown()
+        XCTAssertFalse(carousel.exists)
+        XCTAssertEqual(composer.value as? String, "Keep my own words.")
+
+        bottom.press(forDuration: 0.1, thenDragTo: bottom.withOffset(CGVector(dx: 0, dy: -36)))
+        XCTAssertFalse(carousel.exists, "A short pull at the bottom must not open ideas")
+        XCTAssertFalse(cue.exists, "The cue disappears after releasing a short pull")
+        capture(app, "Ideas-At-Bottom")
+        revealIdeas()
+        app.buttons["Idea 3 of 4"].tap()
+        app.buttons["habibi.idea.2"].tap()
+        XCTAssertFalse(carousel.exists)
+        let expected = "Keep my own words.\n\nHelp me learn something new. Ask what I’m curious about, then guide me one step at a time."
+        XCTAssertEqual(composer.value as? String, expected)
+        XCTAssertTrue(app.staticTexts["What’s on your mind?"].exists, "Choosing an idea must not send a message")
+        // Saving reconciles draft versions and can change the dock's height.
+        XCTAssertTrue(app.staticTexts["habibi.conversations.saved"].waitForExistence(timeout: 5))
+        capture(app, "Ideas-Editable-Draft")
+        revealIdeas()
+        app.buttons["habibi.ideas.close"].tap()
+        XCTAssertFalse(carousel.exists)
+        XCTAssertEqual(composer.value as? String, expected)
+        composer.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["habibi.keyboard.done"].tap()
+        XCTAssertEqual(composer.value as? String, expected)
+        XCTAssertFalse(cue.exists)
+    }
+
+    func testProviderAndPrivacyUseFocusedNavigationAndExplicitDisclosure() {
+        let app = launchHabibi()
+        app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch.tap()
+        app.buttons["habibi.profile.provider"].tap()
+        XCTAssertTrue(app.navigationBars["AI provider"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertTrue(app.staticTexts["habibi.model.availability"].exists)
+        if app.buttons["habibi.model.check"].exists {
+            app.buttons["habibi.model.check"].tap()
+            XCTAssertTrue(app.staticTexts["habibi.model.availability"].exists)
+        }
+        XCTAssertTrue(app.buttons["habibi.chatgpt.connect"].exists)
+        capture(app, "Provider-Overview")
+        app.buttons["Connection privacy"].tap()
+        let disclosure = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'After your approval, messages, requested Kit code'" )).firstMatch
+        XCTAssertTrue(disclosure.waitForExistence(timeout: 5))
+        XCTAssertTrue(disclosure.label.contains("Anything you type in chat is still shared"))
+        capture(app, "Provider-Privacy-Expanded")
+        app.navigationBars.buttons["Profile"].tap()
+        XCTAssertEqual(app.tabBars.count, 1)
+        let privacy = app.buttons["habibi.profile.privacy"]
+        for _ in 0..<4 where !privacy.isHittable { app.swipeUp() }
+        privacy.tap()
+        XCTAssertTrue(app.navigationBars["Privacy & storage"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Habibi creates your encryption key'" )).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Rust'" )).firstMatch.exists)
+        capture(app, "Privacy-Storage")
+        let encryption = app.buttons["Encryption details"]
+        for _ in 0..<6 where !encryption.isHittable { app.swipeUp() }
+        encryption.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Your vault uses a random 256-bit key'" )).firstMatch.waitForExistence(timeout: 5))
+        capture(app, "Privacy-Encryption-Expanded")
+        app.navigationBars.buttons["Profile"].tap()
+        XCTAssertEqual(app.tabBars.count, 1)
+    }
+
     func testPlusExplainsTheBoundaryWithoutBlockingLocalUse() {
         let app = launchHabibi()
         app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch.tap()
@@ -236,6 +336,7 @@ final class OnboardingTests: XCTestCase {
             app.buttons["habibi.create"].tap()
             let name = app.textFields["habibi.name"]
             XCTAssertTrue(name.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.staticTexts["The private key or encrypted vault is missing. Your remaining data is untouched. Restore your backup to recover."].exists)
             name.tap()
             name.typeText("Noor")
             app.buttons["habibi.continue"].tap()

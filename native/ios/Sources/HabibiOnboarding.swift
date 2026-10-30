@@ -68,7 +68,7 @@ struct HabibiWelcomeView: View {
         .confirmationDialog("Discard this device’s orphaned key?", isPresented: $restarting, titleVisibility: .visible) {
             Button("Discard key & restart setup", role: .destructive) {
                 Task {
-                    do { try await session.store.discardIncompleteSetup(); session.canRestartSetup = false; await session.start() }
+                    do { try await session.store.discardIncompleteSetup(); session.canRestartSetup = false; session.error = nil }
                     catch { session.error = error.localizedDescription }
                 }
             }
@@ -90,17 +90,20 @@ struct HabibiOnboardingView: View {
         NavigationStack {
             Form {
                 Section {
+                    EmptyView()
+                } header: {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("\(step + 1) of 4").font(.subheadline)
-                            .foregroundStyle(step == 2 ? palette.muted : Color.secondary)
+                            .foregroundStyle(.secondary)
                         Text(["What should I call you?", "What matters to you?", "Connect ChatGPT", "Yours. And only yours."][step])
                             .font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                            .foregroundStyle(palette.ink)
                         Text(["A first name or nickname is perfect. This stays in your encrypted space.",
                               "Pick a few interests. You can change these any time in your profile.",
                               "Optional. You can connect later in Profile.",
                               "Habibi creates your private encryption key here, on this device."][step])
-                            .foregroundStyle(step == 2 ? palette.muted : Color.secondary)
-                    }.padding(.vertical, 8)
+                            .font(.body).foregroundStyle(.secondary)
+                    }.textCase(nil).padding(.vertical, 8)
                 }
                 if step == 0 {
                     Section("Your name") {
@@ -115,15 +118,17 @@ struct HabibiOnboardingView: View {
                     HabibiChatGPTFields(session: session)
                 } else {
                     Section {
-                        Label("Generated with secure device randomness", systemImage: "key")
-                        Label("Protected by your device’s Keychain", systemImage: "lock.shield")
-                        Label("Personal details and Kits are encrypted", systemImage: "externaldrive.badge.checkmark")
+                        Label("Your key is protected by this device’s Keychain", systemImage: "key")
+                        Label("Your personal details and Kits are encrypted", systemImage: "lock.shield")
+                    } footer: {
+                        Text("Encrypted sync is optional and separate. Habibi’s server receives encrypted content and account metadata, never your vault key.")
                     }
                     Section {
-                        Text("Your private space starts on this device. You can connect encrypted sync separately in Profile. Habibi’s server stores ciphertext and account metadata, never your vault key or readable personal details.")
-                        Text("Make a recovery backup from Profile. Keep its recovery key separately. Without both, losing this device can mean losing your data. Habibi cannot reset your key.")
+                        Text("Save a recovery backup from Profile and keep its recovery key separately. You need both to recover your data if you lose this device.")
                         Toggle("I understand how recovery works", isOn: $understood)
                             .accessibilityIdentifier("habibi.understood")
+                    } footer: {
+                        Text("Habibi cannot reset a lost key. This prototype is not independently audited; use fictional data for now.")
                     }
                 }
                 if let error = session.error { Section { Text(error).foregroundStyle(.red) } }
@@ -137,10 +142,9 @@ struct HabibiOnboardingView: View {
             .safeAreaInset(edge: .bottom) {
                 Group {
                     if step == 2 && !session.chatGPTConnected {
-                        Button { step += 1 } label: {
-                            Text("Skip for now").frame(maxWidth: .infinity, minHeight: 36)
-                        }
-                        .buttonStyle(.bordered)
+                        Button("Skip for now") { step += 1 }
+                            .buttonStyle(.borderless).foregroundStyle(palette.accent)
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     } else {
                         Button {
                             if step < 3 { step += 1 }
@@ -149,13 +153,13 @@ struct HabibiOnboardingView: View {
                             HStack {
                                 if session.busy { ProgressView().tint(palette.onPrimary) }
                                 Text(step < 3 ? "Continue" : "Create my private space")
-                            }.frame(maxWidth: .infinity, minHeight: 36).foregroundStyle(palette.onPrimary)
+                            }.frame(maxWidth: .infinity).foregroundStyle(palette.onPrimary)
                         }
                         .buttonStyle(.borderedProminent)
                     }
                 }
                 .controlSize(.large)
-                .disabled(session.busy || session.connectingChatGPT || (step == 0 && profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(session.busy || (step != 2 && session.connectingChatGPT) || (step == 0 && profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                           || (step == 1 && profile.goals.isEmpty) || (step == 3 && !understood))
                 .accessibilityIdentifier("habibi.continue")
                 .padding().background(.bar)

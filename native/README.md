@@ -246,6 +246,9 @@ Copy the displayed device code, open OpenAI's sign-in page, approve there, and
 return to Habibi. Device-code login may need enabling in ChatGPT security
 settings or workspace permissions. Connecting does not send a prompt or create
 a Habibi sync account; the first conversation still asks for disclosure consent.
+Sign-in errors distinguish connectivity, invalid responses, rate limits and
+provider rejection. Only a missing device-code endpoint suggests checking
+Security settings; a generic failure does not establish an account setting.
 
 This experimental integration follows Pi's **legacy `openai-codex` provider** at
 [`b3a29f1`](https://github.com/earendil-works/pi/blob/b3a29f1111114fac696e2cfcd65acdb382a6ed5e/packages/ai/src/auth/oauth/openai-codex.ts):
@@ -286,6 +289,12 @@ menu include **Apple · On device**. It uses Foundation Models' on-device
 `SystemLanguageModel`, without an account, API key or cloud disclosure prompt.
 Apple Intelligence must be supported, enabled and have its model ready. The UI
 shows the actual availability reason and retains saved preferences if unavailable.
+**Check availability** rereads the system status; it does not start a download.
+If iOS reports `modelNotReady`, the model may be downloading or unavailable for
+another system reason. Check Settings → Apple Intelligence & Siri and Apple's
+linked setup requirements, then recheck. Habibi cannot determine the device's
+download progress or repair that system state. Availability also refreshes when
+the app becomes active, when the provider screen opens and before a request.
 An Apple preference synced to Android is preserved but cannot run there; choose
 a ChatGPT override explicitly. Nothing silently falls back to a cloud provider.
 
@@ -508,6 +517,17 @@ not executable tool calls or tool results. Archive saves defer while a Kit revie
 owns the document revision. Older backups without conversations still open.
 The pinned composer, prompt index and jump-to-latest follow Atlas's native
 conversation design; incoming output does not pull a reader away from history.
+
+On iOS, pull up past the end of a conversation to browse four swipeable
+suggestion cards over a blurred transcript. The pull cue appears only while
+overscrolling the bottom; there is no always-visible Ideas button. VoiceOver
+also offers a **Show ideas** action on the conversation.
+Choose a card to append editable text to the current draft, never to send it.
+These are bundled prompts, with a different set after a conversation starts and
+an example from the selected skin; browsing requires no inference or network
+request. Swipe down, tap the backdrop or use Close to dismiss. At accessibility
+text sizes the cards scroll vertically and Close remains available; reduced
+motion and reduced transparency use the corresponding native fallbacks.
 
 Habibi can acknowledge a user message with a reaction instead of another text
 bubble. `react_to_message` takes `{message_id,emoji}`, using a stable user-message

@@ -95,6 +95,7 @@ struct HabibiWorkspaceView: View {
                     Label("Encrypted sync", systemImage: "lock.icloud")
                 }.accessibilityIdentifier("habibi.profile.sync")
                 NavigationLink { privacy } label: { Label("Privacy & storage", systemImage: "lock.shield") }
+                    .accessibilityIdentifier("habibi.profile.privacy")
             }
             Section {
                 LabeledContent("Version", value: "0.1.0 · Development")
@@ -105,16 +106,32 @@ struct HabibiWorkspaceView: View {
     private var privacy: some View {
         List {
             Section("Your private key") {
-                Text("Rust generates a random 256-bit encryption key on your device. The key is stored in this device’s Keychain, separately from a distinct sync token. Neither is an account password.")
+                Text("Habibi creates your encryption key on this device and protects it in Keychain. Habibi’s server never receives your vault key and cannot reset it.")
             }
-            Section("Encrypted local storage") {
-                Text("Your name, interests, Kit code, entries and conversations are inside an authenticated AES-256-GCM/HKDF encrypted vault. Optional sync sends only encrypted snapshots to Habibi’s server, plus opaque IDs, sizes, digests and sequence numbers. Your content key never leaves this device except inside your separately encrypted recovery backup.")
-                Text("This prototype has not had an independent security audit. Use fictional data for now. Device compromise and malicious app updates are outside the encryption boundary.")
+            Section("On this device") {
+                Text("Your name, interests, Kit code, entries and conversations are saved in an encrypted vault.")
+                Text("Apple’s on-device model runs locally. Connected service tools still use the network when you request them.")
             }
-            Section("When you ask a cloud model") {
-                Text("Your messages, requested Kit definitions and synthetic test results are shared with the selected inference provider only after approval. When you ask to use connected GitHub tools, their sanitized read-only profile and public repository results are also shared with the conversation’s provider and saved in encrypted conversation history. Connecting or checking GitHub alone does not share account data with the provider. Saved Kit entries, vault keys and connection credentials are never included by tools. Personal information you type in a message is still disclosed.")
+            Section("Optional encrypted sync") {
+                Text("Sync sends encrypted snapshots and drafts, not readable vault content. The server also sees account and access metadata, opaque IDs, sizes, digests and sequence numbers.")
+            }
+            Section("Recovery") {
+                Text("Keep your encrypted recovery backup and its separate recovery key safe. You need both to restore your vault on another device. The backup contains an encrypted copy of your vault key.")
+            }
+            Section("When you use a cloud model") {
+                Text("After your approval, your messages, requested Kit code and synthetic test results go to the selected provider. Requested GitHub tool results are also shared and saved in encrypted conversation history. Connecting or checking GitHub alone does not share those results.")
+                Text("Tools never include saved Kit entries, vault keys or connection credentials. Personal information you type in chat or put in Kit code is still shared.")
+            }
+            Section {
+                DisclosureGroup("Encryption details") {
+                    Text("Your vault uses a random 256-bit key with authenticated AES-256-GCM/HKDF encryption. A separate sync token is stored in Keychain. Neither is an account password.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("This prototype has not had an independent security audit. Use fictional data for now. Encryption does not protect against a compromised device or malicious app update.")
             }
         }.background(palette.canvas).navigationTitle("Privacy & storage").navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
     }
 }
 

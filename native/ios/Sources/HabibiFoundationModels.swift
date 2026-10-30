@@ -29,7 +29,7 @@ struct HabibiFoundationModels {
         case .available: return nil
         case .unavailable(.deviceNotEligible): return "Apple Intelligence isn’t supported on this device."
         case .unavailable(.appleIntelligenceNotEnabled): return "Turn on Apple Intelligence in Settings to use the on-device model."
-        case .unavailable(.modelNotReady): return "Apple’s on-device model is downloading or isn’t ready yet. Try again later."
+        case .unavailable(.modelNotReady): return "Apple’s on-device model isn’t ready. iOS may still be downloading it or handling another system condition. Check Apple Intelligence in Settings, then try again."
         case .unavailable: return "Apple’s on-device model is unavailable. Try again later."
         }
     }
