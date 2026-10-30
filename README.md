@@ -4,6 +4,10 @@ An open-source personal AI companion, in the making. The static home is designed
 
 The app logo is [`assets/logo.png`](assets/logo.png), a 1024×1024 PNG for GitHub and other integrations.
 
+X profile artwork lives in [`assets/x/`](assets/x/): a [400×400 avatar](assets/x/avatar.png) and a [1500×500 header](assets/x/header.png). The account speaks as Habibi, with this bio:
+
+> Hi, I’m Habibi. A little heart for your everyday. Your open-source AI companion, in the making. 🌱
+
 This repository contains an Eleventy website, an Elixir/Phoenix ciphertext-sync prototype, a Web Crypto reference client, and development native iOS/Android apps. **There is no released mobile app. The sync protocol and native vault are experimental and have not been independently audited. Do not entrust them with real personal data yet.**
 
 ## Native apps
