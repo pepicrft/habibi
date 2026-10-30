@@ -206,6 +206,10 @@ struct HabibiConversationView: View {
                             Label("Model · \(session.modelName(session.conversationModel))", systemImage: "cpu")
                         }.disabled(!session.canChangeModel)
                     }
+                    Button { choosingCostume = true } label: {
+                        Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a skin", systemImage: "tshirt")
+                    }.disabled(!session.canChangeCostume)
+                        .accessibilityIdentifier("habibi.costume.conversation")
                     Button("Conversation details", systemImage: "info.circle") { details = true }
                 } label: {
                     VStack(spacing: 2) {
@@ -219,8 +223,8 @@ struct HabibiConversationView: View {
                 }
                 .foregroundStyle(palette.ink)
                 .accessibilityLabel("Conversation options")
-                .accessibilityValue("\(session.modelName(session.conversationModel)), \(session.modelOverride == nil ? "using default" : "this conversation only")")
-                .accessibilityHint("Choose a model or view conversation details")
+                .accessibilityValue("\(session.modelName(session.conversationModel)), \(session.modelOverride == nil ? "using default" : "this conversation only"), \(session.costume.map { "wearing \($0.name)" } ?? "no skin")")
+                .accessibilityHint("Choose a model or skin, or view conversation details")
                 .accessibilityIdentifier("habibi.model.conversation")
             }
             ToolbarItemGroup(placement: .keyboard) {
@@ -268,6 +272,8 @@ struct HabibiConversationView: View {
                     Text("The selected skin’s name and instructions also go to your chosen model. The rest of your wardrobe is not included.")
                     Text("Messages, tool results, cards and drafts are saved encrypted on this device and included in encrypted recovery backups. Continuing a restored conversation uses its text context with the selected model; tools and pending approvals are never replayed. Cloud inference requires approval.")
                     LabeledContent("Inference", value: session.inferenceName)
+                    LabeledContent("Draft sync", value: session.draftSyncMessage)
+                        .accessibilityIdentifier("habibi.drafts.status")
                 }
                 .navigationTitle("Conversation details").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { details = false } } }
@@ -367,16 +373,10 @@ struct HabibiConversationView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !showingIdeas {
-                Button { choosingCostume = true } label: {
-                    Label(session.costume.map { "Wearing \($0.name)" } ?? "Wear a skin", systemImage: "tshirt")
-                        .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 10)
-                        .background(palette.surface, in: Capsule())
-                }.buttonStyle(.plain).disabled(!session.canChangeCostume)
-                    .accessibilityIdentifier("habibi.costume.conversation")
-                HabibiConversationSaveStatus(session: session)
-                    .frame(maxWidth: .infinity, alignment: .leading).background(palette.canvas)
-                Text(session.draftSyncMessage).font(.caption).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("habibi.drafts.status")
+                if session.conversationSaveError != nil {
+                    HabibiConversationSaveStatus(session: session)
+                        .frame(maxWidth: .infinity, alignment: .leading).background(palette.canvas)
+                }
                 if !session.otherDrafts.isEmpty {
                     Menu("Other draft versions (\(session.otherDrafts.count))") {
                         ForEach(session.otherDrafts, id: \.self) { text in

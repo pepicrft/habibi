@@ -13,10 +13,13 @@ final class OnboardingTests: XCTestCase {
         let cue = app.staticTexts["habibi.ideas.pull"]
         XCTAssertFalse(app.buttons["habibi.ideas.toggle"].exists, "Ideas must not have an always-visible control")
         XCTAssertFalse(cue.exists, "The cue stays hidden before pulling past the bottom")
+        XCTAssertFalse(app.buttons["habibi.costume.conversation"].exists, "Skin selection belongs in conversation options")
+        XCTAssertFalse(app.staticTexts["habibi.conversations.saved"].exists)
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "habibi.drafts.status").firstMatch.exists)
         capture(app, "Ideas-Collapsed")
 
         // The scroll view's accessibility frame includes the dock, so start just above it.
-        let bottom = app.buttons["habibi.costume.conversation"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+        let bottom = composer.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
             .withOffset(CGVector(dx: 0, dy: -60))
         func revealIdeas() {
             for _ in 0..<5 where !carousel.exists {
@@ -50,8 +53,9 @@ final class OnboardingTests: XCTestCase {
         let expected = "Keep my own words.\n\nHelp me learn something new. Ask what I’m curious about, then guide me one step at a time."
         XCTAssertEqual(composer.value as? String, expected)
         XCTAssertTrue(app.staticTexts["What’s on your mind?"].exists, "Choosing an idea must not send a message")
-        // Saving reconciles draft versions and can change the dock's height.
-        XCTAssertTrue(app.staticTexts["habibi.conversations.saved"].waitForExistence(timeout: 5))
+        // Wait for local draft reconciliation before taking a stable snapshot.
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.buttons["habibi.drafts.versions"])
+        waitForExpectations(timeout: 5)
         capture(app, "Ideas-Editable-Draft")
         revealIdeas()
         app.buttons["habibi.ideas.close"].tap()
@@ -62,6 +66,14 @@ final class OnboardingTests: XCTestCase {
         app.buttons["habibi.keyboard.done"].tap()
         XCTAssertEqual(composer.value as? String, expected)
         XCTAssertFalse(cue.exists)
+        app.buttons["habibi.model.conversation"].tap()
+        XCTAssertTrue(app.buttons["habibi.costume.conversation"].exists)
+        capture(app, "Composer-Conversation-Menu")
+        app.buttons["Conversation details"].tap()
+        let draftStatus = app.descendants(matching: .any).matching(identifier: "habibi.drafts.status").firstMatch
+        for _ in 0..<4 where !draftStatus.isHittable { app.swipeUp() }
+        XCTAssertTrue(draftStatus.exists, "Draft sync status remains available in conversation details")
+        capture(app, "Composer-Conversation-Details")
     }
 
     func testProviderAndPrivacyUseFocusedNavigationAndExplicitDisclosure() {
@@ -239,6 +251,8 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertEqual(composer.value as? String, "Help me make my own Kit.")
         XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertFalse(app.staticTexts["habibi.conversations.saved"].exists)
+        app.navigationBars.buttons["Conversations"].tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "habibi.conversations.saved").firstMatch.waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
@@ -266,6 +280,7 @@ final class OnboardingTests: XCTestCase {
         let conversations = app.buttons.matching(NSPredicate(format: "identifier == 'bubble.left.and.bubble.right' OR label == 'Conversations'")).firstMatch
         let profile = app.buttons.matching(NSPredicate(format: "identifier == 'person.crop.circle' OR label == 'Profile'")).firstMatch
         let composer = app.descendants(matching: .any).matching(identifier: "habibi.composer").firstMatch
+        let options = app.buttons["habibi.model.conversation"]
         XCTAssertTrue(home.waitForExistence(timeout: 10))
         profile.tap()
         app.buttons["habibi.profile.costumes"].tap()
@@ -280,7 +295,7 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Learn through questions and hints, one idea at a time."].exists)
         XCTAssertEqual(composer.value as? String, "Help me understand probability. Ask me a question to see where to begin.")
-        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wearing Socratic Tutor")
+        XCTAssertTrue((options.value as? String)?.contains("wearing Socratic Tutor") == true)
         XCTAssertFalse(app.buttons["habibi.send"].isEnabled)
         capture(app, "Costumes-Tutor-Conversation")
         app.navigationBars.buttons["Conversations"].tap()
@@ -307,18 +322,20 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap(); composer.typeText("A costume draft to keep")
         app.buttons["habibi.keyboard.done"].tap()
-        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wearing Socratic Tutor")
+        XCTAssertTrue((options.value as? String)?.contains("wearing Socratic Tutor") == true)
         app.navigationBars.buttons["Conversations"].tap()
         app.terminate(); app.launch()
         XCTAssertTrue(home.waitForExistence(timeout: 10))
         conversations.tap()
         app.buttons.containing(.staticText, identifier: "A costume draft to keep").firstMatch.tap()
+        XCTAssertTrue((options.value as? String)?.contains("wearing Socratic Tutor") == true)
+        options.tap()
         XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wearing Socratic Tutor")
         app.buttons["habibi.costume.conversation"].tap()
         XCTAssertTrue(app.buttons["habibi.costumes.take-off"].waitForExistence(timeout: 5))
         capture(app, "Costumes-Chooser")
         app.buttons["habibi.costumes.take-off"].tap()
-        XCTAssertEqual(app.buttons["habibi.costume.conversation"].label, "Wear a skin")
+        XCTAssertTrue((options.value as? String)?.contains("no skin") == true)
         XCTAssertEqual(composer.value as? String, "A costume draft to keep")
     }
 

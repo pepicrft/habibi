@@ -214,9 +214,10 @@ layers. Neither platform bakes rounded corners into the master.
 Gentle Planner are bundled starting points. **Try on** opens a separate saved
 conversation with an editable example; it neither installs the skin nor sends
 a message. **Add to wardrobe** opens an explicit, editable review. **Wear** starts
-a new conversation. The skin control above the composer switches future
-replies in that conversation or returns to **Just Habibi**. New ordinary
-conversations have no skin, and selection is disabled during an active turn.
+a new conversation. The conversation’s skin control switches future replies
+or returns to **Just Habibi**. On iOS, open the **Habibi** conversation menu
+to choose a skin. New ordinary conversations have no skin, and selection is
+disabled during an active turn.
 
 Skins are portable JSON definitions with `apiVersion:1`, `name`, `description`,
 `author`, `instructions` and `examplePrompt`. Make one in the native editor, or
@@ -517,6 +518,9 @@ not executable tool calls or tool results. Archive saves defer while a Kit revie
 owns the document revision. Older backups without conversations still open.
 The pinned composer, prompt index and jump-to-latest follow Atlas's native
 conversation design; incoming output does not pull a reader away from history.
+On iOS, the composer shows actionable save failures and conflicting drafts,
+not routine saved/encrypted or sync status. Save status remains in the
+Conversations inbox; draft-sync status is in **Habibi → Conversation details**.
 
 On iOS, pull up past the end of a conversation to browse four swipeable
 suggestion cards over a blurred transcript. The pull cue appears only while
@@ -656,7 +660,8 @@ exchange unsent conversation text after a 1.5-second typing pause and poll every
 5 seconds while active. They make a best-effort final attempt on departure;
 background suspension, force-quitting or offline devices can delay delivery.
 Keep the first device open until its draft status confirms encrypted sync before
-switching devices. Disconnect stops automatic network sync, not local saving.
+switching devices. On iOS, find that status in **Habibi → Conversation details**.
+Disconnect stops automatic network sync, not local saving.
 
 Drafts are encrypted on-device with the existing vault content key and the HAB1
 format, under the separate context `habibi/drafts/v1\0{vault UUID}`. Only draft
