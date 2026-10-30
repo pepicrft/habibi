@@ -79,6 +79,8 @@ jobs:
         run: bash mise/tasks/ios/check.sh notes > "$RUNNER_TEMP/ios-release-notes.md"
       # Dependency installers and build scripts must not inherit private keys.
       - name: Build device app before loading credentials
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
         run: |
           npm ci
           mise -C native exec -- rustup target add aarch64-apple-ios
