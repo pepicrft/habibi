@@ -138,13 +138,19 @@ test("production routes only Habibi, pins web and migrations together, and keeps
       { name: "analytics-client", key },
     ]),
   );
-  assert.equal(web.envFrom, undefined);
+  assert.deepEqual(web.envFrom, [
+    { secretRef: { name: "habibi-testflight" } },
+  ]);
+  assert.equal(migrate.envFrom, undefined);
 
   const withMail = render("--set", "waitlistEmailSecret=habibi-mail");
   assert.deepEqual(
     withMail.find((resource) => resource.kind === "Deployment").spec.template
       .spec.containers[0].envFrom,
-    [{ secretRef: { name: "habibi-mail" } }],
+    [
+      { secretRef: { name: "habibi-mail" } },
+      { secretRef: { name: "habibi-testflight" } },
+    ],
   );
   assert.equal(
     withMail.find((resource) => resource.kind === "Job").spec.template.spec
@@ -181,7 +187,9 @@ test("production routes only Habibi, pins web and migrations together, and keeps
     ),
     false,
   );
-  assert.equal(isolatedPod.containers[0].envFrom, undefined);
+  assert.deepEqual(isolatedPod.containers[0].envFrom, [
+    { secretRef: { name: "habibi-testflight" } },
+  ]);
   assert.equal(isolatedPod.imagePullSecrets, undefined);
 });
 

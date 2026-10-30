@@ -1,6 +1,7 @@
 host: habibi.fyi
 # Keep experimental sync closed; the public deployment initially serves marketing.
 allowRegistration: false
+testflightSecret: habibi-testflight
 ingress:
   enabled: true
 analytics:
