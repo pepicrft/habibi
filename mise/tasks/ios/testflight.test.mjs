@@ -133,6 +133,21 @@ test("waits for the exact iOS upload, updates English notes and submits only to 
   assert.equal(state.builds[0].attributes.usesNonExemptEncryption, undefined);
 });
 
+test("distributes to the existing public-link group without changing enrollment settings", async () => {
+  const { state, options } = apple();
+  Object.assign(state.group.attributes, {
+    publicLinkEnabled: true,
+    publicLinkLimitEnabled: true,
+    publicLinkLimit: 10,
+    publicLink: "https://testflight.apple.com/join/example",
+  });
+  const group = structuredClone(state.group);
+  assert.equal(await distribute(release, options), "WAITING_FOR_BETA_REVIEW");
+  assert.deepEqual(state.group, group);
+  assert.deepEqual([...state.groupBuilds], ["old-train", "new-build"]);
+  assert.deepEqual([...state.submissions], ["new-build"]);
+});
+
 test("creates missing English notes and starts approved testing; reruns do not submit another review", async () => {
   const { state, options } = apple();
   state.localizations.pop();
@@ -163,7 +178,7 @@ test("fails rather than reporting distribution success for blocked builds or aud
     ["missing compliance", s => { s.builds.at(-1).attributes.usesNonExemptEncryption = null; }, /Export compliance/],
     ["nonexempt crypto", s => { s.builds.at(-1).attributes.usesNonExemptEncryption = true; }, /Export compliance/],
     ["rejected beta", s => { s.detail.attributes.externalBuildState = "BETA_REJECTED"; }, /requires attention/],
-    ["public group", s => { s.group.attributes.publicLinkEnabled = true; }, /refusing to change its audience/],
+    ["internal group", s => { s.group.attributes.isInternalGroup = true; }, /refusing to change its audience/],
     ["wrong app", s => { s.group.relationships.app.data.id = "123"; }, /refusing to change its audience/],
     ["processing timeout", s => { s.visibility = [false]; }, /Timed out:.*do not re-upload/],
     ["review queue timeout", s => { s.conflict = true; }, /Timed out:.*do not re-upload/],

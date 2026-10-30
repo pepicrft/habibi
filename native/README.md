@@ -73,7 +73,7 @@ Personal Infisical EU organization `pepicrft`, project `habibi`, environment
 | `ASC_API_KEY_ID` | App Store Connect **team** API key ID |
 | `ASC_API_ISSUER_ID` | That team's API issuer UUID |
 | `ASC_API_KEY_P8_BASE64` | Base64 private `.p8` API key |
-| `ASC_TESTFLIGHT_API_KEY_ID` | Separate **App Manager** team API key ID for private beta distribution |
+| `ASC_TESTFLIGHT_API_KEY_ID` | Separate **App Manager** team API key ID for external beta distribution |
 | `ASC_TESTFLIGHT_API_ISSUER_ID` | That team's API issuer UUID |
 | `ASC_TESTFLIGHT_API_KEY_P8_BASE64` | Base64 private `.p8` management API key |
 
@@ -107,11 +107,14 @@ The upload script validates with Apple before uploading. Only a successful uploa
 creates the exact-SHA GitHub release/tag. A separate TestFlight job then waits for
 that exact iOS version/build to finish processing, copies the release notes into
 English “What to Test”, enables automatic tester notifications, adds the build to
-the existing **Private Beta** external group (public links remain disabled), and
-submits it for beta review. Already-approved builds start testing without another
-review submission. The existing **Internal Beta** group has access to all builds
+the existing **Private Beta** external group, and submits it for beta review.
+Already-approved builds start testing without another review submission. The
+existing **Internal Beta** group has access to all builds
 automatically and does not require beta review. Group membership and invitations
-are not changed. This does not submit for public App Review or release publicly.
+are not changed. The external group's public link and enrollment limit are
+preserved as configured in App Store Connect; its current public link is capped
+at 10 testers. This does not submit for App Store review or publish an App Store
+release.
 
 The signed distribution plist records `ITSAppUsesNonExemptEncryption=false`,
 preserving the existing private-beta exemption answer for standard encryption,

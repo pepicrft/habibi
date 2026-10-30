@@ -4,7 +4,7 @@ import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 const appId = "6828413839";
-const groupId = "01087c85-1ab4-417f-a366-775403e8fce4"; // Existing private external group.
+const groupId = "01087c85-1ab4-417f-a366-775403e8fce4"; // Existing external group; preserve its enrollment settings.
 
 // Uploads and distribution are separate jobs: retry this without uploading again.
 export async function distribute({ version, build, notes }, {
@@ -61,8 +61,8 @@ export async function distribute({ version, build, notes }, {
   }
 
   const group = (await request("GET", `/betaGroups/${groupId}?include=app`)).data;
-  if (group.relationships.app.data.id !== appId || group.attributes.isInternalGroup || group.attributes.publicLinkEnabled) {
-    throw new Error("Expected Habibi's existing private external TestFlight group; refusing to change its audience.");
+  if (group.relationships.app.data.id !== appId || group.attributes.isInternalGroup) {
+    throw new Error("Expected Habibi's existing external TestFlight group; refusing to change its audience.");
   }
 
   const query = new URLSearchParams({
