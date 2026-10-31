@@ -81,11 +81,13 @@ expect false 1.1.0
 
 expect_ios() {
   local output
-  output=$(GITHUB_RUN_NUMBER=37 GITHUB_RUN_ATTEMPT=2 bash "$IOS_CHECK")
+  output=$(bash "$IOS_CHECK")
   grep -qx "should-release=$1" <<< "$output"
   grep -qx "next-version=ios@$2" <<< "$output"
   grep -qx "next-version-number=$2" <<< "$output"
-  grep -qx 'build-number=37.2' <<< "$output"
+  if grep -q '^build-number=' <<< "$output"; then
+    echo "Version selection must not allocate an upload build number" >&2; exit 1
+  fi
 }
 
 # Server tags, including unreachable high versions, must not bootstrap iOS.
@@ -113,10 +115,8 @@ change native/app.txt 'feat(ios): only on another branch'
 git -C "$FIXTURE" tag ios@99.0.0
 git -C "$FIXTURE" checkout -q main
 expect_ios true 1.0.0
-GITHUB_RUN_NUMBER=37 GITHUB_RUN_ATTEMPT=3 bash "$IOS_CHECK" | grep -qx 'build-number=37.3'
-if GITHUB_RUN_NUMBER=0 bash "$IOS_CHECK" >/dev/null 2>&1; then
-  echo "Invalid iOS build number was accepted" >&2; exit 1
-fi
+# Marketing version selection is independent of GitHub upload attempts/counters.
+GITHUB_RUN_NUMBER=0 GITHUB_RUN_ATTEMPT=3 expect_ios true 1.0.0
 git -C "$FIXTURE" tag ios@1.0.0
 git -C "$FIXTURE" checkout -qb ios-feature
 change native/app.txt 'feat(ios): release a merged feature'

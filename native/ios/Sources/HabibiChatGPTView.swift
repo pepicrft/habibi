@@ -115,6 +115,12 @@ struct HabibiChatGPTView: View {
                     Link("Apple Intelligence setup", destination: URL(string: "https://support.apple.com/en-us/121115")!)
                         .foregroundStyle(palette.accent)
                 }
+                NavigationLink {
+                    HabibiOnDeviceDiagnosticsView(session: session)
+                } label: {
+                    Label("On-device diagnostics", systemImage: "stethoscope")
+                }
+                .accessibilityIdentifier("habibi.model.diagnostics")
             } header: {
                 Text("On-device AI")
             } footer: {
@@ -151,5 +157,57 @@ struct HabibiChatGPTView: View {
         .navigationTitle("AI provider").navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .onAppear { session.refreshOnDeviceAvailability() }
+    }
+}
+
+private struct HabibiOnDeviceDiagnosticsView: View {
+    @ObservedObject var session: HabibiSession
+    @Environment(\.habibiPalette) private var palette
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var report = ""
+    @State private var copied = false
+
+    var body: some View {
+        Form {
+            Section {
+                Button("Refresh diagnostics", systemImage: "arrow.clockwise", action: refresh)
+                    .foregroundStyle(palette.accent)
+                    .accessibilityIdentifier("habibi.model.diagnostics.refresh")
+                Button(copied ? "Report copied" : "Copy report", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                    UIPasteboard.general.setItems([[UIPasteboard.typeAutomatic: report]],
+                        options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(300)])
+                    copied = true
+                    UIAccessibility.post(notification: .announcement, argument: "Diagnostics report copied")
+                }
+                .disabled(report.isEmpty)
+                .foregroundStyle(palette.accent)
+                .accessibilityIdentifier("habibi.model.diagnostics.copy")
+            } footer: {
+                Text("Collected on this device. Nothing is uploaded. The report excludes conversations, account credentials and device names or unique identifiers. Copied reports stay on this device’s clipboard for five minutes.")
+            }
+            Section {
+                Text(report)
+                    .font(.system(.footnote, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("habibi.model.diagnostics.report")
+            } header: {
+                Text("System report")
+            } footer: {
+                Text("This report can identify availability and language constraints, but not why iOS has delayed a model download. In Settings → Apple Intelligence & Siri, check the setup status and Siri language. Also check available storage. Refreshing does not start a download or send a model request.")
+            }
+        }
+        .background(palette.canvas)
+        .navigationTitle("On-device diagnostics").navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .onAppear(perform: refresh)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refresh() }
+        }
+    }
+
+    private func refresh() {
+        session.refreshOnDeviceAvailability()
+        report = HabibiFoundationModels.diagnostics()
+        copied = false
     }
 }

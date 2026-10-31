@@ -161,6 +161,22 @@ test("creates missing English notes and starts approved testing; reruns do not s
   assert.equal(state.localizations[1].attributes.whatsNew, release.notes);
 });
 
+test("retries the exact timestamp or historical dotted upload even when a newer build exists", async () => {
+  for (const build of ["20261031235959", "47.2", "1.0.9"]) {
+    const { state, options } = apple();
+    const uploaded = state.builds.at(-1);
+    uploaded.attributes.version = build;
+    const newer = structuredClone(uploaded);
+    newer.id = "newer-build";
+    newer.attributes.version = "20261101000002";
+    state.builds.splice(-1, 0, newer);
+    assert.equal(await distribute({ ...release, build }, options), "WAITING_FOR_BETA_REVIEW");
+    assert.equal(await distribute({ ...release, build }, options), "WAITING_FOR_BETA_REVIEW");
+    assert.deepEqual([...state.groupBuilds], ["old-train", "new-build"]);
+    assert.deepEqual([...state.submissions], ["new-build"]);
+  }
+});
+
 test("preserves another build's active review and retries after Apple's queue clears", async () => {
   const { state, options } = apple();
   state.conflict = true;

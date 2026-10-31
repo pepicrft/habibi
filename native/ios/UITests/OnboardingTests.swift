@@ -89,6 +89,27 @@ final class OnboardingTests: XCTestCase {
         }
         XCTAssertTrue(app.buttons["habibi.chatgpt.connect"].exists)
         capture(app, "Provider-Overview")
+        app.buttons["habibi.model.diagnostics"].tap()
+        XCTAssertTrue(app.navigationBars["On-device diagnostics"].waitForExistence(timeout: 5))
+        let report = app.staticTexts["habibi.model.diagnostics.report"]
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        for field in ["Checked at:", "OS:", "Hardware:", "Current locale:", "Model availability:",
+                      "Supports current locale:", "Siri language: Not exposed to apps", "Model download progress: Not exposed"] {
+            XCTAssertTrue(report.label.contains(field), "Diagnostics must include \(field)")
+        }
+        XCTAssertFalse(report.label.contains("Noor"), "The report must not include the profile")
+        capture(app, "Provider-Diagnostics")
+        let copy = app.buttons["habibi.model.diagnostics.copy"]
+        copy.tap()
+        XCTAssertEqual(copy.label, "Report copied")
+        capture(app, "Provider-Diagnostics-Copied")
+        let previousReport = report.label
+        app.buttons["habibi.model.diagnostics.refresh"].tap()
+        XCTAssertEqual(copy.label, "Copy report")
+        XCTAssertNotEqual(report.label, previousReport, "Refreshing must collect a new timestamp")
+        app.swipeUp()
+        capture(app, "Provider-Diagnostics-Details")
+        app.navigationBars.buttons["AI provider"].tap()
         app.buttons["Connection privacy"].tap()
         let disclosure = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'After your approval, messages, requested Kit code'" )).firstMatch
         XCTAssertTrue(disclosure.waitForExistence(timeout: 5))

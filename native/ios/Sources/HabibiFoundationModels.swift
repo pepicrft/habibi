@@ -1,5 +1,6 @@
 import Foundation
 import FoundationModels
+import UIKit
 
 /// Requests one protocol operation at a time. The framework never receives
 /// executable tools; Rust validation and native approval still own execution.
@@ -32,6 +33,48 @@ struct HabibiFoundationModels {
         case .unavailable(.modelNotReady): return "Apple’s on-device model isn’t ready. iOS may still be downloading it or handling another system condition. Check Apple Intelligence in Settings, then try again."
         case .unavailable: return "Apple’s on-device model is unavailable. Try again later."
         }
+    }
+
+    static func diagnostics(now: Date = Date()) -> String {
+        var system = utsname()
+        uname(&system)
+        let hardware = withUnsafeBytes(of: system.machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        #if targetEnvironment(simulator)
+        let environment = "Simulator (\(ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? "unknown model"))"
+        #else
+        let environment = "Physical device"
+        #endif
+        var lines = [
+            "Habibi on-device AI diagnostics",
+            "Checked at: \(now.ISO8601Format())",
+            "App version: \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"))",
+            "OS: \(ProcessInfo.processInfo.operatingSystemVersionString)",
+            "Device type: \(UIDevice.current.model)",
+            "Hardware: \(hardware)",
+            "Environment: \(environment)",
+            "Current locale: \(Locale.current.identifier)",
+            "Preferred languages: \(Locale.preferredLanguages.joined(separator: ", "))",
+            "App localization: \(Bundle.main.preferredLocalizations.joined(separator: ", "))",
+            "Low Power Mode: \(ProcessInfo.processInfo.isLowPowerModeEnabled ? "On" : "Off")",
+            "Thermal state: \(ProcessInfo.processInfo.thermalState)"
+        ]
+        if #available(iOS 26.0, *) {
+            let model = SystemLanguageModel.default
+            lines += [
+                "Model availability: \(model.availability)",
+                "Supports current locale: \(model.supportsLocale() ? "Yes" : "No")",
+                "Supported model languages: \(model.supportedLanguages.map(\.minimalIdentifier).sorted().joined(separator: ", "))"
+            ]
+        } else {
+            lines.append("Model availability: Requires iOS 26 or later")
+        }
+        lines += [
+            "Siri language: Not exposed to apps; check Settings → Apple Intelligence & Siri",
+            "Model download progress: Not exposed by Foundation Models"
+        ]
+        return lines.joined(separator: "\n")
     }
 
     func send(_ body: [String: Any]) async throws -> [String: Any] {

@@ -30,6 +30,7 @@ jobs:
       release: ${{ steps.version.outputs.should-release }}
       version: ${{ steps.version.outputs.next-version-number }}
       tag: ${{ steps.version.outputs.next-version }}
+      # Compatibility only: new version checks no longer emit build-number.
       build: ${{ steps.version.outputs.build-number }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -51,14 +52,22 @@ jobs:
     if: needs.version.outputs.release == 'true'
     runs-on: macos-26
     timeout-minutes: 60
+    outputs:
+      build: ${{ steps.build.outputs.build-number }}
     permissions:
       contents: write
       id-token: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
-      BUILD: ${{ needs.version.outputs.build }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
+      # Generate here, not in version: rerun-failed-jobs can reuse version.
+      - name: Select this upload attempt's build number
+        id: build
+        run: |
+          build=$(date -u +%Y%m%d%H%M%S)
+          printf 'BUILD=%s\n' "$build" >> "$GITHUB_ENV"
+          printf 'build-number=%s\n' "$build" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -123,7 +132,9 @@ jobs:
       id-token: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
-      BUILD: ${{ needs.version.outputs.build }}
+      # Successful upload outputs survive distribution-only retries. The fallback
+      # preserves historical run/attempt builds from the old version job.
+      BUILD: ${{ needs.upload.outputs.build || needs.version.outputs.build }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

@@ -57,10 +57,15 @@ root git-cliff 2.6.0 conventional-commit policy, but uses independent reachable
 stable `ios@x.y.z` tags, starting at `0.1.0`. Native/shared-theme fixes bump patches,
 features bump minors, and breaking changes bump majors, including during `0.x`.
 Ordinary maintenance and server-only changes do not release iOS. The build number
-is `GITHUB_RUN_NUMBER.GITHUB_RUN_ATTEMPT`, so a retried upload gets a new number.
-Keep the workflow's run-counter history when changing its name or location.
-Local bootstrap builds use `1.0.N`, below CI's first `1.1`, to avoid collisions
-before the workflow is enabled.
+is a UTC timestamp in `YYYYMMDDHHmmss` format, selected once inside each upload
+job attempt with `date -u +%Y%m%d%H%M%S`. Retrying a failed upload selects a fresh
+timestamp even when GitHub reuses the successful version-selection job. The same
+value stamps the signed app, records the GitHub upload receipt, and selects the
+exact build for downstream TestFlight distribution. The release workflow remains
+serialized from version selection through distribution; marketing versions and
+`ios@x.y.z` tags are unchanged. Local uploads must also select a fresh UTC timestamp
+before packaging; historical `RUN_NUMBER.RUN_ATTEMPT` and bootstrap `1.0.N` builds
+remain valid targets for distribution-only retries.
 
 Personal Infisical EU organization `pepicrft`, project `habibi`, environment
 `prod`, root folder stores:
@@ -131,13 +136,17 @@ queued, not as available to testers. Rejections, unresolved compliance, permissi
 errors and timeouts fail the TestFlight job with an actionable error. Resolve the
 problem in App Store Connect and use **Re-run failed jobs**, not a new upload or a
 rerun of all jobs. Successful upload/version jobs and their original build number
-are reused. No IPA is published as a public GitHub artifact. Do not blindly retry
-an upload with an unknown outcome; inspect App Store Connect first.
+are reused, including historical dotted build numbers; distribution never
+generates a timestamp or selects the latest build. No IPA is published as a public
+GitHub artifact. Do not blindly retry an upload with an unknown outcome; inspect
+App Store Connect first.
 
 Run `mise exec -- bash mise/tasks/release/test.sh` from the repository root to
 exercise real disposable Git histories for both server and iOS releases.
-Run `node --test mise/tasks/ios/testflight.test.mjs` for simulated Apple processing,
-distribution, review conflicts, retries and failure cases; it does not contact Apple.
+Run `node --test mise/tasks/ios/*.test.mjs` for upload-attempt timestamp/receipt
+propagation, historical-build retries, packaging input validation, and simulated
+Apple processing, distribution, review conflicts and failures. These tests do not
+contact Apple or use signing credentials.
 
 ### In-app beta updates
 
@@ -304,6 +313,12 @@ Sign-in errors distinguish connectivity, invalid responses, rate limits and
 provider rejection. Only a missing device-code endpoint suggests checking
 Security settings; a generic failure does not establish an account setting.
 
+On iOS, polling and the final token exchange wait while Habibi is backgrounded
+in Safari. Interrupted polls retry with backoff using the same device code,
+within its 15-minute lifetime. The single-use token exchange is not replayed on
+an ambiguous network failure; its error distinguishes successful browser
+approval from a connection that could not be completed in Habibi.
+
 This experimental integration follows Pi's **legacy `openai-codex` provider** at
 [`b3a29f1`](https://github.com/earendil-works/pi/blob/b3a29f1111114fac696e2cfcd65acdb382a6ed5e/packages/ai/src/auth/oauth/openai-codex.ts):
 public client ID `app_EMoamEEZ73f0CkXaXp7hrann`, OpenAI device authorization and
@@ -351,6 +366,15 @@ download progress or repair that system state. Availability also refreshes when
 the app becomes active, when the provider screen opens and before a request.
 An Apple preference synced to Android is preserved but cannot run there; choose
 a ChatGPT override explicitly. Nothing silently falls back to a cloud provider.
+
+**Profile → AI provider → On-device diagnostics** shows a refreshable, copyable
+local report: the raw Foundation Models availability, locale support and model
+languages, iOS version/build, hardware type, app version, language settings,
+Low Power Mode and thermal state. It does not run inference or upload anything,
+and excludes conversations, credentials, device names and unique identifiers.
+Copying uses the device-local clipboard with a five-minute expiry. Siri language
+and model download progress are not exposed to apps; the report identifies those
+limits and points to the settings to check manually.
 
 The smaller model is best for short conversations, not complex Kit code generation.
 Each step selects an operation before receiving that operation's argument schema,

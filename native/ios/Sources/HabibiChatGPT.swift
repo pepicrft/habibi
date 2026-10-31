@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct HabibiChatGPTCatalog: Decodable {
     struct Model: Decodable, Identifiable {
@@ -22,12 +23,14 @@ actor HabibiChatGPT {
     static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
     static let verificationURL = URL(string: "https://auth.openai.com/codex/device")!
     enum SignInError: LocalizedError {
-        case network, invalidResponse, deviceLoginUnavailable, httpStatus(Int)
+        case network, exchangeNetwork, invalidResponse, deviceLoginUnavailable, httpStatus(Int)
 
         var errorDescription: String? {
             switch self {
             case .network:
                 return "Couldn’t reach OpenAI. Check your connection and try again."
+            case .exchangeNetwork:
+                return "Browser approval succeeded, but Habibi couldn’t finish connecting to OpenAI. Check your connection, then connect again for a new code."
             case .invalidResponse:
                 return "OpenAI returned an unexpected sign-in response. Try again later."
             case .deviceLoginUnavailable:
@@ -45,12 +48,14 @@ actor HabibiChatGPT {
     private let secrets: any HabibiSyncSecretStorage
     private let http: any HabibiSyncHTTP
     private let sleep: (TimeInterval) async throws -> Void
+    private let isForeground: @MainActor () -> Bool
     private var occupied = false
 
     init(secrets: any HabibiSyncSecretStorage = HabibiSyncKeychain(service: "fyi.habibi.chatgpt"),
          http: any HabibiSyncHTTP = HabibiSyncURLSession(resourceTimeout: 110),
-         sleep: @escaping (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) {
-        self.secrets = secrets; self.http = http; self.sleep = sleep
+         sleep: @escaping (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
+         isForeground: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState != .background }) {
+        self.secrets = secrets; self.http = http; self.sleep = sleep; self.isForeground = isForeground
     }
 
     func connected() throws -> Bool {
@@ -77,11 +82,21 @@ actor HabibiChatGPT {
         try Task.checkCancellation()
         await showCode(code)
         let deadline = Date().addingTimeInterval(15 * 60)
+        var retryDelay: TimeInterval = 0
         while Date() < deadline {
-            try await sleep(interval)
-            try Task.checkCancellation()
-            guard Date() < deadline else { break }
-            let (data, response) = try await post("/api/accounts/deviceauth/token", values: ["device_auth_id": id, "user_code": code])
+            try await sleep(max(interval, retryDelay))
+            guard try await waitForForeground(until: deadline) else { break }
+            let data: Data
+            let response: HTTPURLResponse
+            do {
+                (data, response) = try await post("/api/accounts/deviceauth/token", values: ["device_auth_id": id, "user_code": code])
+                retryDelay = 0
+            } catch SignInError.network {
+                // Safari can suspend the app or interrupt an in-flight poll.
+                // Keep the same device code and retry only this polling step.
+                retryDelay = min(60, max(interval, retryDelay) * 2)
+                continue
+            }
             if [403, 404].contains(response.statusCode) { continue }
             if let failure = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
                 let code = failure["error"] as? String ?? (failure["error"] as? [String: Any])?["code"] as? String
@@ -92,14 +107,30 @@ actor HabibiChatGPT {
             guard let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
                   let code = result["authorization_code"] as? String,
                   let verifier = result["code_verifier"] as? String else { throw signInFailure }
-            let tokens = try await json("/oauth/token", values: ["grant_type": "authorization_code", "client_id": Self.clientID,
-                "code": code, "code_verifier": verifier, "redirect_uri": "https://auth.openai.com/deviceauth/callback"], form: true)
+            guard try await waitForForeground(until: deadline) else { break }
+            // Authorization codes are single-use. Unlike polling, an ambiguous
+            // exchange failure must not automatically replay the request.
+            let tokens: [String: Any]
+            do {
+                tokens = try await json("/oauth/token", values: ["grant_type": "authorization_code", "client_id": Self.clientID,
+                    "code": code, "code_verifier": verifier, "redirect_uri": "https://auth.openai.com/deviceauth/callback"], form: true)
+            } catch SignInError.network { throw SignInError.exchangeNetwork }
             let record = try credentials(tokens)
             try Task.checkCancellation()
             try secrets.save(JSONSerialization.data(withJSONObject: record))
             return
         }
         throw HabibiFailure(message: "The ChatGPT code expired. Connect again to get a new code.")
+    }
+
+    private func waitForForeground(until deadline: Date) async throws -> Bool {
+        while Date() < deadline {
+            try Task.checkCancellation()
+            if await isForeground() { return true }
+            try await sleep(1)
+        }
+        try Task.checkCancellation()
+        return false
     }
 
     func send(_ body: [String: Any], model: String? = nil) async throws -> Any {

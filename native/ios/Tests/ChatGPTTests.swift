@@ -16,15 +16,21 @@ private actor ChatGPTServer: HabibiSyncHTTP {
     var requests: [URLRequest] = []
     var polls = 0
     var failRefresh = false
+    var failExchange = false
     var exchangeStarted = false
     let codeKey: String
+    let pollFailures: Int
+    let receiveGrant: @MainActor () -> Void
     private var holdExchange = false
     private var exchange: CheckedContinuation<Void, Never>?
-    init(codeKey: String = "user_code") { self.codeKey = codeKey }
+    init(codeKey: String = "user_code", pollFailures: Int = 0, receiveGrant: @escaping @MainActor () -> Void = {}) {
+        self.codeKey = codeKey; self.pollFailures = pollFailures; self.receiveGrant = receiveGrant
+    }
     func pauseExchange() { holdExchange = true }
     func releaseExchange() { exchange?.resume(); exchange = nil }
     func exchanging() -> Bool { exchangeStarted }
     func loseRefresh() { failRefresh = true }
+    func loseExchange() { failExchange = true }
     func captured() -> [URLRequest] { requests }
     nonisolated static func access(_ number: Int) -> String {
         let claims = Data("{\"https://api.openai.com/auth\":{\"chatgpt_account_id\":\"account-\(number)\"}}".utf8).habibiBase64URL
@@ -42,13 +48,16 @@ private actor ChatGPTServer: HabibiSyncHTTP {
             return try result(["device_auth_id": "device-id", codeKey: "ABCD-1234", "interval": "5"])
         case "/api/accounts/deviceauth/token":
             polls += 1
+            if polls <= pollFailures { throw URLError(.networkConnectionLost) }
             if polls == 1 { return try result(["error": "slow_down"], code: 400) }
             if polls == 2 { return try result(["error": "deviceauth_authorization_pending"], code: 400) }
+            await receiveGrant()
             return try result(["authorization_code": "authorization-code", "code_verifier": "device-verifier"])
         case "/oauth/token":
             let body = String(decoding: request.httpBody!, as: UTF8.self)
             let refresh = body.contains("grant_type=refresh_token")
             if refresh && failRefresh { throw HabibiFailure(message: "Lost response") }
+            if !refresh && failExchange { throw URLError(.networkConnectionLost) }
             #expect(body.contains("client_id=app_EMoamEEZ73f0CkXaXp7hrann"))
             if !refresh { #expect(body.contains("code_verifier=device-verifier")) }
             if holdExchange { exchangeStarted = true; await withCheckedContinuation { exchange = $0 } }
@@ -162,6 +171,66 @@ func chatGPTConnectsRefreshesAndChatsWithoutPuttingCredentialsInTheVault(_ codeK
     #expect(!session.inferenceConnected)
     #expect(secrets.data == nil)
     #expect(session.snapshot?.profile.name == "PRIVATE-PROFILE")
+}
+
+@Test func chatGPTSignInSurvivesInterruptedPollingWithoutRestartingBrowserApproval() async throws {
+    let secrets = ChatGPTSecrets()
+    let server = ChatGPTServer(pollFailures: 2)
+    let provider = HabibiChatGPT(secrets: secrets, http: server, sleep: { _ in })
+    var codes: [String] = []
+    try await provider.authorize { codes.append($0) }
+    #expect(codes == ["ABCD-1234"])
+    #expect(try await provider.connected())
+    let requests = await server.captured()
+    #expect(requests.filter { $0.url?.path == "/api/accounts/deviceauth/usercode" }.count == 1)
+    #expect(requests.filter { $0.url?.path == "/api/accounts/deviceauth/token" }.count == 3)
+    #expect(requests.filter { $0.url?.path == "/oauth/token" }.count == 1)
+}
+
+@MainActor
+@Test(arguments: [false, true])
+func chatGPTSignInWaitsForReturnFromBrowserBeforePollingOrExchanging(_ afterApproval: Bool) async throws {
+    let secrets = ChatGPTSecrets()
+    var foreground = afterApproval
+    var codeShown = false
+    var grantReceived = false
+    let server = ChatGPTServer(receiveGrant: {
+        if afterApproval { foreground = false; grantReceived = true }
+    })
+    let provider = HabibiChatGPT(secrets: secrets, http: server,
+        sleep: { _ in try await Task.sleep(for: .milliseconds(1)) }, isForeground: { foreground })
+    let authorization = Task { try await provider.authorize { _ in codeShown = true } }
+    defer { authorization.cancel() }
+    for _ in 0..<500 {
+        if afterApproval ? grantReceived : codeShown { break }
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    try #require(afterApproval ? grantReceived : codeShown)
+    // Give an incorrect implementation time to issue requests while backgrounded.
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(try await !provider.connected())
+    let backgroundRequests = await server.captured()
+    #expect(!backgroundRequests.contains { $0.url?.path == "/oauth/token" })
+    if !afterApproval { #expect(!backgroundRequests.contains { $0.url?.path == "/api/accounts/deviceauth/token" }) }
+    foreground = true
+    try await authorization.value
+    #expect(try await provider.connected())
+}
+
+@Test func chatGPTLostAuthorizationExchangeRequiresNewApprovalWithoutReplayingTheCode() async throws {
+    let secrets = ChatGPTSecrets()
+    let server = ChatGPTServer()
+    await server.loseExchange()
+    let provider = HabibiChatGPT(secrets: secrets, http: server, sleep: { _ in })
+    do {
+        try await provider.authorize { _ in }
+        Issue.record("Lost exchange must require reconnection")
+    } catch {
+        #expect(error.localizedDescription.contains("Browser approval succeeded"))
+    }
+    #expect(try await !provider.connected())
+    #expect(secrets.data == nil)
+    #expect(await server.captured().filter { $0.url?.path == "/oauth/token" }.count == 1)
 }
 
 private struct RejectedChatGPTSignIn: HabibiSyncHTTP {
