@@ -72,10 +72,13 @@ struct HabibiCostumesView: View {
     }
 
     private func row(_ definition: HabibiCostumeDefinition) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Label(definition.name, systemImage: "tshirt").font(.headline)
-            Text(definition.description).font(.subheadline).foregroundStyle(.secondary)
-            Text("By \(definition.author) · Author supplied").font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            HabibiHeartling(interactive: false, avatar: definition.avatar).frame(width: 64, height: 64)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(definition.name).font(.headline)
+                Text(definition.description).font(.subheadline).foregroundStyle(.secondary)
+                Text("By \(definition.author) · Author supplied").font(.caption).foregroundStyle(.secondary)
+            }
         }.padding(.vertical, 6)
     }
 }
@@ -98,7 +101,9 @@ private struct HabibiCostumeDetail: View {
     var body: some View {
         List {
             Section {
-                Label(current.name, systemImage: "tshirt").font(.title2.weight(.semibold))
+                HabibiHeartling(avatar: current.avatar).frame(width: 128, height: 128)
+                    .frame(maxWidth: .infinity)
+                Text(current.name).font(.title2.weight(.semibold))
                 Text(current.description)
                 Text("By \(current.author) · Author supplied, not verified").font(.caption).foregroundStyle(.secondary)
             }
@@ -156,6 +161,7 @@ private struct HabibiCostumeEditor: View {
     @State var definition: HabibiCostumeDefinition
     var costumeID: String?
     @State private var error: String?
+    @State private var avatarJSON = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -174,6 +180,25 @@ private struct HabibiCostumeEditor: View {
             Section("Example to try on") {
                 TextField("A starting prompt", text: $definition.examplePrompt, axis: .vertical).lineLimit(2...4)
             }
+            Section("Avatar") {
+                HabibiHeartling(avatar: definition.avatar).frame(width: 112, height: 112)
+                    .frame(maxWidth: .infinity)
+                Button("Copy avatar prompt", systemImage: "doc.on.doc") {
+                    UIPasteboard.general.string = HabibiSkinAvatar.prompt + "\n\(definition.name): \(definition.description)"
+                }
+                Text("Use the prompt in your chosen chat model, then paste its JSON below. Only the skin’s name and description are copied. Leave blank to keep Heartling.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                TextField("Avatar geometry (JSON)", text: $avatarJSON, axis: .vertical)
+                    .font(.system(.caption, design: .monospaced)).lineLimit(4...10)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityIdentifier("habibi.costumes.avatar")
+                Button("Preview skin") {
+                    do { definition = try preparedDefinition(); error = nil }
+                    catch { self.error = error.localizedDescription }
+                }.accessibilityIdentifier("habibi.costumes.preview")
+                Text("Complete the skin’s text before previewing. Artwork is geometry only, never code or remote images. Preview or Save validates it; clearing the JSON removes it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             Section {
                 Text("Review every field before adding an imported skin. Author names are not verified. Its selected name and instructions are sent to your chosen model when you send a message. Never put secrets here.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -186,11 +211,27 @@ private struct HabibiCostumeEditor: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button(costumeID == nil ? "Add" : "Save") {
                     Task {
-                        do { try await session.saveCostume(definition, id: costumeID); dismiss() }
+                        do { try await session.saveCostume(preparedDefinition(), id: costumeID); dismiss() }
                         catch { self.error = error.localizedDescription }
                     }
                 }.disabled(!session.canChangeCostume).accessibilityIdentifier("habibi.costumes.save")
             }
         }
+        .onAppear {
+            if let avatar = definition.avatar {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                avatarJSON = (try? String(data: encoder.encode(avatar), encoding: .utf8)) ?? ""
+            }
+        }
+    }
+
+    private func preparedDefinition() throws -> HabibiCostumeDefinition {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(definition)) as! [String: Any]
+        // Validate raw geometry before Codable can discard unrecognized fields.
+        object["avatar"] = avatarJSON.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil : try JSONSerialization.jsonObject(with: Data(avatarJSON.utf8))
+        let checked = try HabibiCore.execute(["operation": "validate_costume", "definition": object])
+        return try JSONDecoder().decode(HabibiCostumeDefinition.self, from: JSONSerialization.data(withJSONObject: checked["definition"] ?? [:]))
     }
 }

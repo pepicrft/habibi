@@ -115,12 +115,18 @@ class HabibiAndroidTest {
         dialog.findViewById<View>(android.R.id.content)!!.findViewWithTag<View>("costumes_add").performClick()
         dialog = ShadowDialog.getLatestDialog() as AlertDialog
         assertTrue(session.wardrobe.isEmpty()) // Opening review never installs.
+        val avatar = JSONObject("""{"body":{"path":"M 20 15 L 80 15 L 80 85 L 20 85 Z"},"eyes":{"x":45,"y":40,"spacing":18,"scale":1}}""")
+        val review = dialog.findViewById<View>(android.R.id.content)!!
+        review.findViewWithTag<TextInputEditText>("costumes_avatar").setText(avatar.toString())
+        review.findViewWithTag<View>("costumes_preview").performClick()
+        assertEquals("Say hello to your skin avatar", review.findViewWithTag<View>("costumes_preview_avatar").contentDescription)
         store.failSave = true
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertTrue(session.wardrobe.isEmpty()); assertTrue(dialog.isShowing)
         store.failSave = false
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertEquals(1, session.wardrobe.size)
+        assertEquals(avatar.toString(), session.wardrobe.single().getJSONObject("definition").getJSONObject("avatar").toString())
         activity.onBackPressedDispatcher.onBackPressed(); tabs.selectedItemId = R.id.conversations
         activity.tagged("conversation_$trialID").performClick()
         val editor = activity.tagged("conversation_message") as TextInputEditText
@@ -135,6 +141,7 @@ class HabibiAndroidTest {
         session.flushConversations()
         val restored = fixtureSession(store, core); restored.start(); restored.selectConversation(trialID)
         assertNull(restored.conversation.costume); assertEquals(1, restored.wardrobe.size)
+        assertEquals(avatar.toString(), restored.wardrobe.single().getJSONObject("definition").getJSONObject("avatar").toString())
         assertEquals("Help me find a first step.", restored.conversationDraft)
         controller.pause().stop().destroy()
     }

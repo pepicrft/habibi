@@ -292,14 +292,56 @@ The wardrobe and those copies are encrypted in the vault, recovery and sync.
 Stored JSON keys and core operation names retain `costume`/`costumes` for
 compatibility with existing vaults, conversations and exported definitions.
 
+An optional `avatar` adds a data-only silhouette and eye placement in a 100 × 100
+coordinate space, for example:
+
+```json
+"avatar": {
+  "body": {"path": "M 20 20 L 80 20 Q 90 20 90 30 L 90 80 L 20 80 Z"},
+  "eyes": {"x": 50, "y": 50, "spacing": 18, "scale": 1}
+}
+```
+
+No other keys are accepted in `avatar`, `body` or `eyes`. The path is a strict
+SVG subset: **every token must be separated by ASCII whitespace**, including
+commands and numbers. Only explicit uppercase `M` (2 numbers), `L` (2), `Q` (4),
+`C` (6) and `Z` (0) are supported; no commas, implicit repeated commands,
+relative commands or other SVG syntax. Every subpath starts with `M`, has at
+least one `L`, `Q` or `C` segment, and closes with `Z` before another subpath.
+Paths are limited to 4,096 UTF-8 bytes and 768 tokens. All coordinates (including
+curve control points) must be finite and within 0–100. Numbers use ASCII decimal
+digits with an optional sign and decimal point, at least one digit, and no
+exponents (`.5` and `100.` are accepted).
+
+Eye `x` and `y` are the pair's midpoint, both within 15–85; `spacing` is the
+center-to-center distance, within 8–36; `scale` is within 0.5–1.5. Values must be
+finite. Both centers (`x ± spacing/2`, `y`) plus a `4 × scale` radius must fit
+inside 0–100. Native hosts supply theme color and the existing greeting, blink
+and working states, not JSON animation code. Bundled skins have original chunky
+silhouettes: Coach's star, Socratic Tutor's closed book and Gentle Planner's
+rounded plant pot with sprout. Avatars are native-only geometry, never remote
+assets, executable code or model input.
+
+In the skin editor, **Copy avatar prompt** copies the geometry contract plus the
+skin's current name and description, not instructions, conversations or vault
+data. Run it in a chat model of your choice, paste the returned object into
+**Avatar geometry (JSON)**, then **Preview skin** or Save. Complete the skin text
+before previewing. Clearing the field restores Heartling. Generation is manual:
+copying, previewing or saving never calls inference or sends a message. The
+wardrobe, detail and conversation views render the same selected geometry.
+
+Old definitions without `avatar` still load and export without adding the field;
+they retain the default native character. Older clients reject the new `avatar`
+field rather than stripping it. Upgrade both clients before importing or syncing
+skins, conversations or recovery backups containing avatar geometry.
+
 Only the selected name and instructions join the model request, alongside the
 conversation's normal context and tool results. The example is sent only if you
-send it as a message. Other skins and author metadata are not sent. Skins
-change conversational guidance, not tools, data access, approval requirements or
+send it as a message. Other skins, author metadata and avatar geometry are not
+sent. Skins change conversational guidance, not tools, data access, approval requirements or
 professional qualifications. The native host still enforces those boundaries;
 prompt text is not a security boundary. There is no executable skin code,
-public catalogue, automatic update, model-generated creation flow or skin
-artwork in this first version.
+public catalogue, automatic update or in-app model-generated creation flow.
 
 ## Connect ChatGPT
 

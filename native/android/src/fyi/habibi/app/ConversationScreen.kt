@@ -262,6 +262,8 @@ internal class ConversationScreen(
     }
     fun render() {
         if (closed) return
+        emptyHeartling.avatar = chat.costume?.optJSONObject("avatar")
+        workingHeartling.avatar = chat.costume?.optJSONObject("avatar")
         emptyHeartling.visibility = if (chat.lines.isEmpty() && !session.chatting) View.VISIBLE else View.GONE
         working.visibility = if (session.chatting) View.VISIBLE else View.GONE
         welcome.text = chat.costume?.getString("description")

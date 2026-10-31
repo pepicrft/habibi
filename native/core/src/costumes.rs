@@ -13,6 +13,108 @@ pub struct Definition {
     author: String,
     instructions: String,
     example_prompt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    avatar: Option<Avatar>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Avatar {
+    body: AvatarBody,
+    eyes: AvatarEyes,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AvatarBody {
+    path: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AvatarEyes {
+    x: f64,
+    y: f64,
+    spacing: f64,
+    scale: f64,
+}
+
+impl Avatar {
+    fn validate(&self) -> Result<()> {
+        let invalid = || Error::invalid("Invalid skin avatar geometry.");
+        if self.body.path.len() > 4096 {
+            return Err(invalid());
+        }
+        let tokens: Vec<_> = self.body.path.split_ascii_whitespace().collect();
+        if tokens.is_empty() || tokens.len() > 768 {
+            return Err(invalid());
+        }
+        let mut cursor = 0;
+        let mut open = false;
+        let mut has_segment = false;
+        while cursor < tokens.len() {
+            let count = match tokens[cursor] {
+                "M" if !open => {
+                    open = true;
+                    has_segment = false;
+                    2
+                }
+                "L" if open => 2,
+                "Q" if open => 4,
+                "C" if open => 6,
+                "Z" if open && has_segment => {
+                    open = false;
+                    0
+                }
+                _ => return Err(invalid()),
+            };
+            if open && tokens[cursor] != "M" {
+                has_segment = true;
+            }
+            cursor += 1;
+            let coordinates = tokens.get(cursor..cursor + count).ok_or_else(invalid)?;
+            for token in coordinates {
+                // Decimal ASCII only: optional sign and decimal point, at least one digit.
+                let unsigned = token.strip_prefix(['+', '-']).unwrap_or(token);
+                if !unsigned.bytes().any(|byte| byte.is_ascii_digit())
+                    || unsigned
+                        .bytes()
+                        .any(|byte| !byte.is_ascii_digit() && byte != b'.')
+                    || unsigned.bytes().filter(|byte| *byte == b'.').count() > 1
+                {
+                    return Err(invalid());
+                }
+                let coordinate = token.parse::<f64>().map_err(|_| invalid())?;
+                if !coordinate.is_finite() || !(0.0..=100.0).contains(&coordinate) {
+                    return Err(invalid());
+                }
+            }
+            cursor += count;
+        }
+        if open {
+            return Err(invalid());
+        }
+        let eyes = &self.eyes;
+        for (value, min, max) in [
+            (eyes.x, 15.0, 85.0),
+            (eyes.y, 15.0, 85.0),
+            (eyes.spacing, 8.0, 36.0),
+            (eyes.scale, 0.5, 1.5),
+        ] {
+            if !value.is_finite() || !(min..=max).contains(&value) {
+                return Err(invalid());
+            }
+        }
+        let radius = 4.0 * eyes.scale;
+        if eyes.x - eyes.spacing / 2.0 - radius < 0.0
+            || eyes.x + eyes.spacing / 2.0 + radius > 100.0
+            || eyes.y - radius < 0.0
+            || eyes.y + radius > 100.0
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -44,6 +146,9 @@ impl Definition {
         if self.api_version != 1 {
             return Err(Error::invalid("Unsupported skin version."));
         }
+        if let Some(avatar) = &self.avatar {
+            avatar.validate()?;
+        }
         Ok(())
     }
 
@@ -73,20 +178,27 @@ pub fn catalog() -> Vec<Definition> {
     [
         ("Coach", "Turn intentions into small commitments, with encouragement and no guilt.",
          "Help the user choose one realistic next step. Ask what matters and what gets in the way before proposing a plan. Offer small, specific commitments, recognize effort, and adapt to the user's energy. Avoid guilt, pressure, unsolicited health advice and pretending to monitor progress outside this conversation.",
-         "I keep putting off something important. Help me find a small first step."),
+         "I keep putting off something important. Help me find a small first step.",
+         "M 50 8 L 63 32 L 90 36 L 71 57 L 76 87 L 50 73 L 24 87 L 29 57 L 10 36 L 37 32 Z", 50.0),
         ("Socratic Tutor", "Learn through questions and hints, one idea at a time.",
          "Start by asking what the user already understands and what they want to learn. Ask one focused question at a time. Offer progressively clearer hints and check understanding with a new example. Do not give the full answer immediately unless asked. Correct mistakes patiently and explain uncertainty.",
-         "Help me understand probability. Ask me a question to see where to begin."),
+         "Help me understand probability. Ask me a question to see where to begin.",
+         "M 28 16 L 78 16 Q 84 16 84 22 L 84 72 Q 84 78 78 78 L 28 78 Q 23 78 23 82 Q 23 86 28 86 L 80 86 L 80 92 L 28 92 Q 14 92 14 78 L 14 30 Q 14 16 28 16 Z", 55.0),
         ("Gentle Planner", "Make room for what matters by breaking overwhelming tasks into manageable steps.",
          "Help the user reduce overwhelm. Ask about time, energy and real constraints. Separate essentials from things that can wait. Propose a short, flexible plan with breathing room and one clear starting action. Do not invent deadlines, saved reminders or completed tasks. Avoid treating productivity as a measure of personal worth.",
-         "My week feels overwhelming. Help me decide what matters and what can wait."),
-    ].into_iter().map(|(name, description, instructions, example_prompt)| Definition {
+         "My week feels overwhelming. Help me decide what matters and what can wait.",
+         "M 28 52 L 45 52 L 45 35 Q 24 39 23 18 Q 44 15 50 34 Q 56 10 78 14 Q 78 35 55 39 L 55 52 L 78 52 L 72 86 Q 71 92 64 92 L 36 92 Q 29 92 28 86 L 22 52 Z", 70.0),
+    ].into_iter().map(|(name, description, instructions, example_prompt, path, y)| Definition {
         api_version: 1,
         name: name.into(),
         description: description.into(),
         author: "Habibi".into(),
         instructions: instructions.into(),
         example_prompt: example_prompt.into(),
+        avatar: Some(Avatar {
+            body: AvatarBody { path: path.into() },
+            eyes: AvatarEyes { x: 50.0, y, spacing: 18.0, scale: 1.0 },
+        }),
     }).collect()
 }
 
@@ -105,6 +217,7 @@ mod tests {
         );
         let identity = &created["ok"]["identity"];
         let definition = call(json!({"operation":"bundled_costumes"}))["ok"]["costumes"][1].clone();
+        assert!(definition["avatar"]["body"]["path"].is_string());
         let saved = call(
             json!({"operation":"save_costume","identity":identity,"document":created["ok"]["document"],"definition":definition}),
         );
@@ -115,6 +228,7 @@ mod tests {
         );
         let mut edited = definition.clone();
         edited["instructions"] = json!("Use a different example each time.");
+        edited["avatar"]["eyes"]["spacing"] = json!(20.0);
         let updated = call(
             json!({"operation":"save_costume","identity":identity,"document":archived["ok"]["document"],"id":id,"definition":edited}),
         );
@@ -141,6 +255,14 @@ mod tests {
             json!({"operation":"recover","backup":backup["ok"]["backup"],"recoveryKey":backup["ok"]["recoveryKey"]}),
         );
         assert_eq!(recovered["ok"]["state"], updated["ok"]["state"]);
+        assert_eq!(
+            recovered["ok"]["state"]["costumes"][0]["definition"]["avatar"],
+            edited["avatar"]
+        );
+        assert_eq!(
+            recovered["ok"]["state"]["conversations"][0]["costume"]["avatar"],
+            definition["avatar"]
+        );
     }
 
     #[test]
@@ -157,6 +279,15 @@ mod tests {
             {
                 request["costume"] = costume.clone();
                 let dressed = call(request.clone());
+                let mut without_avatar = costume.clone();
+                without_avatar.as_object_mut().unwrap().remove("avatar");
+                request["costume"] = without_avatar;
+                assert_eq!(dressed, call(request.clone()));
+                assert!(
+                    !dressed["ok"]["body"]
+                        .to_string()
+                        .contains(costume["avatar"]["body"]["path"].as_str().unwrap())
+                );
                 assert_eq!(dressed["ok"]["body"]["tools"], plain["ok"]["body"]["tools"]);
                 assert_eq!(dressed["ok"]["body"]["input"], plain["ok"]["body"]["input"]);
                 assert!(
@@ -176,6 +307,139 @@ mod tests {
             json!({"operation":"agent_response","response":{"status":"completed","output":[{"type":"function_call","name":"save_costume","call_id":"x","arguments":"{}"}]}}),
         );
         assert!(response["error"].is_object());
+    }
+
+    #[test]
+    fn optional_avatars_validate_strict_geometry_and_complexity() {
+        let bundled = call(json!({"operation":"bundled_costumes"}))["ok"]["costumes"].clone();
+        for definition in bundled.as_array().unwrap() {
+            assert_eq!(
+                call(json!({"operation":"validate_costume","definition":definition}))["ok"]["definition"],
+                *definition
+            );
+        }
+        let mut definition = bundled[0].clone();
+        definition.as_object_mut().unwrap().remove("avatar");
+        assert_eq!(
+            call(json!({"operation":"validate_costume","definition":definition}))["ok"]["definition"],
+            definition
+        );
+        let custom = json!({"body":{"path":"M 0 0 L 100 0 Q 100 100 50 100 C 25 100 0 75 0 0 Z"},"eyes":{"x":50.0,"y":50.0,"spacing":18.0,"scale":1.0}});
+        definition["avatar"] = custom.clone();
+        let token_boundary = format!("M 0 0 {}Q 0 0 0 0 Z", "L 0 0 ".repeat(253));
+        assert_eq!(token_boundary.split_ascii_whitespace().count(), 768);
+        let byte_boundary = format!("M 0 0 L 100 100 Z{}", " ".repeat(4096 - 17));
+        assert_eq!(byte_boundary.len(), 4096);
+        for path in [
+            custom["body"]["path"].as_str().unwrap(),
+            "M .5 +0 L 100. 100 Z M 20 20 L 30 30 Z",
+            &token_boundary,
+            &byte_boundary,
+        ] {
+            definition["avatar"]["body"]["path"] = json!(path);
+            assert_eq!(
+                call(json!({"operation":"validate_costume","definition":definition}))["ok"]["definition"],
+                definition,
+                "{path}"
+            );
+        }
+        for path in [
+            "",
+            "M 0 0 Z",
+            "L 0 0 Z",
+            "M 0 0 L 50 50",
+            "M 0 0 M 1 1 L 2 2 Z",
+            "M 0 0 L 1 1 Z L 2 2 Z",
+            "M 0 0 L 1 1 Z Z",
+            "m 0 0 l 1 1 z",
+            "M0 0 L 1 1 Z",
+            "M 0,0 L 1 1 Z",
+            "M 0 0 1 1 Z",
+            "M 0 0 L 1 Z",
+            "M 0 0 Q 1 1 2 Z",
+            "M 0 0 C 1 1 2 2 3 Z",
+            "M 0 0 H 10 Z",
+            "M 0 0 L 1e1 20 Z",
+            "M 0 0 L NaN 20 Z",
+            "M 0 0 L inf 20 Z",
+            "M 0 0 L -0.1 20 Z",
+            "M 0 0 Q 101 20 50 50 Z",
+            "M 0 0 C 0 0 50 50 100.1 50 Z",
+            "M 0 0 L １ 20 Z",
+            "M 0 0 L 1..0 20 Z",
+            "M\u{a0}0 0 L 1 1 Z",
+            &token_boundary.replace("Z", "L 0 0 Z"),
+            &format!("{byte_boundary} "),
+        ] {
+            definition["avatar"]["body"]["path"] = json!(path);
+            assert!(
+                call(json!({"operation":"validate_costume","definition":definition}))["error"]
+                    .is_object(),
+                "{path}"
+            );
+        }
+        definition["avatar"] = custom;
+        for (field, value) in [
+            ("x", 14.9),
+            ("x", 85.1),
+            ("y", 14.9),
+            ("y", 85.1),
+            ("spacing", 7.9),
+            ("spacing", 36.1),
+            ("scale", 0.49),
+            ("scale", 1.51),
+        ] {
+            let mut invalid = definition.clone();
+            invalid["avatar"]["eyes"][field] = json!(value);
+            assert!(
+                call(json!({"operation":"validate_costume","definition":invalid}))["error"]
+                    .is_object(),
+                "{field}: {value}"
+            );
+        }
+        for x in [15, 85] {
+            let mut invalid = definition.clone();
+            invalid["avatar"]["eyes"]["x"] = json!(x);
+            invalid["avatar"]["eyes"]["spacing"] = json!(36);
+            assert!(
+                call(json!({"operation":"validate_costume","definition":invalid}))["error"]
+                    .is_object()
+            );
+        }
+        for pointer in ["/avatar/extra", "/avatar/body/fill", "/avatar/eyes/color"] {
+            let mut invalid = definition.clone();
+            let (parent, key) = pointer.rsplit_once('/').unwrap();
+            invalid.pointer_mut(parent).unwrap()[key] = json!("not allowed");
+            assert!(
+                call(json!({"operation":"validate_costume","definition":invalid}))["error"]
+                    .is_object()
+            );
+        }
+        for field in ["x", "y", "spacing", "scale"] {
+            let mut invalid = definition.clone();
+            invalid["avatar"]["eyes"]
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
+            assert!(
+                call(json!({"operation":"validate_costume","definition":invalid}))["error"]
+                    .is_object()
+            );
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            for field in ["x", "y", "spacing", "scale"] {
+                let mut invalid: super::Definition =
+                    serde_json::from_value(definition.clone()).unwrap();
+                let eyes = &mut invalid.avatar.as_mut().unwrap().eyes;
+                match field {
+                    "x" => eyes.x = value,
+                    "y" => eyes.y = value,
+                    "spacing" => eyes.spacing = value,
+                    _ => eyes.scale = value,
+                }
+                assert!(invalid.validate().is_err());
+            }
+        }
     }
 
     #[test]

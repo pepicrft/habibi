@@ -241,4 +241,32 @@ class HeartlingTest {
         }
         atlas.recycle()
     }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun skinGeometryUsesItsOwnEyePlacementAndReturnsToUntintedAlphaFallback() {
+        Settings.Global.putFloat(app.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        inject()
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val view = controller.get().tagged("welcome_heartling") as HeartlingView
+        view.layout(0, 0, 200, 200)
+        fun render(): Bitmap = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
+        val fallback = render()
+        view.avatar = JSONObject("""{"body":{"path":"M 20 15 L 80 15 L 80 85 L 20 85 Z"},"eyes":{"x":45,"y":40,"spacing":18,"scale":1}}""")
+        val idle = render()
+        assertEquals(0, Color.alpha(idle.getPixel(15, 100)))
+        assertEquals(255, Color.alpha(idle.getPixel(100, 145)))
+        assertTrue(Color.red(idle.getPixel(72, 80)) < Color.red(idle.getPixel(90, 80)))
+        assertEquals("Say hello to your skin avatar", view.contentDescription)
+        view.performClick(); view.performClick()
+        assertEquals("Delighted", view.expression()); view.assertStill()
+        val happy = render()
+        assertNotEquals(idle.getPixel(72, 85), happy.getPixel(72, 85))
+        view.working = true
+        assertEquals("Attentive", view.expression())
+        assertFalse(idle.sameAs(render()))
+        view.working = false; view.avatar = null
+        assertTrue(fallback.sameAs(render()))
+        assertEquals("Say hello to Heartling", view.contentDescription)
+        controller.pause().stop().destroy()
+    }
 }

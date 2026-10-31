@@ -310,14 +310,18 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(app.tabBars.count, 0)
         capture(app, "Costumes-Empty-Wardrobe")
         app.buttons["habibi.costumes.bundled.Socratic Tutor"].tap()
-        XCTAssertTrue(app.buttons["habibi.costumes.try"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Socratic Tutor"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["habibi.heartling"].label, "Skin avatar")
         capture(app, "Costumes-Tutor-Details")
-        app.buttons["habibi.costumes.try"].tap()
+        let tryOn = app.buttons["habibi.costumes.try"]
+        for _ in 0..<3 where !tryOn.isHittable { app.swipeUp() }
+        tryOn.tap()
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Learn through questions and hints, one idea at a time."].exists)
         XCTAssertEqual(composer.value as? String, "Help me understand probability. Ask me a question to see where to begin.")
         XCTAssertTrue((options.value as? String)?.contains("wearing Socratic Tutor") == true)
         XCTAssertFalse(app.buttons["habibi.send"].isEnabled)
+        XCTAssertEqual(app.buttons["habibi.heartling"].label, "Skin avatar")
         capture(app, "Costumes-Tutor-Conversation")
         app.navigationBars.buttons["Conversations"].tap()
         profile.tap()
@@ -329,6 +333,11 @@ final class OnboardingTests: XCTestCase {
         addCostume.tap()
         XCTAssertTrue(app.textFields["habibi.costumes.name"].waitForExistence(timeout: 5))
         capture(app, "Costumes-Review")
+        let preview = app.buttons["habibi.costumes.preview"]
+        for _ in 0..<6 where !preview.isHittable { app.swipeUp() }
+        preview.tap()
+        XCTAssertEqual(app.buttons["habibi.heartling"].label, "Skin avatar")
+        capture(app, "Skins-Avatar-Editor")
         app.buttons["habibi.costumes.save"].tap()
         XCTAssertTrue(app.navigationBars["Socratic Tutor"].waitForExistence(timeout: 5))
         app.navigationBars.buttons["Skins"].tap()
@@ -358,6 +367,8 @@ final class OnboardingTests: XCTestCase {
         app.buttons["habibi.costumes.take-off"].tap()
         XCTAssertTrue((options.value as? String)?.contains("no skin") == true)
         XCTAssertEqual(composer.value as? String, "A costume draft to keep")
+        XCTAssertEqual(app.buttons["habibi.heartling"].label, "Heartling")
+        capture(app, "Skins-Heartling-Fallback")
     }
 
     private func launchHabibi() -> XCUIApplication {

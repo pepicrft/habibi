@@ -71,6 +71,7 @@ private actor ReactionInference: HabibiSyncHTTP {
         inferenceURL: URL(string: "https://inference.example/inference")!, inferenceHTTP: inference)
     #expect(await session.create(.init(name: "Noor", goals: ["learning"], style: "warm")))
     var selected = try #require(HabibiCostumeDefinition.catalog().first)
+    let avatar = try #require(selected.avatar)
     selected.instructions = "SELECTED-GUIDANCE: Ask one focused question."
     selected.author = "PRIVATE-AUTHOR-NOT-FOR-INFERENCE"
     var other = selected
@@ -102,6 +103,7 @@ private actor ReactionInference: HabibiSyncHTTP {
     #expect(wire.contains("SELECTED-GUIDANCE"))
     #expect(!wire.contains("UNSELECTED-GUIDANCE"))
     #expect(!wire.contains("PRIVATE-AUTHOR"))
+    #expect(!wire.contains(avatar.body.path))
     #expect(session.costume == selected)
     var edited = selected
     edited.instructions = "Edited guidance for new conversations only."

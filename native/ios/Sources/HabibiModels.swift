@@ -48,6 +48,7 @@ struct HabibiCostumeDefinition: Codable, Equatable, Identifiable {
     var author = ""
     var instructions = ""
     var examplePrompt = ""
+    var avatar: HabibiSkinAvatar?
     var id: String { name }
 
     func validated() throws -> Self {
@@ -60,6 +61,27 @@ struct HabibiCostumeDefinition: Codable, Equatable, Identifiable {
         let result = try HabibiCore.execute(["operation": "bundled_costumes"])
         return try JSONDecoder().decode([Self].self, from: JSONSerialization.data(withJSONObject: result["costumes"] ?? []))
     }
+}
+
+struct HabibiSkinAvatar: Codable, Equatable {
+    struct Body: Codable, Equatable { var path: String }
+    struct Eyes: Codable, Equatable {
+        var x: Double
+        var y: Double
+        var spacing: Double
+        var scale: Double
+    }
+    var body: Body
+    var eyes: Eyes
+
+    static let prompt = """
+    Design an original small object character for my Habibi skin, based on its role below.
+    Return only JSON: {"body":{"path":"..."},"eyes":{"x":50,"y":50,"spacing":18,"scale":1}}.
+    Draw a soft, chunky silhouette in a 100 × 100 square, with generous padding. No text, eyes, colors, SVG markup or code in the path. Habibi adds theme color, eyes, blinking and motion natively.
+    Use ONLY explicit uppercase M, L, Q, C and Z commands. Separate EVERY command and number with spaces. M/L take 2 numbers, Q takes 4, C takes 6, Z takes none. Start every subpath with M and close it with Z. Use ordinary decimal coordinates from 0 to 100, no exponents; keep the path under 4,096 bytes and 768 tokens.
+    Place both eyes well inside the silhouette. x/y: 15–85, spacing: 8–36, scale: 0.5–1.5. No URLs, external assets or extra fields.
+    Skin role:
+    """
 }
 
 struct HabibiCostume: Codable, Identifiable {

@@ -90,7 +90,7 @@ struct HabibiConversationView: View {
                         }.scrollTargetLayout()
                         if session.chatRunning {
                             HStack(spacing: 10) {
-                                HabibiHeartling(interactive: false, working: true).frame(width: 40, height: 40)
+                                HabibiHeartling(interactive: false, working: true, avatar: session.costume?.avatar).frame(width: 40, height: 40)
                                 Text("Habibi is working…").font(.footnote).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                                 .accessibilityElement(children: .combine).accessibilityIdentifier("habibi.working")
@@ -311,7 +311,7 @@ struct HabibiConversationView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HabibiHeartling().frame(width: 144, height: 144)
+            HabibiHeartling(avatar: session.costume?.avatar).frame(width: 144, height: 144)
             Text("What’s on your mind?").font(.title2.weight(.semibold))
             Text(session.costume?.description ?? "A little tool, a new rhythm, or an idea you want to explore. Let’s make it yours.").foregroundStyle(.secondary)
             ForEach(session.costume.map { [$0.examplePrompt] } ?? ["Help me build a workout tracker.", "Make a gentle daily energy journal.", "I have an idea for my own Kit."], id: \.self) { prompt in
